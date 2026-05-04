@@ -6,10 +6,22 @@ Uses test doubles from tests/helpers.py to avoid real API calls.
 """
 
 import pytest
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock
 
-from scrappy.orchestrator.litellm_service import LiteLLMService, MAX_ESCALATION_DEPTH
-from scrappy.infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
+from scrappy.orchestrator.litellm_service import (
+    LiteLLMService,
+    _extract_retry_after,
+    _map_litellm_error,
+    _map_rate_limit_error,
+)
+from scrappy.orchestrator.fallback_metrics import provider_fallback_metrics
+from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
+from scrappy.infrastructure.exceptions.provider_errors import (
+    AllProvidersRateLimitedError,
+    RouterGroupExhaustedError,
+    RateLimitError as ProviderRateLimitError,
+    ProviderExecutionError,
+)
 
 from tests.helpers import (
     MockLiteLLMRouter,
@@ -237,6 +249,7 @@ class TestExceptionMapping:
             )
 
         assert "groq" in exc_info.value.attempted_providers
+        assert exc_info.value.failure_kind == FailureKind.EXHAUSTED
 
     def test_preserves_llm_provider_in_exception(self):
         """Verify provider name is extracted from exception."""
@@ -289,6 +302,130 @@ class TestExceptionMapping:
 
         # Should still raise without crashing
         assert exc_info.value.attempted_providers == []
+
+    def test_direct_model_rate_limit_maps_to_single_model_error(self, monkeypatch):
+        """A direct concrete-model 429 is not router-group exhaustion."""
+        import litellm
+
+        mock_error = make_rate_limit_error(provider="groq")
+
+        def raise_rate_limit(*args, **kwargs):
+            raise mock_error
+
+        monkeypatch.setattr(litellm, "completion", raise_rate_limit)
+        service = make_configured_service(
+            router=MockLiteLLMRouter(),
+            output=MockOutputForLiteLLM(),
+        )
+
+        with pytest.raises(ProviderRateLimitError) as exc_info:
+            service.completion_direct(
+                model="groq/llama-3.1-8b-instant",
+                messages=[{"role": "user", "content": "test"}],
+            )
+
+        assert exc_info.value.failure_kind == FailureKind.RATE_LIMIT
+        assert exc_info.value.provider_name == "groq"
+
+    def test_unknown_group_name_classified_as_concrete_and_warns(self, caplog):
+        """A malformed group-like name is treated as one concrete model failure."""
+        mock_error = make_rate_limit_error(provider="groq")
+
+        with caplog.at_level("WARNING"):
+            mapped = _map_rate_limit_error(mock_error, provider="", model="fasst")
+
+        assert isinstance(mapped, ProviderRateLimitError)
+        assert not isinstance(mapped, RouterGroupExhaustedError)
+        assert "fasst" in caplog.text
+
+    def test_router_group_name_produces_router_exhaustion(self):
+        """A known router group preserves router-exhaustion semantics."""
+        mock_error = make_rate_limit_error(provider="groq")
+
+        mapped = _map_rate_limit_error(
+            mock_error,
+            provider="groq",
+            model="fast",
+        )
+
+        assert isinstance(mapped, RouterGroupExhaustedError)
+        assert mapped.failure_kind == FailureKind.EXHAUSTED
+
+    def test_retry_after_http_date_header_uses_injected_clock(self):
+        """Retry-After HTTP-date is parsed into deterministic seconds."""
+        import httpx
+
+        error = Exception("rate")
+        error.response = httpx.Response(
+            status_code=429,
+            headers={"Retry-After": "Wed, 21 Oct 2015 07:28:00 GMT"},
+        )
+
+        result = _extract_retry_after(error, now=lambda: 1445412470.0)
+
+        assert result == 10.0
+
+    @pytest.mark.parametrize(
+        ("message", "kind"),
+        [
+            ("401 unauthorized", FailureKind.AUTH),
+            ("402 payment required", FailureKind.PAYMENT_REQUIRED),
+            ("429 rate limit exceeded", FailureKind.RATE_LIMIT),
+            ("connection refused", FailureKind.NETWORK),
+            ("request timed out", FailureKind.TIMEOUT),
+            ("content blocked by safety filters", FailureKind.CONTENT_REFUSED),
+            ("model not found", FailureKind.DEPRECATED),
+            ("503 service unavailable", FailureKind.SERVER_ERROR),
+            ("400 bad request", FailureKind.UNKNOWN),
+            ("totally weird provider failure", FailureKind.UNKNOWN),
+        ],
+    )
+    def test_map_litellm_error_assigns_failure_kind(self, message, kind):
+        """Every classifier branch assigns a concrete failure kind."""
+        mapped = _map_litellm_error(
+            Exception(message),
+            provider="groq",
+            model="groq/llama-3.1-8b-instant",
+        )
+
+        assert mapped.failure_kind == kind
+        if kind == FailureKind.UNKNOWN:
+            assert isinstance(mapped, ProviderExecutionError)
+
+    def test_unknown_classification_increments_labeled_counter(self):
+        """UNKNOWN failures are visible by provider and source error type."""
+        provider_fallback_metrics.reset()
+
+        mapped = _map_litellm_error(
+            ValueError("totally weird provider failure"),
+            provider="groq",
+            model="groq/llama-3.1-8b-instant",
+        )
+
+        snapshot = provider_fallback_metrics.snapshot()
+        assert mapped.failure_kind == FailureKind.UNKNOWN
+        assert snapshot.provider_failure_unknown_total[
+            ("groq", "ValueError")
+        ] == 1
+
+    def test_bad_request_unknown_classification_warns_and_counts(self, caplog):
+        """Bad-request UNKNOWN failures have both log and counter signals."""
+        provider_fallback_metrics.reset()
+
+        with caplog.at_level("WARNING"):
+            mapped = _map_litellm_error(
+                ValueError("400 bad request"),
+                provider="groq",
+                model="groq/llama-3.1-8b-instant",
+            )
+
+        snapshot = provider_fallback_metrics.snapshot()
+        assert mapped.failure_kind == FailureKind.UNKNOWN
+        assert snapshot.provider_failure_unknown_total[
+            ("groq", "ValueError")
+        ] == 1
+        assert "Unknown LiteLLM error classification" in caplog.text
+        assert "400 bad request" in caplog.text
 
 
 class TestCompletionFlow:

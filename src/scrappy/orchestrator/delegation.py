@@ -119,6 +119,28 @@ def _select_model_for_context(min_context: int, prefer_group: str = "quality") -
     return None
 
 
+def _validate_concrete_model_context(model: str, min_context: int) -> None:
+    """Raise if a concrete model cannot satisfy the requested context."""
+    if min_context <= 0 or model in MODEL_GROUPS:
+        return
+
+    from .litellm_config import MODEL_METADATA
+
+    metadata = MODEL_METADATA.get(model)
+    if metadata is None:
+        if "/" in model:
+            raise ValueError(
+                f"No context metadata available for concrete model '{model}'."
+            )
+        return
+
+    if metadata.context_length < min_context:
+        raise ValueError(
+            f"Model '{model}' has {metadata.context_length} token context, "
+            f"below required {min_context}."
+        )
+
+
 class DelegationManager:
     """
     Coordinates LLM delegation with caching, prompt augmentation, and LLM service calls.
@@ -305,7 +327,8 @@ class DelegationManager:
             use_context: Override context augmentation setting
             use_cache: Override cache setting
             intent_classification: Intent data for semantic caching
-            auto_fallback: Automatically try other providers on rate limit
+            auto_fallback: Deprecated compatibility parameter. Orchestrator-level
+                dispatch owns fallback gating; this method accepts but ignores it.
             max_retries: Maximum retry attempts per provider
             selection_type: ModelSelectionType value for fallback filtering (e.g., 'quality')
             min_context: Minimum context length for fallback filtering
@@ -400,9 +423,11 @@ class DelegationManager:
         # If specific model provided (from ModelSelectionService), use it directly
         # Otherwise resolve provider_name to model group for Router
         if effective_model_override:
+            _validate_concrete_model_context(effective_model_override, min_context)
             effective_model = effective_model_override
         elif model:
             # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
+            _validate_concrete_model_context(model, min_context)
             effective_model = model
         elif min_context > 0:
             # Caller specified min context - select model with sufficient context
@@ -481,7 +506,8 @@ class DelegationManager:
             use_context: Override context augmentation setting
             use_cache: Override cache setting
             intent_classification: Intent data for semantic caching
-            auto_fallback: Automatically try other providers on rate limit
+            auto_fallback: Deprecated compatibility parameter. Orchestrator-level
+                dispatch owns fallback gating; this method accepts but ignores it.
             max_retries: Maximum retry attempts per provider
             selection_type: ModelSelectionType value for fallback filtering (e.g., 'quality')
             min_context: Minimum context length for fallback filtering
@@ -545,9 +571,11 @@ class DelegationManager:
         # If specific model provided (from ModelSelectionService), use it directly
         # Otherwise resolve provider_name to model group for Router
         if effective_model_override:
+            _validate_concrete_model_context(effective_model_override, min_context)
             effective_model = effective_model_override
         elif model:
             # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
+            _validate_concrete_model_context(model, min_context)
             effective_model = model
         elif min_context > 0:
             # Caller specified min context - select model with sufficient context
@@ -820,9 +848,11 @@ class DelegationManager:
         # If specific model provided (from ModelSelectionService), use it directly
         # Otherwise resolve provider_name to model group for Router
         if effective_model_override:
+            _validate_concrete_model_context(effective_model_override, min_context)
             effective_model = effective_model_override
         elif model:
             # Specific model ID - use directly (e.g., "cerebras/qwen-3-235b-a22b-instruct-2507")
+            _validate_concrete_model_context(model, min_context)
             effective_model = model
         elif min_context > 0:
             # Caller specified min context - select model with sufficient context
@@ -900,6 +930,8 @@ class DelegationManager:
         prompt: str,
         response_model: Type[T],
         system_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        min_context: int = 0,
         **kwargs,
     ) -> T:
         """
@@ -945,8 +977,14 @@ class DelegationManager:
                 "Ensure LiteLLMService is used instead of a mock."
             )
 
-        # Resolve provider_name to model group for LiteLLM Router
-        effective_model = _resolve_model_group(provider_name)
+        if model:
+            _validate_concrete_model_context(model, min_context)
+            effective_model = model
+        elif min_context > 0:
+            context_model = _select_model_for_context(min_context)
+            effective_model = context_model if context_model else _resolve_model_group(provider_name)
+        else:
+            effective_model = _resolve_model_group(provider_name)
 
         # Build messages list for LiteLLM
         messages: list[dict] = []
@@ -954,12 +992,14 @@ class DelegationManager:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
+
         # Delegate to LLM service's structured output method
         return await self._llm_service.completion_structured(
             model=effective_model,
             messages=messages,
             response_model=response_model,
-            **kwargs,
+            **filtered_kwargs,
         )
 
     def delegate_structured_sync(
@@ -968,6 +1008,8 @@ class DelegationManager:
         prompt: str,
         response_model: Type[T],
         system_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        min_context: int = 0,
         **kwargs,
     ) -> T:
         """
@@ -997,8 +1039,14 @@ class DelegationManager:
                 "Ensure LiteLLMService is used instead of a mock."
             )
 
-        # Resolve provider_name to model group for LiteLLM Router
-        effective_model = _resolve_model_group(provider_name)
+        if model:
+            _validate_concrete_model_context(model, min_context)
+            effective_model = model
+        elif min_context > 0:
+            context_model = _select_model_for_context(min_context)
+            effective_model = context_model if context_model else _resolve_model_group(provider_name)
+        else:
+            effective_model = _resolve_model_group(provider_name)
 
         # Build messages list for LiteLLM
         messages: list[dict] = []
@@ -1006,10 +1054,12 @@ class DelegationManager:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
+
         # Delegate to LLM service's sync structured output method
         return self._llm_service.completion_structured_sync(
             model=effective_model,
             messages=messages,
             response_model=response_model,
-            **kwargs,
+            **filtered_kwargs,
         )

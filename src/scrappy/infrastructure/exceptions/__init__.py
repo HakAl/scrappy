@@ -29,6 +29,7 @@ from .enums import (
     ErrorSeverity,
     ErrorCategory,
 )
+from .failure_kinds import FailureKind
 
 # Base classes
 from .base import (
@@ -41,7 +42,9 @@ from .base import (
 from .provider_errors import (
     ProviderError,
     RateLimitError,
+    RouterGroupExhaustedError,
     AllProvidersRateLimitedError,
+    AllProvidersExhaustedError,
     ProviderNotFoundError,
     AuthenticationError,
     TimeoutError,
@@ -77,6 +80,7 @@ __all__ = [
     'RecoveryAction',
     'ErrorSeverity',
     'ErrorCategory',
+    'FailureKind',
 
     # Base classes
     'BaseError',
@@ -86,7 +90,9 @@ __all__ = [
     # Provider errors
     'ProviderError',
     'RateLimitError',
+    'RouterGroupExhaustedError',
     'AllProvidersRateLimitedError',
+    'AllProvidersExhaustedError',
     'ProviderNotFoundError',
     'AuthenticationError',
     'TimeoutError',

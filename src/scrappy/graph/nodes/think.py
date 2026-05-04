@@ -181,6 +181,7 @@ def _apply_think_result(
                 "last_error": result.error,
                 "recovery_action": result.recovery_action,
                 "error_category": result.error_category,
+                "error_suggestion": result.suggestion,
                 "done": result.is_fatal,
                 "last_input_tokens": None,
                 "last_output_tokens": None,
@@ -225,6 +226,7 @@ def _apply_think_result(
             "done": result.is_done,
             "error_count": 0,
             "last_error": None,
+            "error_suggestion": None,
             "current_model": None,  # Clear fallback mode
             "last_model_display": result.model_display,
             "last_input_tokens": final_input_tokens,

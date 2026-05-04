@@ -13,13 +13,13 @@ After LiteLLM integration:
 from typing import List, Optional
 
 # Import protocols from centralized location
-from .orchestrator.protocols import ContextProvider, OrchestratorAdapter
+from .orchestrator.protocols import ContextProvider
 
 # Import LLMResponse from orchestrator provider types
-from .orchestrator.provider_types import LLMResponse, ToolCall
+from .orchestrator.provider_types import LLMResponse
 
 # Import canonical MODEL_GROUPS from model_selection
-from .orchestrator.model_selection import MODEL_GROUPS
+from .orchestrator.model_selection import MODEL_GROUPS, ModelSelectionType
 
 
 # Map legacy provider names to model groups
@@ -274,6 +274,10 @@ class AgentOrchestratorAdapter:
         prompt: str,
         response_model: type,
         system_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        auto_fallback: bool = True,
+        selection_type: Optional[ModelSelectionType | str] = None,
+        min_context: Optional[int] = None,
         **kwargs
     ):
         """
@@ -284,6 +288,10 @@ class AgentOrchestratorAdapter:
             prompt: The prompt to send
             response_model: Pydantic model class for response validation
             system_prompt: Optional system prompt
+            model: Specific concrete model to use
+            auto_fallback: Automatically try other models on retryable failures
+            selection_type: Selection type or value used for fallback candidates
+            min_context: Minimum required context window
             **kwargs: Additional arguments passed to orchestrator
 
         Returns:
@@ -294,6 +302,10 @@ class AgentOrchestratorAdapter:
             prompt=prompt,
             response_model=response_model,
             system_prompt=system_prompt,
+            model=model,
+            auto_fallback=auto_fallback,
+            selection_type=selection_type,
+            min_context=min_context,
             **kwargs
         )
 

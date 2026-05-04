@@ -4,14 +4,76 @@ Model selection types and service.
 Provides deterministic model selection with session stickiness and rate limit awareness.
 """
 
+import logging
+import threading
 import time
+from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Protocol
+from typing import Callable, Optional, Protocol
+
+from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
+
+from .failure_policy import FailureRecord, HealthScope, get_failure_policy
 
 
-class AllModelsRateLimitedError(Exception):
-    """Raised when all models for a selection type are rate limited."""
-    pass
+logger = logging.getLogger(__name__)
+
+
+class SelectionExhaustedError(Exception):
+    """Raised when no model remains available for a selection type."""
+
+    def __init__(
+        self,
+        message: str,
+        failure_summary: Optional[dict[str, FailureRecord]] = None,
+    ) -> None:
+        super().__init__(message)
+        self.failure_summary = failure_summary or {}
+        self.suggestion = _build_selection_exhausted_suggestion(
+            self.failure_summary
+        )
+
+
+AllModelsRateLimitedError = SelectionExhaustedError
+
+
+def _build_selection_exhausted_suggestion(
+    failure_summary: dict[str, FailureRecord],
+) -> str:
+    """Build user guidance from concrete model failure records."""
+    if not failure_summary:
+        return "Configure another model or try again later."
+
+    entries = []
+    for model, record in sorted(failure_summary.items()):
+        provider = record.provider or "unknown"
+        entries.append(f"{model} ({provider}: {record.kind.value})")
+
+    kinds = {record.kind for record in failure_summary.values()}
+    parts = [f"Unavailable models: {', '.join(entries)}."]
+
+    if FailureKind.RATE_LIMIT in kinds:
+        waits = [
+            record.retry_after
+            for record in failure_summary.values()
+            if record.kind == FailureKind.RATE_LIMIT and record.retry_after is not None
+        ]
+        if waits:
+            parts.append(
+                f"Wait at least {min(waits):.0f}s before retrying rate-limited models."
+            )
+        else:
+            parts.append("Wait before retrying rate-limited models.")
+
+    if FailureKind.AUTH in kinds or FailureKind.PAYMENT_REQUIRED in kinds:
+        parts.append("Run /setup or update API keys and billing for affected providers.")
+
+    if FailureKind.RATE_LIMIT not in kinds and not (
+        FailureKind.AUTH in kinds or FailureKind.PAYMENT_REQUIRED in kinds
+    ):
+        parts.append("Configure another provider or try again later.")
+
+    return " ".join(parts)
 
 
 class ModelSelectionType(Enum):
@@ -64,34 +126,56 @@ MODEL_PRIORITIES: dict[ModelSelectionType, list[str]] = {
 }
 
 
+@dataclass(frozen=True)
+class ModelHealthState:
+    """Resolved health state stored for an unavailable model."""
+
+    expires_at: float
+    failure_kind: FailureKind
+    retry_after: Optional[float] = None
+
+
 class ModelAvailabilityTracker:
     """
-    Track rate-limited models with automatic cooldown recovery.
+    Track temporary model health states with automatic recovery.
 
-    When a model returns a rate limit error, mark it unavailable.
-    After the cooldown period, the model becomes available again.
+    Callers pass a resolved health state, including its expiration timestamp.
+    After the state expires, the model becomes available again.
     """
 
     DEFAULT_COOLDOWN_SECONDS = 60
 
-    def __init__(self, cooldown_seconds: int = DEFAULT_COOLDOWN_SECONDS):
+    def __init__(
+        self,
+        cooldown_seconds: int = DEFAULT_COOLDOWN_SECONDS,
+        now: Callable[[], float] = time.time,
+    ):
         """
         Initialize availability tracker.
 
         Args:
-            cooldown_seconds: How long to mark a model unavailable after rate limit
+            cooldown_seconds: Legacy constructor value retained for callers that
+                instantiate the tracker directly. ModelSelectionService resolves
+                cooldowns before storing health state.
         """
-        self._cooldown = cooldown_seconds
-        self._unavailable: dict[str, float] = {}  # model -> timestamp when marked
+        self._legacy_cooldown_seconds = cooldown_seconds
+        self._now = now
+        self._lock = threading.Lock()
+        self._unavailable: dict[str, ModelHealthState] = {}
+        logger.info(
+            "Provider cooldown state is process-local and resets on restart."
+        )
 
-    def mark_rate_limited(self, model: str) -> None:
-        """
-        Mark a model as rate limited.
+    def mark(self, model: str, state: ModelHealthState) -> None:
+        """Store resolved health state for a model."""
+        with self._lock:
+            existing = self._unavailable.get(model)
+            if existing is None or state.expires_at >= existing.expires_at:
+                self._unavailable[model] = state
 
-        Args:
-            model: Model ID that hit rate limit
-        """
-        self._unavailable[model] = time.time()
+    def now(self) -> float:
+        """Return the tracker's injected clock value."""
+        return self._now()
 
     def is_available(self, model: str) -> bool:
         """
@@ -103,16 +187,7 @@ class ModelAvailabilityTracker:
         Returns:
             True if model is available
         """
-        if model not in self._unavailable:
-            return True
-
-        elapsed = time.time() - self._unavailable[model]
-        if elapsed >= self._cooldown:
-            # Cooldown expired, remove from unavailable
-            del self._unavailable[model]
-            return True
-
-        return False
+        return self.get_unavailable_state(model) is None
 
     def get_available(self, models: list[str]) -> list[str]:
         """
@@ -136,16 +211,36 @@ class ModelAvailabilityTracker:
         Returns:
             Seconds remaining, or 0 if available
         """
-        if model not in self._unavailable:
+        state = self.get_unavailable_state(model)
+        if state is None:
             return 0.0
 
-        elapsed = time.time() - self._unavailable[model]
-        remaining = self._cooldown - elapsed
-        return max(0.0, remaining)
+        return max(0.0, state.expires_at - self._now())
 
     def clear(self) -> None:
         """Clear all rate limit tracking."""
-        self._unavailable.clear()
+        with self._lock:
+            self._unavailable.clear()
+
+    def clear_kinds(self, kinds: set[FailureKind]) -> None:
+        """Clear health states matching any failure kind."""
+        with self._lock:
+            for model, state in list(self._unavailable.items()):
+                if state.failure_kind in kinds:
+                    del self._unavailable[model]
+
+    def get_unavailable_state(self, model: str) -> Optional[ModelHealthState]:
+        """Return current health state for a model, clearing expired entries."""
+        with self._lock:
+            state = self._unavailable.get(model)
+            if state is None:
+                return None
+
+            if self._now() >= state.expires_at:
+                del self._unavailable[model]
+                return None
+
+            return state
 
 
 class ModelSelectionServiceProtocol(Protocol):
@@ -156,6 +251,7 @@ class ModelSelectionServiceProtocol(Protocol):
         selection_type: ModelSelectionType,
         min_context: int = 0,
         session_preferred: Optional[str] = None,
+        exclude: Optional[set[str]] = None,
     ) -> str:
         """
         Select specific model ID.
@@ -169,7 +265,7 @@ class ModelSelectionServiceProtocol(Protocol):
             Specific model ID (e.g., 'groq/llama-3.1-8b-instant')
 
         Raises:
-            AllModelsRateLimitedError: If all models are rate limited or no model has sufficient context
+            SelectionExhaustedError: If all models are unhealthy or no model has sufficient context
         """
         ...
 
@@ -177,8 +273,25 @@ class ModelSelectionServiceProtocol(Protocol):
         """Get available models for selection type, ordered by priority."""
         ...
 
-    def mark_rate_limited(self, model: str) -> None:
-        """Mark a model as rate limited."""
+    def mark_unhealthy(
+        self,
+        model: str,
+        kind: FailureKind,
+        retry_after: Optional[float] = None,
+    ) -> None:
+        """Mark a model or provider unhealthy according to failure policy."""
+        ...
+
+    def update_configured(self, new_set: set[str]) -> None:
+        """Replace configured models without resetting health state."""
+        ...
+
+    def clear_failure_kinds(self, kinds: set[FailureKind]) -> None:
+        """Clear tracked health states matching failure kinds."""
+        ...
+
+    def is_available(self, model_id: str) -> bool:
+        """Check if a model is configured and currently healthy."""
         ...
 
 
@@ -190,7 +303,7 @@ class ModelSelectionService:
     1. Filter out rate-limited models
     2. If session_preferred is set and available -> use it
     3. Otherwise, iterate priority list and pick first available
-    4. If none available, raise AllModelsRateLimitedError
+    4. If none available, raise SelectionExhaustedError
 
     This replaces the random simple-shuffle behavior of LiteLLM Router
     with deterministic, priority-based selection.
@@ -213,7 +326,8 @@ class ModelSelectionService:
             availability_tracker: Tracker for rate-limited models.
                                  Creates new one if not provided.
         """
-        self._configured = configured_models
+        self._configured = set(configured_models)
+        self._configured_lock = threading.Lock()
         self._priorities = model_priorities or MODEL_PRIORITIES
         self._availability = availability_tracker or ModelAvailabilityTracker()
 
@@ -222,6 +336,7 @@ class ModelSelectionService:
         selection_type: ModelSelectionType,
         min_context: int = 0,
         session_preferred: Optional[str] = None,
+        exclude: Optional[set[str]] = None,
     ) -> str:
         """
         Select specific model ID.
@@ -236,29 +351,18 @@ class ModelSelectionService:
 
         Raises:
             ValueError: If no models configured for selection type
-            AllModelsRateLimitedError: If all configured models are rate limited or no model has sufficient context
+            SelectionExhaustedError: If all configured models are unhealthy or no model has sufficient context
         """
+        excluded = exclude or set()
+
         # Get configured models for this type
         configured = self.get_models_for_type(selection_type)
-
-        # Filter by context requirement if specified
-        if min_context > 0:
-            from .litellm_config import MODEL_METADATA
-            configured = [
-                m for m in configured
-                if MODEL_METADATA.get(m) and MODEL_METADATA[m].context_length >= min_context
-            ]
-            if not configured:
-                raise AllModelsRateLimitedError(
-                    f"No models with >= {min_context} token context available. "
-                    f"Try reducing prompt size or configure a larger context model."
-                )
 
         if not configured:
             # Get expected models for this type
             expected = self._priorities.get(selection_type, [])
             # Get all configured models
-            all_configured = list(self._configured)
+            all_configured = list(self._configured_snapshot())
             raise ValueError(
                 f"No models configured for {selection_type.value}. "
                 f"Expected one of: {expected}. "
@@ -266,21 +370,35 @@ class ModelSelectionService:
                 f"Run /setup to configure API keys."
             )
 
-        # Filter out rate-limited models
-        available = self._availability.get_available(configured)
+        candidates = self._filter_candidates(
+            configured,
+            min_context=min_context,
+            exclude=excluded,
+        )
 
-        if not available:
+        if min_context > 0 and not any(
+            self._model_satisfies_context(model, min_context)
+            for model in configured
+        ):
+            raise AllModelsRateLimitedError(
+                f"No models with >= {min_context} token context available. "
+                f"Try reducing prompt size or configure a larger context model.",
+                failure_summary={},
+            )
+
+        if not candidates:
             raise AllModelsRateLimitedError(
                 f"All {selection_type.value} models are rate limited. "
-                f"Try again in {self._get_min_cooldown(configured):.0f} seconds."
+                f"Try again in {self._get_min_cooldown(configured):.0f} seconds.",
+                failure_summary=self._build_failure_summary(configured),
             )
 
         # 1. Try session preferred if available and not rate limited
-        if session_preferred and session_preferred in available:
+        if session_preferred and session_preferred in candidates:
             return session_preferred
 
         # 2. Return first available (highest priority)
-        return available[0]
+        return candidates[0]
 
     def get_models_for_type(self, selection_type: ModelSelectionType) -> list[str]:
         """
@@ -296,29 +414,138 @@ class ModelSelectionService:
             List of configured model IDs, ordered by priority
         """
         priorities = self._priorities.get(selection_type, [])
-        return [m for m in priorities if m in self._configured]
+        configured = self._configured_snapshot()
+        return [m for m in priorities if m in configured]
 
-    def mark_rate_limited(self, model: str) -> None:
-        """
-        Mark a model as rate limited.
+    def mark_unhealthy(
+        self,
+        model: str,
+        kind: FailureKind,
+        retry_after: Optional[float] = None,
+    ) -> None:
+        """Mark a model or provider unhealthy according to failure policy."""
+        policy = get_failure_policy(kind)
+        if policy.scope == HealthScope.NONE:
+            return
 
-        The model will be unavailable for selection until cooldown expires.
+        cooldown = retry_after if retry_after is not None else policy.cooldown_seconds
+        state = ModelHealthState(
+            expires_at=self._availability.now() + cooldown,
+            failure_kind=kind,
+            retry_after=retry_after,
+        )
 
-        Args:
-            model: Model ID that hit rate limit
-        """
-        self._availability.mark_rate_limited(model)
+        if policy.scope == HealthScope.PER_MODEL:
+            self._availability.mark(model, state)
+            return
+
+        configured_now = self._configured_snapshot()
+        provider = self._extract_provider_from(model, configured_now)
+        if provider is None:
+            logger.warning(
+                "Could not derive provider for %r; marking only that model",
+                model,
+            )
+            self._availability.mark(model, state)
+            return
+
+        for configured_model in configured_now:
+            if configured_model.startswith(f"{provider}/"):
+                self._availability.mark(configured_model, state)
+
+    def update_configured(self, new_set: set[str]) -> None:
+        """Replace configured models without resetting health state."""
+        with self._configured_lock:
+            self._configured = set(new_set)
+
+    def clear_failure_kinds(self, kinds: set[FailureKind]) -> None:
+        """Clear tracked health states matching failure kinds."""
+        self._availability.clear_kinds(kinds)
 
     def is_configured(self, model_id: str) -> bool:
         """Check if a model has API keys configured."""
-        return model_id in self._configured
+        return model_id in self._configured_snapshot()
 
     def is_available(self, model_id: str) -> bool:
         """Check if a model is configured and not rate limited."""
-        return model_id in self._configured and self._availability.is_available(model_id)
+        return model_id in self._configured_snapshot() and self._availability.is_available(model_id)
 
     def _get_min_cooldown(self, models: list[str]) -> float:
         """Get minimum cooldown remaining across models."""
         if not models:
             return 0.0
         return min(self._availability.get_cooldown_remaining(m) for m in models)
+
+    @property
+    def _known_prefixes(self) -> set[str]:
+        """Provider prefixes from currently configured model IDs."""
+        return {
+            model.split("/", 1)[0]
+            for model in self._configured_snapshot()
+            if "/" in model
+        }
+
+    def _configured_snapshot(self) -> set[str]:
+        """Return a thread-safe snapshot of configured model IDs."""
+        with self._configured_lock:
+            return set(self._configured)
+
+    def _extract_provider(self, model_id: str) -> Optional[str]:
+        """Extract provider only when the prefix is currently configured."""
+        return self._extract_provider_from(model_id, self._configured_snapshot())
+
+    def _extract_provider_from(
+        self,
+        model_id: str,
+        configured_models: set[str],
+    ) -> Optional[str]:
+        """Extract provider only when the prefix exists in configured models."""
+        if "/" not in model_id:
+            return None
+
+        provider = model_id.split("/", 1)[0]
+        known_prefixes = {
+            model.split("/", 1)[0]
+            for model in configured_models
+            if "/" in model
+        }
+        if provider not in known_prefixes:
+            return None
+        return provider
+
+    def _build_failure_summary(self, models: list[str]) -> dict[str, FailureRecord]:
+        """Build failure summary from current tracker state."""
+        summary: dict[str, FailureRecord] = {}
+        for model in models:
+            state = self._availability.get_unavailable_state(model)
+            if state is not None:
+                summary[model] = FailureRecord.from_health_state(model, state)
+        return summary
+
+    def _filter_candidates(
+        self,
+        models: list[str],
+        min_context: int,
+        exclude: set[str],
+    ) -> list[str]:
+        """Apply context, exclude, and health filters in one pass."""
+        candidates: list[str] = []
+        for model in models:
+            if model in exclude:
+                continue
+            if not self._model_satisfies_context(model, min_context):
+                continue
+            if not self._availability.is_available(model):
+                continue
+            candidates.append(model)
+        return candidates
+
+    def _model_satisfies_context(self, model: str, min_context: int) -> bool:
+        """Return whether a model has enough context for the request."""
+        if min_context <= 0:
+            return True
+
+        from .litellm_config import MODEL_METADATA
+
+        metadata = MODEL_METADATA.get(model)
+        return bool(metadata and metadata.context_length >= min_context)

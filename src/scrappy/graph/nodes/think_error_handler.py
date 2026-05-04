@@ -24,6 +24,7 @@ from scrappy.infrastructure.exceptions import (
 )
 from scrappy.infrastructure.logging import get_logger
 from scrappy.orchestrator.litellm_service import NotConfiguredError, StreamCancelledError
+from scrappy.orchestrator.model_selection import SelectionExhaustedError
 
 logger = get_logger(__name__)
 
@@ -104,9 +105,20 @@ class DefaultThinkErrorHandler:
                 is_fatal=True,
             )
 
-        # All providers rate limited - trigger fallback to different model
+        # Concrete model selection exhausted after orchestrator-level fallback.
+        if isinstance(error, SelectionExhaustedError):
+            logger.warning("Selection exhausted: %s", error)
+            return ThinkResult(
+                error=str(error),
+                suggestion=error.suggestion,
+                recovery_action=RecoveryAction.FALLBACK.value,
+                error_category="rate_limit",
+                is_fatal=False,
+            )
+
+        # Router group exhausted - trigger fallback to different model
         if isinstance(error, AllProvidersRateLimitedError):
-            logger.warning("All providers rate limited")
+            logger.warning("Router group exhausted")
             return ThinkResult(
                 error="All providers rate limited. Please try again later.",
                 recovery_action=RecoveryAction.FALLBACK.value,

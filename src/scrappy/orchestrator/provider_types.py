@@ -187,6 +187,7 @@ class ProviderAttempt:
     model: str
     success: bool
     error: Optional[str] = None  # "429", "timeout", etc.
+    retry_after: Optional[float] = None
 
 
 @dataclass
@@ -257,6 +258,10 @@ class LLMProviderProtocol(Protocol):
 
     def get_limits(self) -> ProviderLimits:
         """Get current rate limit information."""
+        ...
+
+    def is_available(self) -> bool:
+        """Check if provider is configured and available."""
         ...
 
 
@@ -379,7 +384,12 @@ class LLMProviderBase:
         """
         return True
 
-    def estimate_cost(self, input_tokens: int, output_tokens: int, model: str = None) -> float:
+    def estimate_cost(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        model: Optional[str] = None,
+    ) -> float:
         """
         Estimate cost for a request (returns 0.0 for free tier).
         Override in paid providers.

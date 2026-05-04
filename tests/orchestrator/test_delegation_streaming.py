@@ -11,12 +11,10 @@ Tests the stream_delegate method including:
 """
 
 import pytest
-from typing import Optional, List, Any, AsyncIterator
-from unittest.mock import Mock
+from typing import Optional, List, AsyncIterator
 
 from scrappy.orchestrator.delegation import DelegationManager
 from scrappy.orchestrator.types import StreamChunk
-from scrappy.orchestrator.protocols import StreamingCompletionProtocol
 from scrappy.orchestrator.provider_types import LLMResponse
 from tests.helpers import (
     make_stream_chunk,
@@ -379,6 +377,25 @@ async def test_stream_delegate_passes_params_to_service(delegation_manager_strea
     ]
     assert call['max_tokens'] == 500
     assert call['temperature'] == 0.9
+
+
+@pytest.mark.asyncio
+async def test_stream_delegate_concrete_model_below_min_context_fails_before_llm_call(
+    delegation_manager_streaming,
+):
+    """Concrete stream models must satisfy caller-provided context requirements."""
+    manager = delegation_manager_streaming()
+
+    with pytest.raises(ValueError, match="below required 32768"):
+        async for _chunk in manager.stream_delegate(
+            provider_name="fast",
+            prompt="test prompt",
+            model="cerebras/llama-3.3-70b",
+            min_context=32768,
+        ):
+            pass
+
+    assert manager._llm_service.stream_calls == []
 
 
 # =============================================================================

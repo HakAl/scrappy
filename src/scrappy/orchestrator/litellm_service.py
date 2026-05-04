@@ -24,12 +24,13 @@ Architecture:
 """
 
 import asyncio
+from email.utils import parsedate_to_datetime
 import json
 import logging
 import re
 import time
 import threading
-from typing import Iterator, Optional, TYPE_CHECKING, AsyncIterator, Type, TypeVar
+from typing import Callable, Iterator, Optional, TYPE_CHECKING, AsyncIterator, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -39,17 +40,21 @@ from pydantic import BaseModel
 from ..infrastructure.logging import StructuredLogger
 from .provider_types import LLMResponse, ToolCall
 from ..infrastructure.exceptions.provider_errors import (
-    AllProvidersRateLimitedError,
+    ProviderError,
+    RouterGroupExhaustedError,
     RateLimitError,
     AuthenticationError,
     NetworkError,
     TimeoutError as ProviderTimeoutError,
     ProviderExecutionError,
 )
+from ..infrastructure.exceptions.failure_kinds import FailureKind
 from ..cli.protocols import BaseOutputProtocol
 from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from .types import StreamChunk, ToolCallFragment
-from .litellm_config import build_model_list
+from .litellm_config import MODEL_METADATA, build_model_list
+from .fallback_metrics import provider_fallback_metrics
+from .model_selection import MODEL_GROUPS
 
 if TYPE_CHECKING:
     import instructor
@@ -108,7 +113,10 @@ PROVIDER_THROTTLE_DELAYS = {
 DEFAULT_THROTTLE_DELAY = 0.5  # Default for unknown providers
 
 
-def _extract_retry_after(error: Exception) -> Optional[float]:
+def _extract_retry_after(
+    error: Exception,
+    now: Callable[[], float] = time.time,
+) -> Optional[float]:
     """Extract retry-after time from litellm RateLimitError.
 
     Checks multiple sources:
@@ -133,7 +141,9 @@ def _extract_retry_after(error: Exception) -> Optional[float]:
                 try:
                     return float(retry_after)
                 except ValueError:
-                    pass  # HTTP date format, skip
+                    parsed_delta = _parse_retry_after_http_date(retry_after, now)
+                    if parsed_delta is not None:
+                        return parsed_delta
 
             # OpenAI/Anthropic rate limit headers
             reset_requests = headers.get('x-ratelimit-reset-requests')
@@ -170,6 +180,23 @@ def _extract_retry_after(error: Exception) -> Optional[float]:
             return value
 
     return None
+
+
+def _parse_retry_after_http_date(
+    retry_after: str,
+    now: Callable[[], float],
+) -> Optional[float]:
+    """Parse Retry-After HTTP-date header into seconds from now."""
+    try:
+        parsed = parsedate_to_datetime(retry_after)
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return None
+
+    if parsed.tzinfo is None:
+        from datetime import timezone
+        parsed = parsed.replace(tzinfo=timezone.utc)
+
+    return max(0.0, parsed.timestamp() - now())
 
 
 def _parse_time_string(time_str: str) -> Optional[float]:
@@ -222,6 +249,45 @@ def _build_provider_details(
         details["retry_after"] = retry_after
 
     return {provider: details}
+
+
+def _known_provider_prefixes() -> set[str]:
+    """Return provider prefixes known from static LiteLLM model metadata.
+
+    This is only for typo classification. Configured-model health scope uses
+    ModelSelectionService._known_prefixes.
+    """
+    return {metadata.provider for metadata in MODEL_METADATA.values()}
+
+
+def _is_known_model_id(model: str) -> bool:
+    """Return True when model looks like provider/model with a known provider."""
+    if "/" not in model:
+        return False
+    provider = model.split("/", 1)[0]
+    return provider in _known_provider_prefixes()
+
+
+def _map_rate_limit_error(
+    error: Exception,
+    provider: str = "",
+    model: str = "",
+) -> ProviderError:
+    """Map a LiteLLM rate-limit error using router-group vs model semantics."""
+    if model in MODEL_GROUPS:
+        return RouterGroupExhaustedError(
+            message="",
+            attempted_providers=[provider] if provider else [],
+            provider_details=_build_provider_details(error, provider),
+        )
+
+    if model and not _is_known_model_id(model):
+        logger.warning(
+            "Treating rate limit for unknown model/group %r as concrete model failure",
+            model,
+        )
+
+    return _map_litellm_error(error, provider=provider, model=model)
 
 # Instructor retry limit - keep low since LiteLLM Router already handles retries
 DEFAULT_INSTRUCTOR_RETRIES = 1
@@ -292,7 +358,33 @@ def _get_throttle() -> RequestThrottle:
     return _request_throttle
 
 
-def _map_litellm_error(error: Exception, provider: str = "", model: str = "") -> Exception:
+def _record_unknown_classification(
+    *,
+    error_type: str,
+    provider: str,
+    model: str,
+    error: Exception,
+) -> None:
+    """Log and count an UNKNOWN LiteLLM classification."""
+    logger.warning(
+        "Unknown LiteLLM error classification: type=%s provider=%s model=%s message=%s",
+        error_type,
+        provider,
+        model,
+        str(error)[:200],
+    )
+    provider_fallback_metrics.record_unknown_failure(
+        provider=provider,
+        error_type=error_type,
+    )
+
+
+def _map_litellm_error(
+    error: Exception,
+    provider: str = "",
+    model: str = "",
+    now: Callable[[], float] = time.time,
+) -> ProviderError:
     """
     Map LiteLLM exceptions to user-friendly exceptions with actionable suggestions.
 
@@ -309,13 +401,33 @@ def _map_litellm_error(error: Exception, provider: str = "", model: str = "") ->
 
     # Provider name for messages
     provider_display = provider or "the provider"
+    retry_after = _extract_retry_after(error, now=now)
 
     # Authentication errors
     if "auth" in error_type.lower() or "401" in str(error) or "unauthorized" in error_msg:
         return AuthenticationError(
             f"Authentication failed for {provider_display}",
             provider_name=provider,
+            failure_kind=FailureKind.AUTH,
+            retry_after=retry_after,
+            original_error=error,
             suggestion=f"Check your API key for {provider_display} is correct in .env file."
+        )
+
+    # Payment/account errors
+    if (
+        "402" in str(error)
+        or "payment" in error_msg
+        or "billing" in error_msg
+        or "insufficient_quota" in error_msg
+    ):
+        return ProviderExecutionError(
+            f"Account quota or billing issue for {provider_display}",
+            provider_name=provider,
+            original_error=error,
+            failure_kind=FailureKind.PAYMENT_REQUIRED,
+            retry_after=retry_after,
+            suggestion=f"Check billing or quota for {provider_display}."
         )
 
     # Rate limiting - more specific than base RateLimitError
@@ -323,6 +435,9 @@ def _map_litellm_error(error: Exception, provider: str = "", model: str = "") ->
         return RateLimitError(
             f"Rate limit exceeded for {provider_display}",
             provider_name=provider,
+            failure_kind=FailureKind.RATE_LIMIT,
+            retry_after=retry_after,
+            original_error=error,
             suggestion="Wait a few seconds before retrying, or try a different provider."
         )
 
@@ -330,6 +445,10 @@ def _map_litellm_error(error: Exception, provider: str = "", model: str = "") ->
     if "connection" in error_type.lower() or "connection" in error_msg or "unreachable" in error_msg:
         return NetworkError(
             f"Could not connect to {provider_display}",
+            provider_name=provider,
+            failure_kind=FailureKind.NETWORK,
+            retry_after=retry_after,
+            original_error=error,
             suggestion="Check your internet connection and try again."
         )
 
@@ -337,6 +456,10 @@ def _map_litellm_error(error: Exception, provider: str = "", model: str = "") ->
     if "timeout" in error_type.lower() or "timeout" in error_msg or "timed out" in error_msg:
         return ProviderTimeoutError(
             f"Request to {provider_display} timed out",
+            provider_name=provider,
+            failure_kind=FailureKind.TIMEOUT,
+            retry_after=retry_after,
+            original_error=error,
             suggestion="The provider may be slow. Try again or use a different provider."
         )
 
@@ -345,14 +468,23 @@ def _map_litellm_error(error: Exception, provider: str = "", model: str = "") ->
         return ProviderExecutionError(
             f"Content was blocked by {provider_display}'s safety filters",
             provider_name=provider,
+            original_error=error,
+            failure_kind=FailureKind.CONTENT_REFUSED,
+            retry_after=retry_after,
             suggestion="Try rephrasing your request to avoid triggering content filters."
         )
 
     # Model not found
-    if "model" in error_msg and ("not found" in error_msg or "unknown" in error_msg or "invalid" in error_msg):
+    if (
+        "deprecated" in error_msg
+        or ("model" in error_msg and ("not found" in error_msg or "unknown" in error_msg or "invalid" in error_msg))
+    ):
         return ProviderExecutionError(
             f"Model '{model}' not available from {provider_display}",
             provider_name=provider,
+            original_error=error,
+            failure_kind=FailureKind.DEPRECATED,
+            retry_after=retry_after,
             suggestion="Check the model name or run '/providers' to see available models."
         )
 
@@ -361,15 +493,26 @@ def _map_litellm_error(error: Exception, provider: str = "", model: str = "") ->
         return ProviderExecutionError(
             f"{provider_display} is temporarily unavailable",
             provider_name=provider,
+            original_error=error,
+            failure_kind=FailureKind.SERVER_ERROR,
+            retry_after=retry_after,
             suggestion="The provider is experiencing issues. Try again later or use a different provider."
         )
 
     # Bad request (400) - often malformed input
     if "400" in str(error) or "bad request" in error_msg:
+        _record_unknown_classification(
+            error_type=error_type,
+            provider=provider,
+            model=model,
+            error=error,
+        )
         return ProviderExecutionError(
             f"Invalid request to {provider_display}",
             provider_name=provider,
             original_error=error,
+            failure_kind=FailureKind.UNKNOWN,
+            retry_after=retry_after,
             suggestion="There may be an issue with the request format. Try a simpler prompt."
         )
 
@@ -378,14 +521,25 @@ def _map_litellm_error(error: Exception, provider: str = "", model: str = "") ->
         return ProviderExecutionError(
             f"{provider_display} experienced an internal error",
             provider_name=provider,
+            original_error=error,
+            failure_kind=FailureKind.SERVER_ERROR,
+            retry_after=retry_after,
             suggestion="This is a provider-side issue. Try again or use a different provider."
         )
 
     # Fallback: wrap with context but preserve original message
+    _record_unknown_classification(
+        error_type=error_type,
+        provider=provider,
+        model=model,
+        error=error,
+    )
     return ProviderExecutionError(
         f"Error from {provider_display}: {error}",
         provider_name=provider,
         original_error=error,
+        failure_kind=FailureKind.UNKNOWN,
+        retry_after=retry_after,
         suggestion="Try again or use a different provider."
     )
 
@@ -796,12 +950,8 @@ class LiteLLMService:
             raise
 
         except litellm.RateLimitError as e:
-            provider = getattr(e, 'llm_provider', None)
-            raise AllProvidersRateLimitedError(
-                message="",  # Will be auto-generated
-                attempted_providers=[provider] if provider else [],
-                provider_details=_build_provider_details(e, provider),
-            )
+            provider = getattr(e, 'llm_provider', None) or ""
+            raise _map_rate_limit_error(e, provider=provider, model=model) from e
         # NOTE: AuthenticationError is NOT caught here.
         # LiteLLM Router handles auth failures internally by trying next provider in group.
         # If all providers in group fail auth, Router raises the error which propagates up.
@@ -907,12 +1057,8 @@ class LiteLLMService:
             raise
 
         except litellm.RateLimitError as e:
-            provider = getattr(e, 'llm_provider', None)
-            raise AllProvidersRateLimitedError(
-                message="",  # Will be auto-generated
-                attempted_providers=[provider] if provider else [],
-                provider_details=_build_provider_details(e, provider),
-            )
+            provider = getattr(e, 'llm_provider', None) or ""
+            raise _map_rate_limit_error(e, provider=provider, model=model) from e
         # NOTE: AuthenticationError is NOT caught here. See async version for rationale.
 
     def completion_direct(
@@ -996,11 +1142,7 @@ class LiteLLMService:
             return self._convert_response(response, elapsed)
 
         except litellm.RateLimitError as e:
-            raise AllProvidersRateLimitedError(
-                message="",  # Will be auto-generated
-                attempted_providers=[provider],
-                provider_details=_build_provider_details(e, provider),
-            )
+            raise _map_rate_limit_error(e, provider=provider, model=model) from e
 
     def stream_completion_direct(
         self,
@@ -1097,11 +1239,13 @@ class LiteLLMService:
                 yield converted
 
         except litellm.RateLimitError as e:
-            raise AllProvidersRateLimitedError(
-                message="",  # Will be auto-generated
-                attempted_providers=[provider],
-                provider_details=_build_provider_details(e, provider),
-            )
+            mapped_error = _map_rate_limit_error(e, provider=provider, model=model)
+            if partial_content:
+                mapped_error.context = {
+                    **(getattr(mapped_error, 'context', {}) or {}),
+                    'partial_content_chars': len(partial_content)
+                }
+            raise mapped_error from e
 
         except Exception as e:
             # Map LiteLLM exceptions to user-friendly exceptions
@@ -1217,12 +1361,14 @@ class LiteLLMService:
             raise
 
         except litellm.RateLimitError as e:
-            provider = getattr(e, 'llm_provider', None)
-            raise AllProvidersRateLimitedError(
-                message="",  # Will be auto-generated
-                attempted_providers=[provider] if provider else [],
-                provider_details=_build_provider_details(e, provider),
-            )
+            provider = getattr(e, 'llm_provider', None) or ""
+            mapped_error = _map_rate_limit_error(e, provider=provider, model=model)
+            if partial_content:
+                mapped_error.context = {
+                    **(getattr(mapped_error, 'context', {}) or {}),
+                    'partial_content_chars': len(partial_content)
+                }
+            raise mapped_error from e
 
         except Exception as e:
             # Map LiteLLM exceptions to user-friendly exceptions
@@ -1373,12 +1519,14 @@ class LiteLLMService:
             raise
 
         except litellm.RateLimitError as e:
-            provider = getattr(e, 'llm_provider', None)
-            raise AllProvidersRateLimitedError(
-                message="",  # Will be auto-generated
-                attempted_providers=[provider] if provider else [],
-                provider_details=_build_provider_details(e, provider),
-            )
+            provider = getattr(e, 'llm_provider', None) or ""
+            mapped_error = _map_rate_limit_error(e, provider=provider, model=model)
+            if partial_content:
+                mapped_error.context = {
+                    **(getattr(mapped_error, 'context', {}) or {}),
+                    'partial_content_chars': len(partial_content)
+                }
+            raise mapped_error from e
 
         except (StreamStuckError, StreamCancelledError):
             # Re-raise our custom exceptions unchanged
