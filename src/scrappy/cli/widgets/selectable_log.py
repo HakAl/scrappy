@@ -1,4 +1,4 @@
-"""SelectableLog widget - RichLog replacement with mouse text selection."""
+"""SelectableLog widget with mouse text selection."""
 
 import logging
 from typing import Optional
@@ -18,8 +18,7 @@ logger = logging.getLogger(__name__)
 class SelectableLog(ScrollView, can_focus=True):
     """Log widget with text selection support.
 
-    A drop-in replacement for RichLog that allows users to select
-    and copy text using mouse drag and Ctrl+C.
+    Allows users to select and copy transcript text using mouse drag and Ctrl+C.
 
     Features:
     - Rich renderable support (Panel, Table, Text, Syntax, etc.)
@@ -44,9 +43,9 @@ class SelectableLog(ScrollView, can_focus=True):
         Args:
             max_lines: Maximum lines to keep (None = unlimited)
             auto_scroll: Auto-scroll to bottom on new content
-            wrap: Ignored (kept for RichLog API compatibility)
-            highlight: Ignored (kept for RichLog API compatibility)
-            markup: Ignored (kept for RichLog API compatibility)
+            wrap: Ignored (kept for legacy log API compatibility)
+            highlight: Ignored (kept for legacy log API compatibility)
+            markup: Ignored (kept for legacy log API compatibility)
         """
         super().__init__(**kwargs)
         self._strips: list[Strip] = []

@@ -430,7 +430,7 @@ Current key: [dim]{masked}[/dim]
                 self.io.secho("Invalid selection. Enter 1, 2, or q.", fg=self.io.theme.error)
 
     def _show_menu(self) -> None:
-        """Display provider menu in RichLog."""
+        """Display provider menu in the configured output sink."""
         from rich.panel import Panel
         from rich.table import Table
 
@@ -463,7 +463,7 @@ Current key: [dim]{masked}[/dim]
         )
         self.io.echo("")
 
-        # Post panel to RichLog via OutputSink
+        # Post panel to SelectableLog via OutputSink
         if hasattr(self.io, 'output_sink') and self.io.output_sink:
             self.io.output_sink.post_renderable(panel)
         else:

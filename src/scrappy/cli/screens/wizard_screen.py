@@ -24,7 +24,7 @@ class WizardOutputSink:
 
     Implements the same interface as TextualOutputAdapter so SetupWizard
     can output via io.output_sink pattern, but writes go directly to
-    the screen's RichLog instead of the app's message queue.
+    the screen's SelectableLog instead of the app's message queue.
     """
 
     def __init__(self, layout: ChatLayout) -> None:

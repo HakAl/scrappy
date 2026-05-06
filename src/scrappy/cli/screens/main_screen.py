@@ -43,7 +43,7 @@ class MainAppScreen(Screen):
     """Main chat interface screen.
 
     Provides:
-    - Scrollable output area for conversation history (RichLog)
+    - Scrollable output area for conversation history (SelectableLog)
     - Input field for user messages and commands
     - Dynamic status bar for progress indicators and metrics
     - Command history navigation with up/down arrows

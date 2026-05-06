@@ -70,15 +70,6 @@ SelectableLog:focus {
     border: none;
 }
 
-/* Legacy RichLog support (for screens still using RichLog) */
-RichLog {
-    background: $background;
-    color: $text;
-    border: none;
-    padding: 0 1 1 1;
-    height: 100%;
-}
-
 /* Input container at bottom */
 #input_container {
     layout: horizontal;

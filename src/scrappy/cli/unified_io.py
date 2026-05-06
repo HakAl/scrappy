@@ -676,7 +676,7 @@ class OutputSinkAdapter:
     def output_plain(self, text: str, nl: bool = True) -> None:
         """Output plain text through sink.
 
-        Note: RichLog.write() handles line breaks automatically,
+        Note: SelectableLog.write() handles line breaks automatically,
         so we don't add extra newlines to avoid double-spacing.
         """
         self._sink.post_output(text)
@@ -690,7 +690,7 @@ class OutputSinkAdapter:
     ) -> None:
         """Output styled text through sink as Rich Text.
 
-        Note: RichLog.write() handles line breaks automatically,
+        Note: SelectableLog.write() handles line breaks automatically,
         so we don't add extra newlines to avoid double-spacing.
         """
         color_map = {

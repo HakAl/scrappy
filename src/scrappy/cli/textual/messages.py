@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class WriteOutput(Message):
-    """Message for thread-safe output to RichLog widget."""
+    """Message for thread-safe output to the transcript widget."""
 
     def __init__(self, content: str) -> None:
         super().__init__()
@@ -25,7 +25,7 @@ class WriteOutput(Message):
 
 
 class WriteRenderable(Message):
-    """Message for posting Rich renderables to RichLog widget."""
+    """Message for posting Rich renderables to the transcript widget."""
 
     def __init__(self, renderable: Any) -> None:
         super().__init__()
