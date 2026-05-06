@@ -22,7 +22,7 @@ from ..orchestrator.protocols import Orchestrator
 if TYPE_CHECKING:
     from rich.console import Console, RenderableType
     from textual.widget import Widget
-    from .unified_io import ProgressTracker, StreamWriter
+    from .unified_io import ProgressTrackerProtocol, StreamWriter
 
 
 # =============================================================================
@@ -762,7 +762,7 @@ class RichOutputProtocol(Protocol):
         self,
         total: int,
         description: str = "Progress"
-    ) -> Generator["ProgressTracker", None, None]:
+    ) -> Generator["ProgressTrackerProtocol", None, None]:
         """Create a progress bar context manager.
 
         Note: Visual representation varies by output mode.
@@ -774,7 +774,7 @@ class RichOutputProtocol(Protocol):
             description: Description text
 
         Yields:
-            ProgressTracker for updating progress
+            Progress tracker for updating progress
         """
         ...
 

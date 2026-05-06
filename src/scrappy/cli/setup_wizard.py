@@ -163,11 +163,20 @@ class SetupWizard:
         elif self._state == WizardState.ACTION_MENU:
             return "1=Update key, 2=Remove key, q=Back"
         elif self._state == WizardState.AWAITING_KEY:
-            info = PROVIDERS[self._current_provider]
+            provider = self._require_current_provider()
+            info = PROVIDERS[provider]
             return f"Enter {info.env_var} or q to cancel"
         elif self._state == WizardState.CONFIRM_REMOVE:
             return "Remove this API key? (y/n)"
         return ""
+
+    def _require_current_provider(self) -> str:
+        """Return the selected provider for states that require one."""
+        if self._current_provider is None:
+            raise RuntimeError(
+                f"Wizard state {self._state.name} requires a selected provider"
+            )
+        return self._current_provider
 
     def handle_input(self, user_input: str) -> None:
         """
@@ -262,18 +271,23 @@ class SetupWizard:
 
         # Use sanitized value from validation
         sanitized_key = validation_result.sanitized_value
+        if sanitized_key is None:
+            self.io.secho("Invalid key: sanitized key is missing", fg=self.io.theme.error)
+            return
+
+        provider = self._require_current_provider()
 
         self.io.echo("Validating with provider...")
-        valid, error_msg = self._test_provider_key(self._current_provider, sanitized_key)
+        valid, error_msg = self._test_provider_key(provider, sanitized_key)
         if not valid:
             self.io.secho(f"API key validation failed: {error_msg}", fg=self.io.theme.error)
             return
 
         # Save the key (config service will validate again as defense-in-depth)
-        info = PROVIDERS[self._current_provider]
+        info = PROVIDERS[provider]
         try:
             self._save_key(info.env_var, sanitized_key)
-            self.io.secho(f"{self._current_provider.replace('_', ' ').title()} configured!", fg=self.io.theme.success)
+            self.io.secho(f"{provider.replace('_', ' ').title()} configured!", fg=self.io.theme.success)
         except ApiKeyValidationError as e:
             self.io.secho(f"Failed to save key: {e}", fg=self.io.theme.error)
             return
@@ -285,8 +299,9 @@ class SetupWizard:
         """Display action menu for a configured provider."""
         from rich.panel import Panel
 
-        provider_title = self._current_provider.replace('_', ' ').title()
-        info = PROVIDERS[self._current_provider]
+        provider = self._require_current_provider()
+        provider_title = provider.replace('_', ' ').title()
+        info = PROVIDERS[provider]
 
         # Mask the current key for display
         current_key = self._config_service.get_key(info.env_var) or ""
@@ -321,13 +336,15 @@ Current key: [dim]{masked}[/dim]
         if choice == '1':
             # Update key - same flow as adding a new key
             self._state = WizardState.AWAITING_KEY
-            info = PROVIDERS[self._current_provider]
-            self.io.echo(f"\nUpdating {self._current_provider.replace('_', ' ').title()}")
+            provider = self._require_current_provider()
+            info = PROVIDERS[provider]
+            self.io.echo(f"\nUpdating {provider.replace('_', ' ').title()}")
             self.io.echo(f"Get your API key from: {info.console_url}")
         elif choice == '2':
             # Remove key - confirm first
             self._state = WizardState.CONFIRM_REMOVE
-            provider_title = self._current_provider.replace('_', ' ').title()
+            provider = self._require_current_provider()
+            provider_title = provider.replace('_', ' ').title()
             self.io.echo(f"\nRemove API key for {provider_title}?")
         else:
             self.io.secho("Invalid selection. Enter 1, 2, or q.", fg=self.io.theme.error)
@@ -336,7 +353,8 @@ Current key: [dim]{masked}[/dim]
         """Handle removal confirmation input."""
         if response in ('y', 'yes'):
             self._remove_key()
-            provider_title = self._current_provider.replace('_', ' ').title()
+            provider = self._require_current_provider()
+            provider_title = provider.replace('_', ' ').title()
             self.io.secho(f"{provider_title} API key removed.", fg=self.io.theme.success)
             self._state = WizardState.MENU
             # Screen will handle showing menu after clearing
@@ -349,7 +367,8 @@ Current key: [dim]{masked}[/dim]
 
     def _remove_key(self) -> None:
         """Remove the current provider's API key."""
-        info = PROVIDERS[self._current_provider]
+        provider = self._require_current_provider()
+        info = PROVIDERS[provider]
         config = self._config_service.load()
         if info.env_var in config.api_keys:
             del config.api_keys[info.env_var]
@@ -526,6 +545,9 @@ Current key: [dim]{masked}[/dim]
             return False
 
         sanitized_key = validation_result.sanitized_value
+        if sanitized_key is None:
+            self.io.secho("Invalid key: sanitized key is missing", fg=self.io.theme.error)
+            return False
 
         self.io.echo("Validating with provider...")
         valid, error_msg = self._test_provider_key(name, sanitized_key)

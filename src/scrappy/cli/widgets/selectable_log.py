@@ -33,9 +33,6 @@ class SelectableLog(ScrollView, can_focus=True):
         self,
         max_lines: Optional[int] = None,
         auto_scroll: bool = True,
-        wrap: bool = False,
-        highlight: bool = False,
-        markup: bool = False,
         **kwargs
     ):
         """Initialize SelectableLog.
@@ -43,9 +40,6 @@ class SelectableLog(ScrollView, can_focus=True):
         Args:
             max_lines: Maximum lines to keep (None = unlimited)
             auto_scroll: Auto-scroll to bottom on new content
-            wrap: Ignored (kept for legacy log API compatibility)
-            highlight: Ignored (kept for legacy log API compatibility)
-            markup: Ignored (kept for legacy log API compatibility)
         """
         super().__init__(**kwargs)
         self._strips: list[Strip] = []

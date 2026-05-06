@@ -86,6 +86,33 @@ class ProgressTracker:
         self._progress.update(self._task_id, description=description)
 
 
+class ProgressTrackerProtocol(Protocol):
+    """Common progress tracker contract for CLI and TUI output modes."""
+
+    @property
+    def total(self) -> int:
+        """Get total progress value."""
+        ...
+
+    @property
+    def current(self) -> int:
+        """Get current progress value."""
+        ...
+
+    @property
+    def completed(self) -> bool:
+        """Check if progress is complete."""
+        ...
+
+    def advance(self, amount: int = 1) -> None:
+        """Advance progress by specified amount."""
+        ...
+
+    def update_description(self, description: str) -> None:
+        """Update the progress description."""
+        ...
+
+
 class StreamWriter:
     """Writer for streaming output without buffering."""
 
@@ -317,7 +344,7 @@ class OutputStrategyProtocol(Protocol):
         self,
         total: int,
         description: str = "Progress"
-    ) -> Generator[ProgressTracker, None, None]:
+    ) -> Generator[ProgressTrackerProtocol, None, None]:
         """Create progress context for this output strategy.
 
         DirectConsoleOutput: Rich animated progress bar
@@ -516,7 +543,7 @@ class DirectConsoleOutput:
         self,
         total: int,
         description: str = "Progress"
-    ) -> Generator[ProgressTracker, None, None]:
+    ) -> Generator[ProgressTrackerProtocol, None, None]:
         """Create Rich animated progress bar."""
         with Progress(
             TextColumn("[progress.description]{task.description}"),
@@ -780,7 +807,7 @@ class OutputSinkAdapter:
         self,
         total: int,
         description: str = "Progress"
-    ) -> Generator[SimplifiedProgressTracker, None, None]:
+    ) -> Generator[ProgressTrackerProtocol, None, None]:
         """Create progress context (simplified for TUI).
 
         Uses text-based progress messages instead of live bars.
@@ -1173,7 +1200,7 @@ class UnifiedIO:
         self,
         total: int,
         description: str = "Progress"
-    ) -> Generator[ProgressTracker, None, None]:
+    ) -> Generator[ProgressTrackerProtocol, None, None]:
         """Create a progress bar context manager.
 
         Visual representation varies by mode:
