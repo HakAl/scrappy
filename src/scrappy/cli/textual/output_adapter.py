@@ -7,6 +7,7 @@ via a thread-safe queue that the main Textual event loop consumes.
 
 from typing import Any, Dict, Optional, TYPE_CHECKING
 import threading
+import time
 import uuid
 from queue import Queue, Empty
 
@@ -71,12 +72,22 @@ class TextualOutputAdapter:
 
         self._queue.put(('flush', flush_id))
 
-        success = event.wait(timeout=timeout)
+        deadline = time.monotonic() + timeout
+        success = False
+
+        while not self._shutdown_requested:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+
+            if event.wait(timeout=min(0.05, remaining)):
+                success = True
+                break
 
         with self._flush_lock:
             self._flush_events.pop(flush_id, None)
 
-        return success
+        return success and not self._shutdown_requested
 
     def acknowledge_flush(self, flush_id: str) -> None:
         """Called by consumer when flush sentinel is processed."""
@@ -93,6 +104,9 @@ class TextualOutputAdapter:
         worker exits promptly.
         """
         self._shutdown_requested = True
+        with self._flush_lock:
+            for event in self._flush_events.values():
+                event.set()
         # Put sentinel to wake any blocked consumer
         self._queue.put(self.SHUTDOWN_SENTINEL)
 

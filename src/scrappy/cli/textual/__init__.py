@@ -16,6 +16,8 @@ __all__ = [
     "ThreadSafeAsyncBridge",
     # Output adapter
     "TextualOutputAdapter",
+    "TextualTuiEventSink",
+    "TuiEventSinkProtocol",
     # Messages
     "WriteOutput",
     "WriteRenderable",
@@ -26,6 +28,7 @@ __all__ = [
     "TasksUpdated",
     "CLIReady",
     "CancelRequested",
+    "TuiEventMessage",
     # Status components
     "ProgressIndicator",
     "TokenCounter",
@@ -41,6 +44,8 @@ _EXPORTS = {
     "ScrappyApp": (".app", "ScrappyApp"),
     "ThreadSafeAsyncBridge": (".bridge", "ThreadSafeAsyncBridge"),
     "TextualOutputAdapter": (".output_adapter", "TextualOutputAdapter"),
+    "TextualTuiEventSink": (".event_sink", "TextualTuiEventSink"),
+    "TuiEventSinkProtocol": (".event_sink", "TuiEventSinkProtocol"),
     "WriteOutput": (".messages", "WriteOutput"),
     "WriteRenderable": (".messages", "WriteRenderable"),
     "RequestInlineInput": (".messages", "RequestInlineInput"),
@@ -50,6 +55,7 @@ _EXPORTS = {
     "TasksUpdated": (".messages", "TasksUpdated"),
     "CLIReady": (".messages", "CLIReady"),
     "CancelRequested": (".messages", "CancelRequested"),
+    "TuiEventMessage": (".tui_events", "TuiEventMessage"),
     "ProgressIndicator": (".status_components", "ProgressIndicator"),
     "TokenCounter": (".status_components", "TokenCounter"),
     "ProviderStatus": (".status_components", "ProviderStatus"),

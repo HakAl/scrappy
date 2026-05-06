@@ -32,11 +32,22 @@ from .messages import (
     IndexingProgress,
     ActivityStateChange,
     MetricsUpdate,
-    TasksUpdated,
+    TasksUpdated as TasksUpdatedMessage,
     CLIReady,
 )
 from .bridge import ThreadSafeAsyncBridge
+from .event_sink import TextualTuiEventSink
 from .output_adapter import TextualOutputAdapter
+from .tui_events import (
+    ActivityChanged,
+    FlushRequested,
+    IndexingProgressChanged,
+    MetricsUpdated,
+    TasksUpdated,
+    TranscriptAppend,
+    TuiEventMessage,
+    tui_event_from_legacy_output_message,
+)
 
 if TYPE_CHECKING:
     from ..interactive import InteractiveMode
@@ -118,6 +129,8 @@ class ScrappyApp(App):
             self.interactive_mode = interactive_mode
             self.output_adapter = output_adapter or TextualOutputAdapter()
             self.ready = True
+
+        self.tui_event_sink = TextualTuiEventSink(self)
 
         # Thread-safe async bridge for prompts/confirms
         self.bridge = ThreadSafeAsyncBridge(self)
@@ -445,6 +458,7 @@ class ScrappyApp(App):
 
         # Signal consumer to exit - puts sentinel on queue to wake it immediately
         self._should_stop_consumer = True
+        self.tui_event_sink.request_shutdown()
         self.output_adapter.request_shutdown()
         self._file_log("exit(): consumer signaled")
 
@@ -495,6 +509,7 @@ class ScrappyApp(App):
 
         self._runtime_cleanup_done = True
         self._should_stop_consumer = True
+        self.tui_event_sink.request_shutdown()
         self.output_adapter.request_shutdown()  # Wake consumer immediately
         OutputModeContext.set_tui_mode(False)
 
@@ -760,20 +775,13 @@ class ScrappyApp(App):
             if self._should_stop_consumer or self.output_adapter.is_shutdown_requested():
                 break
 
-            msg_type, content = message
-
             try:
-                if msg_type == "output":
-                    self.post_message(WriteOutput(content))
-                elif msg_type == "renderable":
-                    self.post_message(WriteRenderable(content))
-                elif msg_type == "tasks":
-                    self.post_message(TasksUpdated(content))
-                elif msg_type == "activity":
-                    state, msg, elapsed_ms = content
-                    self.post_message(ActivityStateChange(state, msg, elapsed_ms))
-                elif msg_type == "flush":
-                    self.output_adapter.acknowledge_flush(content)
+                event = tui_event_from_legacy_output_message(
+                    message,
+                    acknowledge_flush=self.output_adapter.acknowledge_flush,
+                )
+                if event is not None:
+                    self.tui_event_sink.post_event(event)
             except Exception:
                 # App shutting down, message pump closed
                 break
@@ -781,6 +789,42 @@ class ScrappyApp(App):
     # =========================================================================
     # Message Handlers - Route to Active Screen
     # =========================================================================
+
+    def on_tui_event_message(self, message: TuiEventMessage) -> None:
+        """Dispatch typed TUI events from the single boundary message."""
+        event = message.event
+        if isinstance(event, TranscriptAppend):
+            if event.content is not None:
+                self.on_write_output(WriteOutput(event.content))
+            if event.renderable is not None:
+                self.on_write_renderable(WriteRenderable(event.renderable))
+        elif isinstance(event, ActivityChanged):
+            self.on_activity_state_change(
+                ActivityStateChange(event.state, event.message, event.elapsed_ms)
+            )
+        elif isinstance(event, TasksUpdated):
+            self.on_tasks_updated(TasksUpdatedMessage(event.tasks))
+        elif isinstance(event, MetricsUpdated):
+            self.on_metrics_update(
+                MetricsUpdate(
+                    provider_display=event.provider_display,
+                    input_tokens=event.input_tokens,
+                    output_tokens=event.output_tokens,
+                    session_total=event.session_total,
+                    context_percent=event.context_percent,
+                )
+            )
+        elif isinstance(event, IndexingProgressChanged):
+            self.on_indexing_progress(
+                IndexingProgress(
+                    message=event.message,
+                    progress=event.progress,
+                    total=event.total,
+                    complete=event.complete,
+                )
+            )
+        elif isinstance(event, FlushRequested):
+            event.acknowledge(event.flush_id)
 
     def on_write_output(self, message: WriteOutput) -> None:
         """Route plain text output to active screen."""
@@ -838,7 +882,7 @@ class ScrappyApp(App):
         if message.state == ActivityState.IDLE:
             self.call_after_refresh(self._signal_command_idle)
 
-    def on_tasks_updated(self, message: TasksUpdated) -> None:
+    def on_tasks_updated(self, message: TasksUpdatedMessage) -> None:
         """Route task updates to active screen."""
         from ..screens import MainAppScreen
 
