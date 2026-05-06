@@ -36,7 +36,34 @@ from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 
-class ProgressTracker:
+class ProgressTrackerProtocol(Protocol):
+    """Common progress tracker contract for CLI and TUI output modes."""
+
+    @property
+    def total(self) -> int:
+        """Get total progress value."""
+        ...
+
+    @property
+    def current(self) -> int:
+        """Get current progress value."""
+        ...
+
+    @property
+    def completed(self) -> bool:
+        """Check if progress is complete."""
+        ...
+
+    def advance(self, amount: int = 1) -> None:
+        """Advance progress by specified amount."""
+        ...
+
+    def update_description(self, description: str) -> None:
+        """Update the progress description."""
+        ...
+
+
+class ProgressTracker(ProgressTrackerProtocol):
     """Wrapper for tracking progress within a context manager."""
 
     def __init__(self, progress: Progress, task_id):
@@ -84,33 +111,6 @@ class ProgressTracker:
             description: New description text
         """
         self._progress.update(self._task_id, description=description)
-
-
-class ProgressTrackerProtocol(Protocol):
-    """Common progress tracker contract for CLI and TUI output modes."""
-
-    @property
-    def total(self) -> int:
-        """Get total progress value."""
-        ...
-
-    @property
-    def current(self) -> int:
-        """Get current progress value."""
-        ...
-
-    @property
-    def completed(self) -> bool:
-        """Check if progress is complete."""
-        ...
-
-    def advance(self, amount: int = 1) -> None:
-        """Advance progress by specified amount."""
-        ...
-
-    def update_description(self, description: str) -> None:
-        """Update the progress description."""
-        ...
 
 
 class StreamWriter:
@@ -164,7 +164,7 @@ class StreamWriter:
         return "".join(self._buffer)
 
 
-class SimplifiedProgressTracker:
+class SimplifiedProgressTracker(ProgressTrackerProtocol):
     """Simplified progress tracker for TUI mode.
 
     Logs text-based progress messages instead of animated progress bars.

@@ -333,17 +333,16 @@ Current key: [dim]{masked}[/dim]
             self._show_menu()
             return
 
+        provider = self._require_current_provider()
         if choice == '1':
             # Update key - same flow as adding a new key
             self._state = WizardState.AWAITING_KEY
-            provider = self._require_current_provider()
             info = PROVIDERS[provider]
             self.io.echo(f"\nUpdating {provider.replace('_', ' ').title()}")
             self.io.echo(f"Get your API key from: {info.console_url}")
         elif choice == '2':
             # Remove key - confirm first
             self._state = WizardState.CONFIRM_REMOVE
-            provider = self._require_current_provider()
             provider_title = provider.replace('_', ' ').title()
             self.io.echo(f"\nRemove API key for {provider_title}?")
         else:
