@@ -8,6 +8,7 @@ import uuid
 from scrappy.cli.protocols import ActivityState
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.textual.tui_events import ActivityChanged, CliReadyChanged, TuiEventMessage
+from scrappy.cli.widgets import SelectableLog
 
 
 def test_setup_interactive_mode_uses_shared_helpers():
@@ -121,6 +122,45 @@ def test_handle_paste_shortcut_reads_system_clipboard():
     clipboard.paste_text.assert_called_once_with()
     target.focus.assert_called_once_with()
     target.action_paste.assert_called_once_with()
+
+
+def test_get_paste_target_uses_active_chat_surface_input():
+    """Paste fallback should use any active screen's shared composer."""
+    app = ScrappyApp(cli_factory=lambda: Mock())
+    target = Mock()
+    mock_screen = Mock()
+    mock_screen._surface = Mock(input=target)
+
+    with patch.object(type(app), "screen", new_callable=lambda: property(lambda self: mock_screen)):
+        assert app._get_paste_target() is target
+
+
+class FakeSelectableLog(SelectableLog):
+    """SelectableLog test double that avoids clipboard side effects."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.copied = False
+
+    @property
+    def selection_text(self) -> str:
+        return "selected transcript"
+
+    def action_copy_selection(self) -> None:
+        self.copied = True
+
+
+def test_handle_copy_shortcut_uses_active_chat_surface_transcript():
+    """Copy fallback should use any active screen's shared transcript."""
+    app = ScrappyApp(cli_factory=lambda: Mock())
+    output = FakeSelectableLog()
+    mock_screen = Mock()
+    mock_screen._surface = Mock(output=output)
+
+    with patch.object(type(app), "screen", new_callable=lambda: property(lambda self: mock_screen)):
+        assert app._handle_copy_shortcut() is True
+
+    assert output.copied is True
 
 
 def test_handle_ctrl_c_prefers_copy_over_exit_and_cancel():

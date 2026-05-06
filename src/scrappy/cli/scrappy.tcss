@@ -51,8 +51,8 @@ Widget {
     border: none;
 }
 
-/* ChatLayout widget */
-ChatLayout {
+/* ChatSurface widget */
+ChatSurface {
     border: none;
     background: $background;
 }

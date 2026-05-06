@@ -17,7 +17,7 @@ os.environ["SCRAPPY_MOCK_RESPONSE"] = "Mock response"
 from scrappy.cli.core import CLI
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.screens import MainAppScreen, SetupWizardScreen
-from scrappy.cli.screens.chat_layout import ChatLayout
+from scrappy.cli.screens.chat_surface import ChatSurface
 
 
 def create_test_app() -> ScrappyApp:
@@ -60,7 +60,7 @@ class TestMetricsStatusPilot:
                 try:
                     # Query from screen which is more direct
                     screen = app.screen
-                    screen.query_one(ChatLayout)
+                    screen.query_one(ChatSurface)
                     screen.query_one("#status_bar")
                     status_bar_found = True
                     break

@@ -51,23 +51,14 @@ class TestSetupWizardScreen:
         mock_io.theme = MagicMock()
         mock_validator = MagicMock()
         mock_clipboard = MagicMock()
-        mock_clipboard.paste_text.return_value = "clipboard text"
         screen = SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
-        screen._layout = MagicMock()
-        screen._layout.input.selection.start = (0, 0)
-        screen._layout.input.selection.end = (0, 0)
+        screen._surface = MagicMock()
         event = MagicMock()
         event.button = 3
 
         screen.on_click(event)
 
-        mock_clipboard.paste_text.assert_called_once_with()
-        screen._layout.input.replace.assert_called_once_with(
-            "clipboard text",
-            (0, 0),
-            (0, 0),
-            maintain_selection_offset=True,
-        )
+        screen._surface.handle_click.assert_called_once_with(event, mock_clipboard)
 
 
 class TestSetupWizard:

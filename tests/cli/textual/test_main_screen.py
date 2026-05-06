@@ -30,7 +30,7 @@ def create_screen(interactive_mode=None):
     app.interactive_mode = interactive_mode
     app.tui_event_sink = Mock()
     screen._app = app
-    screen._layout = Mock()
+    screen._surface = Mock()
     return screen, app, clipboard
 
 
@@ -44,7 +44,7 @@ def test_process_command_waits_for_interactive_mode():
     finally:
         active_app.reset(token)
 
-    screen._layout.write.assert_called_once_with("Still initializing...\n")
+    screen._surface.write.assert_called_once_with("Still initializing...\n")
     app.tui_event_sink.post_event.assert_called()
     app.exit.assert_not_called()
 
@@ -64,27 +64,17 @@ def test_process_command_recovers_interactive_mode_from_app():
 
     interactive_mode._process_input.assert_called_once_with("hello")
     assert screen.interactive_mode is interactive_mode
-    screen._layout.write.assert_not_called()
+    screen._surface.write.assert_not_called()
     app.call_from_thread.assert_called_once_with(app.restore_mouse_support)
 
 
 def test_on_click_right_click_pastes_clipboard_into_input():
-    """Right-click should paste clipboard text into the input widget."""
+    """Right-click should route through the shared chat surface policy."""
     screen, _, clipboard = create_screen()
-    selection = Mock()
-    selection.start = (0, 0)
-    selection.end = (0, 0)
-    screen._layout.input.selection = selection
     clipboard.paste_text.return_value = "clipboard text"
     event = Mock()
     event.button = 3
 
     screen.on_click(event)
 
-    clipboard.paste_text.assert_called_once_with()
-    screen._layout.input.replace.assert_called_once_with(
-        "clipboard text",
-        selection.start,
-        selection.end,
-        maintain_selection_offset=True,
-    )
+    screen._surface.handle_click.assert_called_once_with(event, clipboard)

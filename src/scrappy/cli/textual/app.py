@@ -803,7 +803,7 @@ class ScrappyApp(App):
             return
 
         main_screen = self._active_main_screen()
-        if main_screen is None or getattr(main_screen, "_layout", None) is None:
+        if main_screen is None or getattr(main_screen, "_surface", None) is None:
             self._buffer_main_transcript_event(event)
             return
 
@@ -852,7 +852,7 @@ class ScrappyApp(App):
         if main_screen is None:
             self._main_transcript_buffer_draining = False
             return
-        if getattr(main_screen, "_layout", None) is None:
+        if getattr(main_screen, "_surface", None) is None:
             self.call_later(self._drain_main_transcript_buffer_batch)
             return
 
@@ -987,8 +987,8 @@ class ScrappyApp(App):
             if screen.capture_manager.is_capturing:
                 screen.capture_manager.cancel()
                 # Full UI cleanup without restarting timer
-                if screen._layout:
-                    screen._layout.input.placeholder = "Type your message or command..."
+                if screen._surface:
+                    screen._surface.input.placeholder = "Type your message or command..."
                 screen.prompt_display.hide_prompt()
                 try:
                     from ..textual import StatusBar
@@ -1020,17 +1020,19 @@ class ScrappyApp(App):
         """Handle ESC key: cancel whatever is running."""
         self._cancel_operation()
 
+    def _active_chat_surface(self) -> Any | None:
+        """Return the active screen's shared chat surface, if present."""
+        return getattr(self.screen, "_surface", None)
+
     def _get_paste_target(self) -> Optional[TextArea]:
-        """Return the focused TextArea, or the main input as a fallback."""
+        """Return the focused TextArea, or the active surface input as fallback."""
         focused = self.focused
         if isinstance(focused, TextArea):
             return focused
 
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen) and screen._layout is not None:
-            return screen._layout.input
+        surface = self._active_chat_surface()
+        if surface is not None:
+            return surface.input
 
         try:
             return self.screen.query_one(TextArea)
@@ -1039,7 +1041,6 @@ class ScrappyApp(App):
 
     def _handle_copy_shortcut(self) -> bool:
         """Copy selected text from the focused input or output log."""
-        from ..screens import MainAppScreen
         from ..widgets.selectable_log import SelectableLog
 
         focused = self.focused
@@ -1047,9 +1048,9 @@ class ScrappyApp(App):
             focused.action_copy()
             return True
 
-        screen = self.screen
-        if isinstance(screen, MainAppScreen) and screen._layout is not None:
-            output = screen._layout.output
+        surface = self._active_chat_surface()
+        if surface is not None:
+            output = surface.output
             if isinstance(output, SelectableLog) and output.selection_text:
                 output.action_copy_selection()
                 return True

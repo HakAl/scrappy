@@ -11,7 +11,7 @@ from textual.app import App, ComposeResult
 from textual.events import MouseDown, MouseMove, MouseUp
 from textual.widgets import TextArea
 
-from scrappy.cli.screens.chat_layout import ChatLayout
+from scrappy.cli.screens.chat_surface import ChatSurface
 from scrappy.cli.screens.main_screen import MainAppScreen
 from scrappy.cli.screens.wizard_screen import SetupWizardScreen
 from scrappy.cli.textual.app import ScrappyApp
@@ -118,11 +118,11 @@ class TestTranscriptScrollContracts:
         async with app.run_test(size=(80, 12)) as pilot:
             await pilot.pause()
 
-            layout = app.screen.query_one(ChatLayout)
+            surface = app.screen.query_one(ChatSurface)
             log = app.screen.query_one(SelectableLog)
 
             assert list(app.screen.query("#output_container")) == []
-            assert log.parent is layout
+            assert log.parent is surface
 
     @pytest.mark.asyncio
     async def test_page_up_scrolls_transcript_after_enough_output(self, monkeypatch):
@@ -328,10 +328,6 @@ class TestSharedSurfaceContracts:
                 assert app.focused is log
                 assert log.selection_text != ""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 5 moves main and wizard paste policy into the shared surface.",
-    )
     @pytest.mark.asyncio
     async def test_transcript_right_click_does_not_paste_into_composer(self):
         """Transcript mouse actions should not paste into the composer."""

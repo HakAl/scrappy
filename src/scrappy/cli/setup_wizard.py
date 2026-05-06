@@ -2,7 +2,7 @@
 import os
 from contextlib import contextmanager
 from enum import Enum, auto
-from typing import Optional, Tuple, Callable, TYPE_CHECKING
+from typing import Any, Optional, Tuple, Callable, TYPE_CHECKING
 
 from scrappy.orchestrator.provider_definitions import PROVIDERS, SETUP_PROVIDER_GUIDANCE
 from scrappy.infrastructure.config.api_keys import (
@@ -447,8 +447,12 @@ Current key: [dim]{masked}[/dim]
             else:
                 self.io.secho("Invalid selection. Enter 1, 2, or q.", fg=self.io.theme.error)
 
-    def _show_menu(self) -> None:
-        """Display provider menu in the configured output sink."""
+    def menu_renderables(self) -> tuple[Any, ...]:
+        """Return renderables for the provider menu without writing them."""
+        return ("", self._build_menu_panel())
+
+    def _build_menu_panel(self):
+        """Build the provider menu panel."""
         from rich.panel import Panel
         from rich.table import Table
 
@@ -479,9 +483,14 @@ Current key: [dim]{masked}[/dim]
             border_style="blue",
             expand=False,
         )
-        self.io.echo("")
+        return panel
 
-        # Post panel to SelectableLog via OutputSink
+    def _show_menu(self) -> None:
+        """Display provider menu in the configured output sink."""
+        self.io.echo("")
+        panel = self._build_menu_panel()
+
+        # Post via OutputSink
         if hasattr(self.io, 'output_sink') and self.io.output_sink:
             self.io.output_sink.post_renderable(panel)
         else:

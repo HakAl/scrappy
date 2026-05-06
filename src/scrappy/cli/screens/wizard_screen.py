@@ -1,16 +1,22 @@
 """Setup wizard screen for Scrappy TUI."""
 
 from contextlib import nullcontext
-from typing import TYPE_CHECKING, Optional, Callable, Any, cast
+from typing import TYPE_CHECKING, Optional, Callable, Any
 import logging
 
 from textual.screen import Screen
 from textual.app import ComposeResult
 from textual.binding import Binding
 
-from .chat_layout import ChatLayout
+from .chat_surface import (
+    AppendTranscript,
+    ChatSurface,
+    ChatSurfaceConfig,
+    ClearTranscript,
+    SubmitResult,
+)
 from scrappy.cli.protocols import ClipboardProtocol
-from scrappy.cli.textual.tui_events import TranscriptClear, TuiEventTarget
+from scrappy.cli.textual.tui_events import TuiEventTarget
 from scrappy.orchestrator.protocols import KeyValidatorProtocol
 
 if TYPE_CHECKING:
@@ -24,7 +30,7 @@ class SetupWizardScreen(Screen):
     """Provider setup wizard screen.
 
     Full-screen replacement that handles API key configuration.
-    Uses ChatLayout for consistent UI and direct output writing.
+    Uses ChatSurface for consistent UI and direct output writing.
     """
 
     BINDINGS = [
@@ -58,24 +64,26 @@ class SetupWizardScreen(Screen):
         # Wizard business logic (created on mount)
         self._wizard: Optional["SetupWizard"] = None
 
-        # Layout component
-        self._layout: Optional[ChatLayout] = None
+        # Shared chat surface
+        self._surface: Optional[ChatSurface] = None
 
     def compose(self) -> ComposeResult:
-        """Create wizard UI using ChatLayout."""
-        yield ChatLayout(
-            show_status_bar=False,
-            input_placeholder="Select provider (1-5 or q)",
-            id="chat_layout"
+        """Create wizard UI using ChatSurface."""
+        yield ChatSurface(
+            config=ChatSurfaceConfig(
+                show_status_bar=False,
+                input_placeholder="Select provider (1-5 or q)",
+            ),
+            id="chat_surface"
         )
 
     def on_mount(self) -> None:
         """Called when screen is mounted - start the wizard."""
         from ..setup_wizard import SetupWizard
 
-        # Get layout and focus input
-        self._layout = self.query_one(ChatLayout)
-        self._layout.focus_input()
+        # Get surface and focus input
+        self._surface = self.query_one(ChatSurface)
+        self._surface.focus_input()
 
         # Create and start wizard
         self._wizard = SetupWizard(self._io, self._key_validator)
@@ -96,33 +104,25 @@ class SetupWizardScreen(Screen):
 
     def on_click(self, event) -> None:
         """Handle clicks - right-click to paste, otherwise refocus input."""
-        if self._layout is None:
+        if self._surface is None:
             return
-
-        # Right-click (button=3) pastes from clipboard
-        if hasattr(event, 'button') and event.button == 3:
-            try:
-                text = self._clipboard.paste_text()
-                if text:
-                    self._layout.input.replace(
-                        text,
-                        self._layout.input.selection.start,
-                        self._layout.input.selection.end,
-                        maintain_selection_offset=True
-                    )
-            except Exception:
-                pass
-            return
-
-        self._layout.focus_input()
+        self._surface.handle_click(event, self._clipboard)
 
     def action_submit_input(self) -> None:
         """Handle Enter to submit input to wizard."""
-        if self._wizard is None or self._layout is None:
+        if self._wizard is None or self._surface is None:
             return
 
-        # Get and clear input
-        user_input = self._layout.clear_input().strip()
+        result = self._surface.submit(self)
+        self._apply_submit_follow_up_actions(result)
+
+        # Update placeholder for next prompt
+        self._update_placeholder()
+
+    def handle_submit(self, user_input: str) -> SubmitResult:
+        """Handle wizard input behind the shared surface protocol."""
+        if self._wizard is None:
+            return SubmitResult(accepted=False)
 
         # Track state before handling input
         from ..setup_wizard import WizardState
@@ -135,15 +135,28 @@ class SetupWizardScreen(Screen):
         # If we transitioned to MENU from AWAITING_KEY, clear and re-show fresh menu
         # (DISCLAIMER -> MENU transition already shows menu, don't clear it)
         state_after = self._wizard._state
-        if state_after == WizardState.MENU and state_before == WizardState.AWAITING_KEY:
-            cast(Any, self.app).tui_event_sink.post_event(
-                TranscriptClear(target=TuiEventTarget.WIZARD_TRANSCRIPT)
+        if state_after == WizardState.MENU and state_before in {
+            WizardState.AWAITING_KEY,
+            WizardState.CONFIRM_REMOVE,
+        }:
+            return SubmitResult(
+                accepted=True,
+                follow_up_actions=(
+                    ClearTranscript(target=TuiEventTarget.WIZARD_TRANSCRIPT),
+                    AppendTranscript(
+                        entries=self._wizard.menu_renderables(),
+                        target=TuiEventTarget.WIZARD_TRANSCRIPT,
+                    ),
+                ),
             )
-            with self._wizard_output_context():
-                self._wizard._show_menu()
 
-        # Update placeholder for next prompt
-        self._update_placeholder()
+        return SubmitResult(accepted=True)
+
+    def _apply_submit_follow_up_actions(self, result: SubmitResult) -> None:
+        """Apply wizard submit follow-up actions."""
+        if self._surface is None:
+            return
+        self._surface.apply_follow_up_actions(result.follow_up_actions)
 
     def _update_placeholder(self) -> None:
         """Update input placeholder based on wizard state."""
@@ -151,23 +164,23 @@ class SetupWizardScreen(Screen):
             return
 
         prompt = self._wizard.current_prompt
-        if prompt and self._layout:
-            self._layout.input.placeholder = prompt
+        if prompt and self._surface:
+            self._surface.input.placeholder = prompt
 
     def write_output(self, content: str) -> None:
         """Write plain text to the wizard transcript."""
-        if self._layout is not None:
-            self._layout.write(content)
+        if self._surface is not None:
+            self._surface.write(content)
 
     def write_renderable(self, renderable: Any) -> None:
         """Write a Rich renderable to the wizard transcript."""
-        if self._layout is not None:
-            self._layout.write(renderable)
+        if self._surface is not None:
+            self._surface.write(renderable)
 
     def clear_output(self) -> None:
         """Clear the wizard transcript."""
-        if self._layout is not None:
-            self._layout.clear_output()
+        if self._surface is not None:
+            self._surface.clear_output()
 
     def _wizard_output_context(self):
         """Route wizard business output to the wizard transcript target."""

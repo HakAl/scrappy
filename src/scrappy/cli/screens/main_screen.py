@@ -7,10 +7,15 @@ import time
 from textual.screen import Screen
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.widgets import TextArea
 from textual import work
 
-from .chat_layout import ChatLayout
+from .chat_surface import (
+    ChatSurface,
+    ChatSurfaceConfig,
+    ExitApp,
+    RestartCapture,
+    SubmitResult,
+)
 from ..widgets import SelectableLog
 from ..input_capture import InputCaptureManager, InputRequest
 from ..command_history import CommandHistory, get_default_history_path
@@ -94,8 +99,8 @@ class MainAppScreen(Screen):
         self._history = CommandHistory(history_file=get_default_history_path())
         self._history_temp_input: str = ""
 
-        # Layout component (set on mount)
-        self._layout: Optional[ChatLayout] = None
+        # Shared chat surface (set on mount)
+        self._surface: Optional[ChatSurface] = None
 
         # Elapsed timer for activity indicator
         self._elapsed_timer: Optional[Any] = None
@@ -115,18 +120,20 @@ class MainAppScreen(Screen):
         return self._semantic_status
 
     def compose(self) -> ComposeResult:
-        """Create child widgets using ChatLayout."""
-        yield ChatLayout(
-            show_status_bar=True,
-            input_placeholder="Type your message or command...",
-            id="chat_layout"
+        """Create child widgets using the shared chat surface."""
+        yield ChatSurface(
+            config=ChatSurfaceConfig(
+                show_status_bar=True,
+                input_placeholder="Type your message or command...",
+            ),
+            id="chat_surface"
         )
 
     def on_mount(self) -> None:
         """Called when screen is mounted."""
-        # Get layout and focus input
-        self._layout = self.query_one(ChatLayout)
-        self._layout.focus_input()
+        # Get surface and focus input
+        self._surface = self.query_one(ChatSurface)
+        self._surface.focus_input()
 
         # Register status components with the status bar
         status_bar = self.query_one(StatusBar)
@@ -145,35 +152,9 @@ class MainAppScreen(Screen):
 
     def on_click(self, event) -> None:
         """Refocus input when clicking anywhere except input field."""
-        if self._layout is None:
+        if self._surface is None:
             return
-
-        # Right-click (button=3) pastes from clipboard
-        if hasattr(event, 'button') and event.button == 3:
-            try:
-                text = self._clipboard.paste_text()
-                if text:
-                    self._layout.input.replace(
-                        text,
-                        self._layout.input.selection.start,
-                        self._layout.input.selection.end,
-                        maintain_selection_offset=True
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to paste from clipboard: {e}")
-            return
-
-        # Get the widget that was clicked
-        clicked_widget = event.widget if hasattr(event, 'widget') else None
-
-        # Refocus input if clicking anything except the input or log
-        if clicked_widget is not None and not isinstance(clicked_widget, (TextArea, SelectableLog)):
-            self._layout.focus_input()
-            # Clear selection by moving to end
-            def clear_selection():
-                end_location = self._layout.input.document.end
-                self._layout.input.cursor_location = end_location
-            self.call_after_refresh(clear_selection)
+        self._surface.handle_click(event, self._clipboard)
 
     def on_key(self, event) -> None:
         """Handle screen-specific key events.
@@ -181,7 +162,7 @@ class MainAppScreen(Screen):
         Note: ctrl+q, ctrl+c, and escape are handled at app level (ScrappyApp.on_key).
         This handler only deals with screen-specific keys like up-arrow blocking.
         """
-        if self._layout is None:
+        if self._surface is None:
             return
 
         # Block up-arrow history during capture mode
@@ -191,7 +172,7 @@ class MainAppScreen(Screen):
                 return
 
         # Already focused on input, let it handle naturally
-        if self._layout.input.has_focus:
+        if self._surface.input.has_focus:
             return
 
         # Don't steal focus from other interactive widgets (except SelectableLog
@@ -202,11 +183,11 @@ class MainAppScreen(Screen):
 
         # Auto-focus on printable characters
         if event.is_printable:
-            self._layout.focus_input()
+            self._surface.focus_input()
 
     def action_submit_input(self) -> None:
         """Handle Enter to submit input."""
-        if self._layout is None:
+        if self._surface is None:
             return
 
         # Gate: Block input until CLI is ready (deferred initialization)
@@ -223,20 +204,16 @@ class MainAppScreen(Screen):
                 self.write_output("Still initializing...\n")
                 return
 
-        # Preserve multiline input as-is (Textual TextArea buffers paste correctly)
-        user_input = self._layout.input.text.strip()
+        result = self._surface.submit(self)
+        self._apply_submit_follow_up_actions(result)
 
-        # Clear input immediately
-        self._layout.input.clear()
-
-        # Handle capture mode
+    def handle_submit(self, user_input: str) -> SubmitResult:
+        """Handle submitted composer text behind the shared surface protocol."""
         if self.capture_manager.is_capturing:
-            self._handle_captured_input(user_input)
-            return
+            return self._handle_captured_input(user_input)
 
-        # Normal command processing
         if not user_input:
-            return
+            return SubmitResult(accepted=False)
 
         # Add to history and reset navigation position
         self._history.add_to_history(user_input)
@@ -244,35 +221,36 @@ class MainAppScreen(Screen):
 
         # Process in worker thread
         self.process_command(user_input)
+        return SubmitResult(accepted=True)
 
     def action_history_previous(self) -> None:
         """Handle Up arrow to navigate to previous history entry."""
-        if self.capture_manager.is_capturing or self._layout is None:
+        if self.capture_manager.is_capturing or self._surface is None:
             return
 
-        current_text = self._layout.input.text
+        current_text = self._surface.input.text
         if self._history_temp_input == "" and current_text:
             self._history_temp_input = current_text
 
         previous = self._history.get_previous()
         if previous is not None:
             # Use text setter instead of clear()+insert() to properly reset cursor state
-            self._layout.input.text = previous
+            self._surface.input.text = previous
 
     def action_history_next(self) -> None:
         """Handle Down arrow to navigate to next history entry."""
-        if self.capture_manager.is_capturing or self._layout is None:
+        if self.capture_manager.is_capturing or self._surface is None:
             return
 
         next_entry = self._history.get_next()
         if next_entry is not None:
             # Use text setter instead of clear()+insert() to properly reset cursor state
-            self._layout.input.text = next_entry
+            self._surface.input.text = next_entry
         else:
             # Restore saved input when navigating past history end
             restored = self._history_temp_input
             self._history_temp_input = ""
-            self._layout.input.text = restored
+            self._surface.input.text = restored
 
     def _cancel_ui_cleanup(self) -> None:
         """Stop timer and hide activity indicator after cancellation."""
@@ -284,21 +262,37 @@ class MainAppScreen(Screen):
         except Exception:
             pass  # Indicator might not be mounted
 
-    def _handle_captured_input(self, user_input: str) -> None:
+    def _handle_captured_input(self, user_input: str) -> SubmitResult:
         """Process input captured for prompt/confirm."""
         self.capture_manager.handle_captured_input(user_input)
         next_request = self.capture_manager.exit_capture_mode()
 
         if next_request:
-            self.capture_manager.enter_capture_mode(
-                next_request.prompt_id,
-                next_request.message,
-                next_request.input_type,
-                next_request.default
+            return SubmitResult(
+                accepted=True,
+                follow_up_actions=(RestartCapture(next_request),),
             )
-            self._update_capture_ui(next_request)
         else:
             self._exit_capture_ui()
+            return SubmitResult(accepted=True)
+
+    def _apply_submit_follow_up_actions(self, result: SubmitResult) -> None:
+        """Apply screen-owned submit follow-up actions."""
+        if self._surface is None:
+            return
+
+        for action in self._surface.apply_follow_up_actions(result.follow_up_actions):
+            if isinstance(action, RestartCapture):
+                request = action.request
+                self.capture_manager.enter_capture_mode(
+                    request.prompt_id,
+                    request.message,
+                    request.input_type,
+                    request.default,
+                )
+                self._update_capture_ui(request)
+            elif isinstance(action, ExitApp):
+                self.app.exit()
 
     @work(exclusive=True, thread=True)
     def process_command(self, user_input: str) -> None:
@@ -352,13 +346,13 @@ class MainAppScreen(Screen):
 
     def write_output(self, content: str) -> None:
         """Write plain text to output area."""
-        if self._layout:
-            self._layout.write(content)
+        if self._surface:
+            self._surface.write(content)
 
     def write_renderable(self, renderable: Any) -> None:
         """Write Rich renderable to output area."""
-        if self._layout:
-            self._layout.write(renderable)
+        if self._surface:
+            self._surface.write(renderable)
 
     def enter_capture_mode(
         self,
@@ -423,7 +417,7 @@ class MainAppScreen(Screen):
 
     def _update_capture_ui(self, request: "InputRequest") -> None:
         """Update UI for capture mode."""
-        if self._layout is None:
+        if self._surface is None:
             return
 
         # Hide activity indicator during prompts - we're waiting for user input,
@@ -448,23 +442,23 @@ class MainAppScreen(Screen):
         input_container.add_class("capture-mode")
 
         if request.input_type == "confirm":
-            self._layout.input.placeholder = "Type y or n..."
+            self._surface.input.placeholder = "Type y or n..."
         elif request.input_type == "confirm_yna":
-            self._layout.input.placeholder = "Type y, n, or a (allow all)..."
+            self._surface.input.placeholder = "Type y, n, or a (allow all)..."
         elif request.input_type == "checkpoint":
-            self._layout.input.placeholder = "Type c, g, a, or s..."
+            self._surface.input.placeholder = "Type c, g, a, or s..."
         else:
             hint = f" (default: {request.default})" if request.default else ""
-            self._layout.input.placeholder = f"Enter value{hint}..."
+            self._surface.input.placeholder = f"Enter value{hint}..."
 
-        self._layout.focus_input()
+        self._surface.focus_input()
 
     def _exit_capture_ui(self) -> None:
         """Clean up capture mode UI state."""
-        if self._layout is None:
+        if self._surface is None:
             return
 
-        self._layout.input.placeholder = "Type your message or command..."
+        self._surface.input.placeholder = "Type your message or command..."
 
         self.prompt_display.hide_prompt()
         status_bar = self.query_one(StatusBar)
