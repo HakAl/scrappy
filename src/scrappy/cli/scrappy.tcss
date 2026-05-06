@@ -57,25 +57,13 @@ ChatLayout {
     background: $background;
 }
 
-/* Scrollable output container */
-#output_container {
-    height: 1fr;
-    overflow-y: auto;
-    border: none;
-    background: $background;
-}
-
 /* Main scrollable output (includes banner as content) */
 SelectableLog {
     background: $background;
     color: $text;
     border: none;
     padding: 0 1 1 1;
-    height: 100%;
-    scrollbar-size-vertical: 0;
-    scrollbar-size-horizontal: 0;
-    scrollbar-background: $background;
-    scrollbar-color: $background;
+    height: 1fr;
 }
 
 SelectableLog:focus {
@@ -89,7 +77,6 @@ RichLog {
     border: none;
     padding: 0 1 1 1;
     height: 100%;
-    scrollbar-size-vertical: 0;
 }
 
 /* Input container at bottom */

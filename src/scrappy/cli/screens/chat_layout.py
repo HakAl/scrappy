@@ -49,8 +49,7 @@ class ChatLayout(Widget):
     def compose(self) -> ComposeResult:
         """Create the chat layout widgets."""
         # Scrollable output area (with text selection support)
-        with Container(id="output_container"):
-            yield SelectableLog(id="output", auto_scroll=True)
+        yield SelectableLog(id="output", auto_scroll=True)
 
         # Activity indicator
         yield ActivityIndicator()
@@ -111,10 +110,10 @@ class ChatLayout(Widget):
         Returns:
             The input text before clearing
         """
-        text = self._input.text
-        self._input.clear()
+        text = self.input.text
+        self.input.clear()
         return text
 
     def focus_input(self) -> None:
         """Focus the input field."""
-        self._input.focus()
+        self.input.focus()

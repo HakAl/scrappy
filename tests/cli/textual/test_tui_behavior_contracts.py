@@ -11,6 +11,7 @@ from textual.app import App, ComposeResult
 from textual.events import MouseDown, MouseMove, MouseUp
 from textual.widgets import TextArea
 
+from scrappy.cli.screens.chat_layout import ChatLayout
 from scrappy.cli.screens.main_screen import MainAppScreen
 from scrappy.cli.screens.wizard_screen import SetupWizardScreen
 from scrappy.cli.textual.app import ScrappyApp
@@ -92,10 +93,6 @@ class TestTranscriptScrollContracts:
     """Contracts for transcript scrolling and scrollbars."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 2 restores normal transcript scrollbars and removes the nested scroll owner.",
-    )
     async def test_transcript_uses_normal_scrollbar_on_overflow(self, monkeypatch):
         """Overflowing transcript content should expose a normal vertical scrollbar."""
         force_main_screen(monkeypatch)
@@ -111,6 +108,21 @@ class TestTranscriptScrollContracts:
             scrollbar_size = getattr(log.styles, "scrollbar_size_vertical", 0)
             assert scrollbar_size != 0
             assert getattr(log, "show_vertical_scrollbar") is True
+
+    @pytest.mark.asyncio
+    async def test_transcript_has_single_scroll_owner(self, monkeypatch):
+        """The transcript widget should be the only scroll owner for output."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            layout = app.screen.query_one(ChatLayout)
+            log = app.screen.query_one(SelectableLog)
+
+            assert list(app.screen.query("#output_container")) == []
+            assert log.parent is layout
 
     @pytest.mark.asyncio
     async def test_page_up_scrolls_transcript_after_enough_output(self, monkeypatch):
