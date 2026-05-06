@@ -79,7 +79,7 @@ class TestCopyViaCtrlC:
             await pilot.pause()
 
             # No selection set
-            assert not log._has_selection()
+            assert log.selection_text == ""
 
             with patch.object(app, "copy_to_clipboard", side_effect=lambda t: copy_called.append(t)):
                 await pilot.press("ctrl+c")
@@ -207,9 +207,7 @@ class TestSelectionViaMouseDrag:
             log._selection_start = (0, 0)
             log._selection_end = (0, 10)
 
-            assert log._has_selection(), "Mouse drag should create selection"
-            text = log._get_selected_text()
-            assert len(text) > 0, "Selected text should not be empty"
+            assert log.selection_text != "", "Mouse drag should create selection"
 
     @pytest.mark.asyncio
     async def test_select_then_ctrl_c_copies(self):
@@ -287,4 +285,4 @@ class TestEscapeCancellation:
             await pilot.pause()
 
             # Selection in the log widget should still be intact
-            assert log._has_selection(), "ESC should not clear text selection"
+            assert log.selection_text != "", "ESC should not clear text selection"

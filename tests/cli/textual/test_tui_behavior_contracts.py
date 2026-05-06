@@ -326,7 +326,7 @@ class TestSharedSurfaceContracts:
                 screen.on_click(event)
 
                 assert app.focused is log
-                assert log._has_selection()
+                assert log.selection_text != ""
 
     @pytest.mark.xfail(
         strict=True,
@@ -359,4 +359,4 @@ class TestSharedSurfaceContracts:
                 screen.on_click(event)
 
                 assert composer.text == ""
-                assert log._has_selection()
+                assert log.selection_text != ""

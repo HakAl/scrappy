@@ -86,8 +86,7 @@ class TestSelectableLogBasicMouse:
             log.on_mouse_move(MouseMove(log, 5, 0, 5, 0, 0, False, False, False))
             log.on_mouse_up(MouseUp(log, 5, 0, 0, 0, 1, False, False, False))
 
-            assert log._has_selection(), "Drag should create an active selection"
-            assert log._get_selected_text() == "Hello"
+            assert log.selection_text == "Hello"
 
     @pytest.mark.asyncio
     async def test_drag_selects_multiple_lines(self):
@@ -115,8 +114,7 @@ class TestSelectableLogBasicMouse:
             log.on_mouse_move(MouseMove(log, 4, 1, 4, 1, 0, False, False, False))
             log.on_mouse_up(MouseUp(log, 4, 1, 0, 0, 1, False, False, False))
 
-            assert log._has_selection(), "Multi-line drag should create a selection"
-            assert log._get_selected_text() == "Alpha line\nBeta"
+            assert log.selection_text == "Alpha line\nBeta"
 
     @pytest.mark.asyncio
     async def test_drag_selection_does_not_depend_on_mousemove_button(self):
@@ -143,8 +141,7 @@ class TestSelectableLogBasicMouse:
             log.on_mouse_move(MouseMove(log, 6, 0, 6, 0, 0, False, False, False))
             log.on_mouse_up(MouseUp(log, 6, 0, 0, 0, 1, False, False, False))
 
-            assert log._has_selection(), "Selection should survive MouseMove(button=0)"
-            assert log._get_selected_text() == "Button"
+            assert log.selection_text == "Button"
 
 
 class TestSelectableLogAfterAgentSimulation:

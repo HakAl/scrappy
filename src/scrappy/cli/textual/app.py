@@ -1050,7 +1050,7 @@ class ScrappyApp(App):
         screen = self.screen
         if isinstance(screen, MainAppScreen) and screen._layout is not None:
             output = screen._layout.output
-            if isinstance(output, SelectableLog) and output._has_selection():
+            if isinstance(output, SelectableLog) and output.selection_text:
                 output.action_copy_selection()
                 return True
 
