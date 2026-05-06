@@ -21,8 +21,8 @@ from ..textual import (
     SemanticStatusComponent,
     StatusBar,
     ActivityIndicator,
-    ActivityStateChange,
 )
+from ..textual.tui_events import ActivityChanged, MetricsUpdated
 
 from scrappy.infrastructure.theme import ThemeProtocol
 from ..protocols import ActivityState, ClipboardProtocol
@@ -33,7 +33,6 @@ if TYPE_CHECKING:
         TextualOutputAdapter,
         ThreadSafeAsyncBridge,
         ScrappyApp,
-        MetricsUpdate,
     )
 
 logger = logging.getLogger(__name__)
@@ -306,7 +305,9 @@ class MainAppScreen(Screen):
         """Process command in worker thread."""
         logger.debug("process_command: starting for input: %s", user_input[:50])
         try:
-            self.app.post_message(ActivityStateChange(ActivityState.THINKING))
+            self.scrappy_app.tui_event_sink.post_event(
+                ActivityChanged(ActivityState.THINKING)
+            )
             interactive_mode = self.interactive_mode
             if interactive_mode is None:
                 interactive_mode = self.scrappy_app.interactive_mode
@@ -339,7 +340,7 @@ class MainAppScreen(Screen):
             logger.debug("process_command: finally block, flushing output adapter")
             self.output_adapter.flush(timeout=5.0)
             logger.debug("process_command: flush complete, posting IDLE")
-            self.app.post_message(ActivityStateChange(ActivityState.IDLE))
+            self.scrappy_app.tui_event_sink.post_event(ActivityChanged(ActivityState.IDLE))
             restore_mouse_support = getattr(self.app, "restore_mouse_support", None)
             if callable(restore_mouse_support):
                 call_from_thread = getattr(self.app, "call_from_thread", None)
@@ -475,13 +476,15 @@ class MainAppScreen(Screen):
         # Restore activity indicator - agent is continuing after the prompt.
         # _update_capture_ui hid it while waiting for input, now we resume.
         # The THINKING state will be replaced by IDLE when process_command ends.
-        self.app.post_message(ActivityStateChange(ActivityState.THINKING))
+        self.scrappy_app.tui_event_sink.post_event(
+            ActivityChanged(ActivityState.THINKING)
+        )
 
-    def update_activity(self, message: ActivityStateChange) -> None:
-        """Update activity indicator based on state change message.
+    def update_activity(self, message: ActivityChanged) -> None:
+        """Update activity indicator based on activity event.
 
         Args:
-            message: ActivityStateChange message with state, message, and elapsed_ms
+            message: Activity event with state, message, and elapsed_ms
         """
         logger.debug("update_activity: state=%s, elapsed_ms=%d", message.state, message.elapsed_ms)
         try:
@@ -516,7 +519,7 @@ class MainAppScreen(Screen):
         except Exception:
             pass  # Widget not mounted yet
 
-    def update_metrics(self, message: "MetricsUpdate") -> None:
+    def update_metrics(self, message: MetricsUpdated) -> None:
         """Update metrics status bar line."""
         self.metrics_status.update(
             provider_display=message.provider_display,

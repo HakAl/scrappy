@@ -373,7 +373,7 @@ class ActivityIndicator(Label):
     elapsed time. Flicker prevention via 500ms timer delay - if operation
     completes before delay, the indicator never becomes visible.
 
-    Thread-safe: Updates via ActivityStateChange messages from worker threads.
+    Thread-safe: Updates via ActivityChanged events from worker threads.
     """
 
     # Delay before showing indicator (flicker prevention)

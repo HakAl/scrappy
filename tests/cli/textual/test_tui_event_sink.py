@@ -12,7 +12,8 @@ from scrappy.cli.textual.tui_events import (
     ActivityChanged,
     FlushRequested,
     TasksUpdated,
-    TranscriptAppend,
+    TranscriptAppendRenderable,
+    TranscriptAppendText,
     TuiEventMessage,
     tui_event_from_legacy_output_message,
 )
@@ -43,11 +44,11 @@ def test_sink_posts_typed_events_as_single_textual_message_type() -> None:
     app = RecordingApp()
     sink = TextualTuiEventSink(app)
 
-    sink.post_event(TranscriptAppend(content="hello"))
+    sink.post_event(TranscriptAppendText(content="hello"))
 
     assert len(app.messages) == 1
     assert isinstance(app.messages[0], TuiEventMessage)
-    assert app.messages[0].event == TranscriptAppend(content="hello")
+    assert app.messages[0].event == TranscriptAppendText(content="hello")
 
 
 def test_flush_event_observes_prior_events_in_same_sink_sequence() -> None:
@@ -56,7 +57,7 @@ def test_flush_event_observes_prior_events_in_same_sink_sequence() -> None:
     sink = TextualTuiEventSink(app)
     result: list[bool] = []
 
-    sink.post_event(TranscriptAppend(content="before flush"))
+    sink.post_event(TranscriptAppendText(content="before flush"))
 
     flush_thread = threading.Thread(
         target=lambda: result.append(sink.flush(timeout=2.0))
@@ -68,10 +69,10 @@ def test_flush_event_observes_prior_events_in_same_sink_sequence() -> None:
     first_event = app.messages[0].event
     second_event = app.messages[1].event
 
-    assert isinstance(first_event, TranscriptAppend)
+    assert isinstance(first_event, TranscriptAppendText)
     assert isinstance(second_event, FlushRequested)
 
-    second_event.acknowledge(second_event.flush_id)
+    sink.acknowledge_flush(second_event.flush_id)
     flush_thread.join(timeout=1.0)
 
     assert not flush_thread.is_alive()
@@ -98,8 +99,10 @@ def test_sink_shutdown_unblocks_pending_flush() -> None:
 
 
 def test_output_adapter_shutdown_unblocks_pending_flush() -> None:
-    """Legacy adapter flush cannot wait for timeout after shutdown."""
-    adapter = TextualOutputAdapter()
+    """Output adapter flush cannot wait for timeout after shutdown."""
+    app = RecordingApp()
+    sink = TextualTuiEventSink(app)
+    adapter = TextualOutputAdapter(sink)
     result: list[bool] = []
 
     flush_thread = threading.Thread(
@@ -107,9 +110,8 @@ def test_output_adapter_shutdown_unblocks_pending_flush() -> None:
     )
     flush_thread.start()
 
-    queued_message = adapter.get_message(block=True, timeout=1.0)
-    assert queued_message is not None
-    assert queued_message[0] == "flush"
+    wait_for(lambda: len(app.messages) == 1)
+    assert isinstance(app.messages[0].event, FlushRequested)
 
     adapter.request_shutdown()
     flush_thread.join(timeout=1.0)
@@ -120,32 +122,25 @@ def test_output_adapter_shutdown_unblocks_pending_flush() -> None:
 
 def test_legacy_tuple_adapter_messages_convert_to_typed_events() -> None:
     """Tuple adapter messages enter the typed event model."""
-    acknowledgements: list[str] = []
-
     output_event = tui_event_from_legacy_output_message(
         ("output", "hello"),
-        acknowledge_flush=acknowledgements.append,
     )
     renderable = object()
     renderable_event = tui_event_from_legacy_output_message(
         ("renderable", renderable),
-        acknowledge_flush=acknowledgements.append,
     )
     tasks_event = tui_event_from_legacy_output_message(
         ("tasks", [{"description": "test"}]),
-        acknowledge_flush=acknowledgements.append,
     )
     activity_event = tui_event_from_legacy_output_message(
         ("activity", (ActivityState.THINKING, "working", 42)),
-        acknowledge_flush=acknowledgements.append,
     )
     flush_event = tui_event_from_legacy_output_message(
         ("flush", "flush-id"),
-        acknowledge_flush=acknowledgements.append,
     )
 
-    assert output_event == TranscriptAppend(content="hello")
-    assert renderable_event == TranscriptAppend(renderable=renderable)
+    assert output_event == TranscriptAppendText(content="hello")
+    assert renderable_event == TranscriptAppendRenderable(renderable=renderable)
     assert tasks_event == TasksUpdated([{"description": "test"}])
     assert activity_event == ActivityChanged(
         state=ActivityState.THINKING,
@@ -154,5 +149,26 @@ def test_legacy_tuple_adapter_messages_convert_to_typed_events() -> None:
     )
     assert isinstance(flush_event, FlushRequested)
 
-    flush_event.acknowledge(flush_event.flush_id)
-    assert acknowledgements == ["flush-id"]
+
+def test_unknown_legacy_tuple_tag_logs_warning(caplog) -> None:
+    """Unknown tuple tags are visible instead of being silently dropped."""
+    with caplog.at_level("WARNING", logger="scrappy.cli.textual.tui_events"):
+        event = tui_event_from_legacy_output_message(("unknown-tag", object()))
+
+    assert event is None
+    assert "unknown-tag" in caplog.text
+
+
+def test_output_adapter_event_order_matches_direct_typed_sink_order() -> None:
+    """Adapter output cannot render after a later typed sink event."""
+    app = RecordingApp()
+    sink = TextualTuiEventSink(app)
+    adapter = TextualOutputAdapter(sink)
+
+    adapter.post_output("from adapter")
+    sink.post_event(TranscriptAppendText(content="direct typed"))
+
+    assert [message.event for message in app.messages] == [
+        TranscriptAppendText(content="from adapter"),
+        TranscriptAppendText(content="direct typed"),
+    ]

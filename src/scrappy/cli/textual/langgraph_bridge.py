@@ -27,7 +27,7 @@ from scrappy.infrastructure.threading import CancellationToken
 from scrappy.tool_display import extract_tool_key_param
 from ..protocols import ActivityState, Task, TaskStatus
 from .tool_confirmation import ToolConfirmationHandler
-from .messages import MetricsUpdate
+from .tui_events import MetricsUpdated
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -219,20 +219,22 @@ class LangGraphBridge:
 
         try:
             logger.debug(
-                "Posting MetricsUpdate: provider=%s, in=%s, out=%s, total=%s, ctx=%s",
+                "Posting MetricsUpdated: provider=%s, in=%s, out=%s, total=%s, ctx=%s",
                 self._metrics_provider_display, self._metrics_input_tokens,
                 self._metrics_output_tokens, self._session_total_tokens,
                 self._metrics_context_percent
             )
-            self.app.post_message(MetricsUpdate(
-                provider_display=self._metrics_provider_display,
-                input_tokens=self._metrics_input_tokens,
-                output_tokens=self._metrics_output_tokens,
-                session_total=self._session_total_tokens,
-                context_percent=self._metrics_context_percent,
-            ))
+            cast(Any, self.app).tui_event_sink.post_event(
+                MetricsUpdated(
+                    provider_display=self._metrics_provider_display,
+                    input_tokens=self._metrics_input_tokens,
+                    output_tokens=self._metrics_output_tokens,
+                    session_total=self._session_total_tokens,
+                    context_percent=self._metrics_context_percent,
+                )
+            )
         except Exception as e:
-            logger.debug("Failed to post MetricsUpdate: %s", e)
+            logger.debug("Failed to post MetricsUpdated: %s", e)
 
     def _confirm_callback(self, question: str) -> bool:
         """

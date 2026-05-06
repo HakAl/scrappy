@@ -18,19 +18,14 @@ This test aims to:
 3. Show that app.suspend() preserves mouse functionality
 """
 
-import os
 import subprocess
 import pytest
 from textual.geometry import Offset
 from textual.events import MouseDown, MouseMove, MouseUp
 
 from scrappy.cli.widgets.selectable_log import SelectableLog
-from scrappy.cli.textual.messages import ActivityStateChange
+from scrappy.cli.textual.tui_events import ActivityChanged, TuiEventMessage
 from scrappy.cli.protocols import ActivityState
-
-
-# Set mock mode for tests
-os.environ["SCRAPPY_MOCK_LLM"] = "1"
 
 
 class TestSelectableLogBasicMouse:
@@ -170,12 +165,15 @@ class TestSelectableLogAfterAgentSimulation:
                 yield SelectableLog(id="log")
                 yield ActivityIndicator()
 
-            def on_activity_state_change(self, message: ActivityStateChange) -> None:
+            def on_tui_event_message(self, message: TuiEventMessage) -> None:
+                event = message.event
+                if not isinstance(event, ActivityChanged):
+                    return
                 indicator = self.query_one(ActivityIndicator)
-                if message.state == ActivityState.IDLE:
+                if event.state == ActivityState.IDLE:
                     indicator.hide()
                 else:
-                    indicator.show(message.state, message.message)
+                    indicator.show(event.state, event.message)
 
         app = TestApp()
         async with app.run_test(size=(80, 24)) as pilot:
@@ -188,7 +186,7 @@ class TestSelectableLogAfterAgentSimulation:
             await pilot.pause()
 
             # Phase 2: Simulate THINKING state (agent starting)
-            app.post_message(ActivityStateChange(ActivityState.THINKING))
+            app.post_message(TuiEventMessage(ActivityChanged(ActivityState.THINKING)))
             await pilot.pause()
 
             # Phase 3: Rapid output (like agent execution)
@@ -198,7 +196,7 @@ class TestSelectableLogAfterAgentSimulation:
 
             # Phase 4: Final message and IDLE
             log.write("To undo changes: scrappy undo")
-            app.post_message(ActivityStateChange(ActivityState.IDLE))
+            app.post_message(TuiEventMessage(ActivityChanged(ActivityState.IDLE)))
             await pilot.pause()
 
             # Phase 5: Try to click - this is where the bug manifests
@@ -311,7 +309,7 @@ class TestSelectableLogVirtualSize:
             def compose(self) -> ComposeResult:
                 yield SelectableLog(id="log")
 
-            def on_activity_state_change(self, message: ActivityStateChange) -> None:
+            def on_tui_event_message(self, message: TuiEventMessage) -> None:
                 pass  # Just handle the message
 
         app = TestApp()
@@ -329,7 +327,7 @@ class TestSelectableLogVirtualSize:
             assert height_before == 20
 
             # Post IDLE
-            app.post_message(ActivityStateChange(ActivityState.IDLE))
+            app.post_message(TuiEventMessage(ActivityChanged(ActivityState.IDLE)))
             await pilot.pause()
 
             height_after = log.virtual_size.height
@@ -492,7 +490,7 @@ class TestUndoFlowMouseEvents:
 
             # Simulate capture mode exit (would normally post THINKING)
             input_container.remove_class("capture-mode")
-            app.post_message(ActivityStateChange(ActivityState.THINKING))
+            app.post_message(TuiEventMessage(ActivityChanged(ActivityState.THINKING)))
             await pilot.pause()
 
             # THIS IS THE KEY DIFFERENCE with undo:
@@ -552,7 +550,7 @@ class TestUndoFlowMouseEvents:
 
             # Simulate capture mode exit (no extra writes - like non-undo)
             input_container.remove_class("capture-mode")
-            app.post_message(ActivityStateChange(ActivityState.THINKING))
+            app.post_message(TuiEventMessage(ActivityChanged(ActivityState.THINKING)))
             await pilot.pause()
 
             # NO extra writes here - goes straight to "agent execution"

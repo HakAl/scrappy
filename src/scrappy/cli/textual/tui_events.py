@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Optional, TypeAlias
+import logging
+from typing import Any, Optional, TypeAlias
 
 from textual.message import Message
 
 from ..protocols import ActivityState
+
+logger = logging.getLogger(__name__)
 
 
 class TuiEventTarget(Enum):
@@ -21,11 +24,18 @@ class TuiEventTarget(Enum):
 
 
 @dataclass(frozen=True)
-class TranscriptAppend:
-    """Append text or a renderable to a transcript surface."""
+class TranscriptAppendText:
+    """Append text to a transcript surface."""
 
-    content: Optional[str] = None
-    renderable: Any = None
+    content: str
+    target: TuiEventTarget = TuiEventTarget.MAIN_TRANSCRIPT
+
+
+@dataclass(frozen=True)
+class TranscriptAppendRenderable:
+    """Append a renderable to a transcript surface."""
+
+    renderable: Any
     target: TuiEventTarget = TuiEventTarget.MAIN_TRANSCRIPT
 
 
@@ -88,7 +98,6 @@ class FlushRequested:
     """Acknowledge all previously posted events in the same sequence."""
 
     flush_id: str
-    acknowledge: Callable[[str], None]
 
 
 @dataclass(frozen=True)
@@ -112,7 +121,8 @@ class CancelStateChanged:
 
 
 TuiEvent: TypeAlias = (
-    TranscriptAppend
+    TranscriptAppendText
+    | TranscriptAppendRenderable
     | TranscriptClear
     | ActivityChanged
     | TasksUpdated
@@ -128,21 +138,21 @@ TuiEvent: TypeAlias = (
 
 def tui_event_from_legacy_output_message(
     message: tuple[str, Any],
-    acknowledge_flush: Callable[[str], None],
 ) -> TuiEvent | None:
     """Convert tuple-adapter output messages to typed TUI events."""
     msg_type, content = message
     if msg_type == "output":
-        return TranscriptAppend(content=content)
+        return TranscriptAppendText(content=content)
     if msg_type == "renderable":
-        return TranscriptAppend(renderable=content)
+        return TranscriptAppendRenderable(renderable=content)
     if msg_type == "tasks":
         return TasksUpdated(content)
     if msg_type == "activity":
         state, msg, elapsed_ms = content
         return ActivityChanged(state=state, message=msg, elapsed_ms=elapsed_ms)
     if msg_type == "flush":
-        return FlushRequested(flush_id=content, acknowledge=acknowledge_flush)
+        return FlushRequested(flush_id=content)
+    logger.warning("Unrecognized tuple-adapter tag: %s", msg_type)
     return None
 
 

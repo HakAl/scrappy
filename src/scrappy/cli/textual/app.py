@@ -10,7 +10,6 @@ import asyncio
 import json
 import logging
 import os
-import threading
 import time
 from pathlib import Path
 
@@ -25,28 +24,23 @@ from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 
 from .runtime_wiring import create_textual_runtime_session, wire_textual_runtime
-from .messages import (
-    WriteOutput,
-    WriteRenderable,
-    RequestInlineInput,
-    IndexingProgress,
-    ActivityStateChange,
-    MetricsUpdate,
-    TasksUpdated as TasksUpdatedMessage,
-    CLIReady,
-)
 from .bridge import ThreadSafeAsyncBridge
 from .event_sink import TextualTuiEventSink
 from .output_adapter import TextualOutputAdapter
 from .tui_events import (
     ActivityChanged,
+    CliReadyChanged,
     FlushRequested,
     IndexingProgressChanged,
     MetricsUpdated,
+    PromptRequested,
+    ShutdownRequested,
+    TranscriptClear,
     TasksUpdated,
-    TranscriptAppend,
+    TranscriptAppendRenderable,
+    TranscriptAppendText,
+    TuiEventTarget,
     TuiEventMessage,
-    tui_event_from_legacy_output_message,
 )
 
 if TYPE_CHECKING:
@@ -110,8 +104,11 @@ class ScrappyApp(App):
         """
         super().__init__()
         self._theme = theme or DEFAULT_THEME
-        self._should_stop_consumer = False
+        self._shutdown_requested = False
         self._clipboard_service = clipboard or self._create_default_clipboard()
+        self.tui_event_sink = TextualTuiEventSink(self)
+        if output_adapter is not None:
+            output_adapter.bind_event_sink(self.tui_event_sink)
 
         # Deferred initialization mode
         self._cli_factory = cli_factory
@@ -119,7 +116,7 @@ class ScrappyApp(App):
 
         # In deferred mode, create output adapter now (needed for skeleton screen)
         if cli_factory is not None:
-            self.output_adapter = output_adapter or TextualOutputAdapter()
+            self.output_adapter = output_adapter or TextualOutputAdapter(self.tui_event_sink)
             self.interactive_mode: Optional["InteractiveMode"] = None
             self.ready = False  # Will be set True when CLI is ready
         else:
@@ -127,10 +124,8 @@ class ScrappyApp(App):
             if interactive_mode is None:
                 raise ValueError("Must provide either interactive_mode or cli_factory")
             self.interactive_mode = interactive_mode
-            self.output_adapter = output_adapter or TextualOutputAdapter()
+            self.output_adapter = output_adapter or TextualOutputAdapter(self.tui_event_sink)
             self.ready = True
-
-        self.tui_event_sink = TextualTuiEventSink(self)
 
         # Thread-safe async bridge for prompts/confirms
         self.bridge = ThreadSafeAsyncBridge(self)
@@ -140,9 +135,12 @@ class ScrappyApp(App):
 
         # Codebase context for semantic search indexing
         self._codebase_context: Optional["CodebaseContext"] = None
+        self._buffered_main_transcript_events: list[
+            TranscriptAppendText | TranscriptAppendRenderable | TranscriptClear
+        ] = []
+        self._buffered_main_transcript_omissions = 0
+        self._main_transcript_buffer_draining = False
 
-        # Consumer thread (daemon so it won't block exit)
-        self._consumer_thread: Optional[threading.Thread] = None
         self._runtime_cleanup_done = False
         self._integration_log_path = os.getenv("SCRAPPY_INTEGRATION_LOG_PATH")
         self._integration_ready_file = os.getenv("SCRAPPY_READY_FILE")
@@ -251,11 +249,15 @@ class ScrappyApp(App):
         ) -> None:
             # Always try to post the message - post_message is thread-safe in Textual
             # Remove is_running check as it may reject valid messages during startup race
-            if not self._should_stop_consumer:
+            if not self._shutdown_requested:
                 logger.debug(f"Posting indexing progress: {message}")
-                self.post_message(IndexingProgress(
-                    message=message, progress=progress, total=total
-                ))
+                self.tui_event_sink.post_event(
+                    IndexingProgressChanged(
+                        message=message,
+                        progress=progress,
+                        total=total,
+                    )
+                )
 
         context.set_indexing_progress_callback(progress_callback)
 
@@ -263,7 +265,9 @@ class ScrappyApp(App):
         # If so, send a ready message to update the UI directly (bypass is_running check)
         if hasattr(context, 'is_semantic_search_ready') and context.is_semantic_search_ready():
             logger.info("Semantic search already ready when callback registered, posting ready message")
-            self.post_message(IndexingProgress(message="Semantic search ready", progress=0, total=0))
+            self.tui_event_sink.post_event(
+                IndexingProgressChanged(message="Semantic search ready")
+            )
 
     def _register_user_theme(self) -> None:
         """Register theme from ThemeProtocol with Textual."""
@@ -296,15 +300,6 @@ class ScrappyApp(App):
             deferred=self._cli_factory is not None,
             ready=self.ready,
         )
-
-        # Start daemon thread to consume output queue.
-        # This avoids keeping a long-running Textual worker alive during exit.
-        self._consumer_thread = threading.Thread(
-            target=self._consume_output_queue_loop,
-            daemon=True,
-            name="output-queue-consumer",
-        )
-        self._consumer_thread.start()
 
         # Navigate to appropriate screen
         has_provider, env_key_count = self._check_and_migrate_providers()
@@ -363,7 +358,7 @@ class ScrappyApp(App):
         CLI creation is CPU-bound (imports) and blocking I/O (disk reads),
         which would freeze the UI if run on the main event loop.
 
-        Posts CLIReady message directly (Textual handles thread safety for @work).
+        Posts a typed CLI-ready event through the shared sink.
         """
         if self._cli_factory is None:
             return
@@ -372,21 +367,17 @@ class ScrappyApp(App):
             # This is the slow part - runs in thread pool
             cli = self._cli_factory()
 
-            # Post message directly - Textual's @work handles thread safety
-            self.post_message(CLIReady(cli=cli))
+            self.tui_event_sink.post_event(CliReadyChanged(cli=cli))
         except Exception as e:
             error_msg = str(e)
             logger.exception("Failed to initialize CLI: %s", e)
-            self.post_message(CLIReady(error=error_msg))
+            self.tui_event_sink.post_event(CliReadyChanged(error=error_msg))
 
-    def on_cliready(self, message: CLIReady) -> None:
+    def _handle_cli_ready(self, message: CliReadyChanged) -> None:
         """Handle CLI initialization completion.
 
         Called on main thread after background worker finishes.
         Wires up InteractiveMode and sets ready=True.
-
-        Note: Handler name is 'on_cliready' (not 'on_cli_ready') because
-        Textual converts 'CLIReady' to 'cliready' (all lowercase, no underscores).
         """
         if message.error:
             # Show error in status bar - user can /setup to fix
@@ -452,15 +443,15 @@ class ScrappyApp(App):
     ) -> None:
         """Override exit to ensure clean shutdown of all resources.
 
-        Signal consumer worker to exit via sentinel before Textual waits for workers.
+        Signal app-owned runtime resources before Textual waits for workers.
         """
         self._file_log("exit(): starting")
 
-        # Signal consumer to exit - puts sentinel on queue to wake it immediately
-        self._should_stop_consumer = True
+        # Signal event sinks and runtime resources before cancelling workers.
+        self._shutdown_requested = True
         self.tui_event_sink.request_shutdown()
         self.output_adapter.request_shutdown()
-        self._file_log("exit(): consumer signaled")
+        self._file_log("exit(): event sinks signaled")
 
         # Unblock any bridge operations (prompts/confirms)
         self.bridge.shutdown()
@@ -508,9 +499,9 @@ class ScrappyApp(App):
             return
 
         self._runtime_cleanup_done = True
-        self._should_stop_consumer = True
+        self._shutdown_requested = True
         self.tui_event_sink.request_shutdown()
-        self.output_adapter.request_shutdown()  # Wake consumer immediately
+        self.output_adapter.request_shutdown()
         OutputModeContext.set_tui_mode(False)
 
         # Signal bridge to release any blocked worker threads (redundant but safe)
@@ -684,6 +675,7 @@ class ScrappyApp(App):
             clipboard=self._clipboard_service,
         )
         self.push_screen(screen)
+        self.call_later(self._drain_main_transcript_buffer)
 
         # Display banner header immediately (doesn't need CLI)
         from scrappy.cli.interactive_banner import display_banner_header_tui
@@ -754,38 +746,6 @@ class ScrappyApp(App):
         """
         self.call_later(lambda: self._show_wizard_screen(allow_cancel=True))
 
-    def _consume_output_queue_loop(self) -> None:
-        """Consume output queue on a daemon thread and post to UI."""
-        while not self._should_stop_consumer:
-            # Check shutdown before blocking on queue
-            if self.output_adapter.is_shutdown_requested():
-                break
-
-            try:
-                message = self.output_adapter.get_message(block=True, timeout=0.2)
-            except Exception as e:
-                logger.exception("Error consuming output queue: %s", e)
-                continue
-
-            if message is None:
-                # Timeout or shutdown sentinel received
-                continue
-
-            # Check shutdown again before processing (avoid posting during shutdown)
-            if self._should_stop_consumer or self.output_adapter.is_shutdown_requested():
-                break
-
-            try:
-                event = tui_event_from_legacy_output_message(
-                    message,
-                    acknowledge_flush=self.output_adapter.acknowledge_flush,
-                )
-                if event is not None:
-                    self.tui_event_sink.post_event(event)
-            except Exception:
-                # App shutting down, message pump closed
-                break
-
     # =========================================================================
     # Message Handlers - Route to Active Screen
     # =========================================================================
@@ -793,110 +753,179 @@ class ScrappyApp(App):
     def on_tui_event_message(self, message: TuiEventMessage) -> None:
         """Dispatch typed TUI events from the single boundary message."""
         event = message.event
-        if isinstance(event, TranscriptAppend):
-            if event.content is not None:
-                self.on_write_output(WriteOutput(event.content))
-            if event.renderable is not None:
-                self.on_write_renderable(WriteRenderable(event.renderable))
+        if isinstance(event, (TranscriptAppendText, TranscriptAppendRenderable, TranscriptClear)):
+            self._route_transcript_event(event)
         elif isinstance(event, ActivityChanged):
-            self.on_activity_state_change(
-                ActivityStateChange(event.state, event.message, event.elapsed_ms)
-            )
+            self._route_activity_changed(event)
         elif isinstance(event, TasksUpdated):
-            self.on_tasks_updated(TasksUpdatedMessage(event.tasks))
+            self._route_tasks_updated(event)
         elif isinstance(event, MetricsUpdated):
-            self.on_metrics_update(
-                MetricsUpdate(
-                    provider_display=event.provider_display,
-                    input_tokens=event.input_tokens,
-                    output_tokens=event.output_tokens,
-                    session_total=event.session_total,
-                    context_percent=event.context_percent,
-                )
-            )
+            self._route_metrics_updated(event)
         elif isinstance(event, IndexingProgressChanged):
-            self.on_indexing_progress(
-                IndexingProgress(
-                    message=event.message,
-                    progress=event.progress,
-                    total=event.total,
-                    complete=event.complete,
-                )
-            )
+            self._route_indexing_progress_changed(event)
+        elif isinstance(event, PromptRequested):
+            self._route_prompt_requested(event)
+        elif isinstance(event, CliReadyChanged):
+            self._handle_cli_ready(event)
         elif isinstance(event, FlushRequested):
-            event.acknowledge(event.flush_id)
-
-    def on_write_output(self, message: WriteOutput) -> None:
-        """Route plain text output to active screen."""
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.write_output(message.content)
-
-    def on_write_renderable(self, message: WriteRenderable) -> None:
-        """Route Rich renderable to active screen."""
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.write_renderable(message.renderable)
-
-    def on_request_inline_input(self, message: RequestInlineInput) -> None:
-        """Route inline input request to active screen."""
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.enter_capture_mode(
-                message.prompt_id,
-                message.message,
-                message.input_type,
-                message.default
-            )
-
-    def on_indexing_progress(self, message: IndexingProgress) -> None:
-        """Route indexing progress to active screen."""
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.update_indexing_progress(
-                message=message.message,
-                progress=message.progress,
-                total=message.total,
-                complete=message.complete
-            )
-
-    def on_activity_state_change(self, message: ActivityStateChange) -> None:
-        """Route activity state changes to active screen."""
-        from ..screens import MainAppScreen
-
-        logger.debug("on_activity_state_change: state=%s, screen=%s", message.state, type(self.screen).__name__)
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.update_activity(message)
+            self.tui_event_sink.acknowledge_flush(event.flush_id)
+        elif isinstance(event, ShutdownRequested):
+            self.exit()
         else:
-            logger.warning("on_activity_state_change: screen is not MainAppScreen, ignoring")
+            logger.debug(
+                "on_tui_event_message: unhandled event %s",
+                type(event).__name__,
+            )
 
-        if message.state == ActivityState.IDLE:
+    def _active_main_screen(self):
+        """Return the active main screen, if any."""
+        from ..screens import MainAppScreen
+
+        screen = self.screen
+        return screen if isinstance(screen, MainAppScreen) else None
+
+    def _active_wizard_screen(self):
+        """Return the active wizard screen, if any."""
+        from ..screens import SetupWizardScreen
+
+        screen = self.screen
+        return screen if isinstance(screen, SetupWizardScreen) else None
+
+    def _route_transcript_event(
+        self,
+        event: TranscriptAppendText | TranscriptAppendRenderable | TranscriptClear,
+    ) -> None:
+        """Route transcript events to the intended surface."""
+        if event.target == TuiEventTarget.WIZARD_TRANSCRIPT:
+            wizard_screen = self._active_wizard_screen()
+            if wizard_screen is not None:
+                self._render_transcript_event(wizard_screen, event)
+            return
+
+        main_screen = self._active_main_screen()
+        if main_screen is None or getattr(main_screen, "_layout", None) is None:
+            self._buffer_main_transcript_event(event)
+            return
+
+        self._render_transcript_event(main_screen, event)
+
+    def _render_transcript_event(
+        self,
+        screen: Any,
+        event: TranscriptAppendText | TranscriptAppendRenderable | TranscriptClear,
+    ) -> None:
+        """Render a transcript event to a screen surface."""
+        if isinstance(event, TranscriptAppendText):
+            screen.write_output(event.content)
+        elif isinstance(event, TranscriptAppendRenderable):
+            screen.write_renderable(event.renderable)
+        else:
+            screen.clear_output()
+
+    def _buffer_main_transcript_event(
+        self,
+        event: TranscriptAppendText | TranscriptAppendRenderable | TranscriptClear,
+    ) -> None:
+        """Buffer main transcript events while another screen is active."""
+        if isinstance(event, TranscriptClear):
+            self._buffered_main_transcript_events.clear()
+            self._buffered_main_transcript_omissions = 0
+            self._buffered_main_transcript_events.append(event)
+            return
+
+        if len(self._buffered_main_transcript_events) >= 2000:
+            self._buffered_main_transcript_events.pop(0)
+            self._buffered_main_transcript_omissions += 1
+
+        self._buffered_main_transcript_events.append(event)
+
+    def _drain_main_transcript_buffer(self) -> None:
+        """Replay buffered main transcript events in UI-sized batches."""
+        if self._main_transcript_buffer_draining:
+            return
+        self._main_transcript_buffer_draining = True
+        self._drain_main_transcript_buffer_batch()
+
+    def _drain_main_transcript_buffer_batch(self) -> None:
+        """Drain one buffered transcript batch."""
+        main_screen = self._active_main_screen()
+        if main_screen is None:
+            self._main_transcript_buffer_draining = False
+            return
+        if getattr(main_screen, "_layout", None) is None:
+            self.call_later(self._drain_main_transcript_buffer_batch)
+            return
+
+        if self._buffered_main_transcript_omissions:
+            count = self._buffered_main_transcript_omissions
+            self._buffered_main_transcript_omissions = 0
+            main_screen.write_output(
+                f"{count} transcript events truncated while wizard was active\n"
+            )
+
+        batch = self._buffered_main_transcript_events[:100]
+        del self._buffered_main_transcript_events[:100]
+
+        for event in batch:
+            self._render_transcript_event(main_screen, event)
+
+        if self._buffered_main_transcript_events:
+            self.call_later(self._drain_main_transcript_buffer_batch)
+        else:
+            self._main_transcript_buffer_draining = False
+
+    def _route_prompt_requested(self, event: PromptRequested) -> None:
+        """Route inline input request to active screen."""
+        screen = self._active_main_screen()
+        if screen is not None:
+            screen.enter_capture_mode(
+                event.prompt_id,
+                event.message,
+                event.input_type,
+                event.default,
+            )
+
+    def _route_indexing_progress_changed(
+        self,
+        event: IndexingProgressChanged,
+    ) -> None:
+        """Route indexing progress to active screen."""
+        screen = self._active_main_screen()
+        if screen is not None:
+            screen.update_indexing_progress(
+                message=event.message,
+                progress=event.progress,
+                total=event.total,
+                complete=event.complete,
+            )
+
+    def _route_activity_changed(self, event: ActivityChanged) -> None:
+        """Route activity state changes to active screen."""
+        logger.debug(
+            "on_tui_event_message: activity state=%s, screen=%s",
+            event.state,
+            type(self.screen).__name__,
+        )
+        screen = self._active_main_screen()
+        if screen is not None:
+            screen.update_activity(event)
+        else:
+            logger.warning("ActivityChanged received while main screen is not active")
+
+        if event.state == ActivityState.IDLE:
             self.call_after_refresh(self._signal_command_idle)
 
-    def on_tasks_updated(self, message: TasksUpdatedMessage) -> None:
+    def _route_tasks_updated(self, event: TasksUpdated) -> None:
         """Route task updates to active screen."""
-        from ..screens import MainAppScreen
+        screen = self._active_main_screen()
+        if screen is not None:
+            screen.update_tasks(event.tasks)
 
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.update_tasks(message.tasks)
-
-    def on_metrics_update(self, message: MetricsUpdate) -> None:
+    def _route_metrics_updated(self, event: MetricsUpdated) -> None:
         """Route metrics updates to active screen."""
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.update_metrics(message)
+        screen = self._active_main_screen()
+        if screen is not None:
+            screen.update_metrics(event)
 
     # =========================================================================
     # Global Key Handlers

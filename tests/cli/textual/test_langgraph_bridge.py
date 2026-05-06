@@ -16,9 +16,29 @@ from scrappy.cli.textual.langgraph_bridge import (
     AgentResult,
     LangGraphBridge,
 )
-from scrappy.cli.textual.messages import MetricsUpdate
+from scrappy.cli.textual.tui_events import MetricsUpdated
 from scrappy.graph.state import AgentState
 from scrappy.infrastructure.threading import CancellationToken
+
+
+class RecordingTuiEventSink:
+    """Event sink double that records typed TUI events."""
+
+    def __init__(self) -> None:
+        self.events: list[object] = []
+
+    def post_event(self, event: object) -> None:
+        self.events.append(event)
+
+    def flush(self, timeout: float = 5.0) -> bool:
+        return True
+
+
+def create_app_with_sink() -> Mock:
+    """Create an app double with a typed event sink."""
+    app = Mock()
+    app.tui_event_sink = RecordingTuiEventSink()
+    return app
 
 
 class TestAgentResult:
@@ -77,7 +97,7 @@ class TestTruncateResult:
     @pytest.fixture
     def bridge(self):
         """Create a bridge with mocked dependencies."""
-        app = Mock()
+        app = create_app_with_sink()
         thread_bridge = Mock()
         output_adapter = Mock()
         orchestrator = Mock()
@@ -245,7 +265,7 @@ class TestRunWithStreaming:
 
     def test_posts_metrics_from_agent_state_event(self):
         """AgentState events should trigger metrics updates."""
-        app = Mock()
+        app = create_app_with_sink()
         bridge = LangGraphBridge(
             app=app,
             bridge=Mock(),
@@ -264,16 +284,16 @@ class TestRunWithStreaming:
 
         bridge._run_with_streaming(graph, state, config={}, state_class=AgentState)
 
-        assert app.post_message.called
-        message = app.post_message.call_args.args[0]
-        assert isinstance(message, MetricsUpdate)
+        assert app.tui_event_sink.events
+        message = app.tui_event_sink.events[-1]
+        assert isinstance(message, MetricsUpdated)
         assert message.provider_display == "gemini: gemma"
         assert message.input_tokens == 10
         assert message.output_tokens == 20
 
     def test_posts_trace_chain_as_provider_display(self):
         """Fallback trace chain is visible through the TUI metrics status path."""
-        app = Mock()
+        app = create_app_with_sink()
         bridge = LangGraphBridge(
             app=app,
             bridge=Mock(),
@@ -294,9 +314,9 @@ class TestRunWithStreaming:
         bridge._run_with_streaming(graph, state, config={}, state_class=AgentState)
 
         metrics_messages = [
-            call.args[0]
-            for call in app.post_message.call_args_list
-            if isinstance(call.args[0], MetricsUpdate)
+            event
+            for event in app.tui_event_sink.events
+            if isinstance(event, MetricsUpdated)
         ]
         assert metrics_messages[-1].provider_display == (
             "cerebras(deprecated)->groq: moonshotai/kimi-k2-instruct"
@@ -304,7 +324,7 @@ class TestRunWithStreaming:
 
     def test_clean_run_replaces_previous_trace_chain_display(self):
         """A later clean model display replaces an earlier fallback breadcrumb."""
-        app = Mock()
+        app = create_app_with_sink()
         bridge = LangGraphBridge(
             app=app,
             bridge=Mock(),
@@ -339,15 +359,15 @@ class TestRunWithStreaming:
         )
 
         metrics_messages = [
-            call.args[0]
-            for call in app.post_message.call_args_list
-            if isinstance(call.args[0], MetricsUpdate)
+            event
+            for event in app.tui_event_sink.events
+            if isinstance(event, MetricsUpdated)
         ]
         assert metrics_messages[-1].provider_display == "gemini: gemma"
 
     def test_posts_metrics_from_partial_state_dict(self):
         """Partial dict events should fall back to snapshot state."""
-        app = Mock()
+        app = create_app_with_sink()
         bridge = LangGraphBridge(
             app=app,
             bridge=Mock(),
@@ -367,7 +387,7 @@ class TestRunWithStreaming:
         bridge._run_with_streaming(graph, state, config={}, state_class=AgentState)
 
         assert graph.get_state_calls >= 1
-        assert app.post_message.called
+        assert app.tui_event_sink.events
 
 
 class TestGetFilePathFromArgs:
@@ -689,8 +709,7 @@ class TestMetricsUpdates:
     @pytest.fixture
     def bridge(self):
         """Create a bridge with mocked dependencies."""
-        app = Mock()
-        app.post_message = Mock()
+        app = create_app_with_sink()
         return LangGraphBridge(
             app=app,
             bridge=Mock(),
@@ -707,8 +726,8 @@ class TestMetricsUpdates:
             output_tokens=200,
         )
 
-        first_message = bridge.app.post_message.call_args_list[0][0][0]
-        assert isinstance(first_message, MetricsUpdate)
+        first_message = bridge.app.tui_event_sink.events[0]
+        assert isinstance(first_message, MetricsUpdated)
         assert first_message.session_total == 300
         assert first_message.provider_display == "gemini: gemma"
         assert first_message.input_tokens == 100
@@ -720,15 +739,15 @@ class TestMetricsUpdates:
             output_tokens=150,
         )
 
-        second_message = bridge.app.post_message.call_args_list[1][0][0]
+        second_message = bridge.app.tui_event_sink.events[1]
         assert second_message.session_total == 500
 
     def test_metrics_update_does_not_increment_without_tokens(self, bridge):
         """Session total stays unset when tokens are not provided."""
         bridge._post_metrics_update(provider_display="gemini: gemma")
 
-        message = bridge.app.post_message.call_args_list[0][0][0]
-        assert isinstance(message, MetricsUpdate)
+        message = bridge.app.tui_event_sink.events[0]
+        assert isinstance(message, MetricsUpdated)
         assert message.session_total is None
 
 

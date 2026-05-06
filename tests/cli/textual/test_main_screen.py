@@ -28,6 +28,7 @@ def create_screen(interactive_mode=None):
     )
     app = Mock()
     app.interactive_mode = interactive_mode
+    app.tui_event_sink = Mock()
     screen._app = app
     screen._layout = Mock()
     return screen, app, clipboard
@@ -44,7 +45,7 @@ def test_process_command_waits_for_interactive_mode():
         active_app.reset(token)
 
     screen._layout.write.assert_called_once_with("Still initializing...\n")
-    app.post_message.assert_called()
+    app.tui_event_sink.post_event.assert_called()
     app.exit.assert_not_called()
 
 

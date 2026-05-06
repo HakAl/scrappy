@@ -1,20 +1,25 @@
 """
 Tests for metrics display using Textual pilot.
 
-Verifies that MetricsUpdate messages are received and displayed in the UI.
+Verifies that MetricsUpdated events are received and displayed in the UI.
 This tests the data flow from langgraph_bridge to the status bar.
 """
 
-import os
 import pytest
-from unittest.mock import MagicMock, Mock, patch
-
-# Set mock mode for testing
-os.environ["SCRAPPY_MOCK_LLM"] = "1"
+from unittest.mock import MagicMock, Mock
 
 from scrappy.cli.textual.app import ScrappyApp
-from scrappy.cli.textual.messages import MetricsUpdate
+from scrappy.cli.textual.tui_events import MetricsUpdated
 from scrappy.cli.textual.status_components import MetricsStatus
+
+
+@pytest.fixture(autouse=True)
+def force_mock_mode(monkeypatch):
+    """Run metrics screen tests on the main screen path."""
+    monkeypatch.setattr(
+        "scrappy.orchestrator.mock_llm_service.is_mock_mode_enabled",
+        lambda: True,
+    )
 
 
 def create_mock_cli():
@@ -82,19 +87,18 @@ class TestMetricsStatusComponent:
         assert "groq: llama-3.1-8b" in formatted
 
 
-class TestMetricsUpdateMessage:
-    """Tests for MetricsUpdate message handling."""
+class TestMetricsUpdatedEvent:
+    """Tests for MetricsUpdated event handling."""
 
     @pytest.mark.asyncio
     async def test_metrics_update_reaches_screen(self):
-        """MetricsUpdate message should update the status bar."""
+        """MetricsUpdated event should update the status bar."""
         app = create_test_app()
 
         async with app.run_test() as pilot:
             await pilot.pause()
 
-            # Post a MetricsUpdate message
-            app.post_message(MetricsUpdate(
+            app.tui_event_sink.post_event(MetricsUpdated(
                 provider_display="cerebras: llama-3.3-70b",
                 input_tokens=500,
                 output_tokens=100,
@@ -115,14 +119,13 @@ class TestMetricsUpdateMessage:
 
     @pytest.mark.asyncio
     async def test_metrics_update_with_none_tokens(self):
-        """MetricsUpdate with None tokens should still update provider."""
+        """MetricsUpdated with None tokens should still update provider."""
         app = create_test_app()
 
         async with app.run_test() as pilot:
             await pilot.pause()
 
-            # Post a MetricsUpdate with provider but no tokens
-            app.post_message(MetricsUpdate(
+            app.tui_event_sink.post_event(MetricsUpdated(
                 provider_display="groq: llama-3.1-70b",
                 input_tokens=None,
                 output_tokens=None,
@@ -144,7 +147,7 @@ class TestMetricsIntegrationWithBridge:
 
     @pytest.mark.asyncio
     async def test_bridge_posts_metrics_on_think_complete(self):
-        """Bridge should post MetricsUpdate after think node completes."""
+        """Bridge should post MetricsUpdated after think node completes."""
         app = create_test_app()
 
         async with app.run_test() as pilot:

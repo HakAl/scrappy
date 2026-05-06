@@ -1028,20 +1028,6 @@ class UnifiedIO:
         """
         return self._output_sink
 
-    @output_sink.setter
-    def output_sink(self, sink: Optional[OutputSink]) -> None:
-        """Set the OutputSink (for wizard screen swapping).
-
-        Updates both the stored sink and the strategy's sink reference.
-
-        Args:
-            sink: New OutputSink to use, or None
-        """
-        self._output_sink = sink
-        # Also update strategy's sink if using OutputSinkAdapter
-        if isinstance(self._strategy, OutputSinkAdapter) and sink is not None:
-            self._strategy._sink = sink
-
     @property
     def theme(self) -> ThemeProtocol:
         """Get the current theme.

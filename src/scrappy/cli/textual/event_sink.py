@@ -59,10 +59,7 @@ class TextualTuiEventSink(TuiEventSinkProtocol):
 
         try:
             self.post_event(
-                FlushRequested(
-                    flush_id=flush_id,
-                    acknowledge=self.acknowledge_flush,
-                )
+                FlushRequested(flush_id=flush_id)
             )
 
             while True:

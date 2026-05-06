@@ -13,7 +13,7 @@ import uuid
 if TYPE_CHECKING:
     from .app import ScrappyApp
 
-from .messages import RequestInlineInput
+from .tui_events import PromptRequested
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,9 @@ class ThreadSafeAsyncBridge:
 
         prompt_id, event = self._register_prompt()
 
-        self.app.post_message(RequestInlineInput(prompt_id, message, "prompt", default))
+        self.app.tui_event_sink.post_event(
+            PromptRequested(prompt_id, message, "prompt", default)
+        )
         return self._await_result(prompt_id, event, default)
 
     def blocking_confirm(self, question: str) -> bool:
@@ -89,7 +91,9 @@ class ThreadSafeAsyncBridge:
 
         prompt_id, event = self._register_prompt()
 
-        self.app.post_message(RequestInlineInput(prompt_id, question, "confirm"))
+        self.app.tui_event_sink.post_event(
+            PromptRequested(prompt_id, question, "confirm")
+        )
         return self._await_result(prompt_id, event, False)
 
     def blocking_confirm_yna(self, question: str) -> str:
@@ -107,7 +111,9 @@ class ThreadSafeAsyncBridge:
 
         prompt_id, event = self._register_prompt()
 
-        self.app.post_message(RequestInlineInput(prompt_id, question, "confirm_yna"))
+        self.app.tui_event_sink.post_event(
+            PromptRequested(prompt_id, question, "confirm_yna")
+        )
         result = self._await_result(prompt_id, event, "n")
 
         # Normalize to y/n/a
@@ -129,7 +135,9 @@ class ThreadSafeAsyncBridge:
         prompt_id, event = self._register_prompt()
 
         # Use "checkpoint" input_type to skip log output
-        self.app.post_message(RequestInlineInput(prompt_id, message, "checkpoint", default))
+        self.app.tui_event_sink.post_event(
+            PromptRequested(prompt_id, message, "checkpoint", default)
+        )
         return self._await_result(prompt_id, event, default)
 
     def provide_result(self, prompt_id: str, result: Any) -> None:

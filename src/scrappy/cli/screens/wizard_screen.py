@@ -1,6 +1,7 @@
 """Setup wizard screen for Scrappy TUI."""
 
-from typing import TYPE_CHECKING, Optional, Callable, Any
+from contextlib import nullcontext
+from typing import TYPE_CHECKING, Optional, Callable, Any, cast
 import logging
 
 from textual.screen import Screen
@@ -9,38 +10,14 @@ from textual.binding import Binding
 
 from .chat_layout import ChatLayout
 from scrappy.cli.protocols import ClipboardProtocol
+from scrappy.cli.textual.tui_events import TranscriptClear, TuiEventTarget
 from scrappy.orchestrator.protocols import KeyValidatorProtocol
 
 if TYPE_CHECKING:
-    from ..protocols import RichRenderableProtocol
     from ..setup_wizard import SetupWizard
     from ..unified_io import UnifiedIO
 
 logger = logging.getLogger(__name__)
-
-
-class WizardOutputSink:
-    """Output sink that writes directly to the wizard's ChatLayout.
-
-    Implements the same interface as TextualOutputAdapter so SetupWizard
-    can output via io.output_sink pattern, but writes go directly to
-    the screen's SelectableLog instead of the app's message queue.
-    """
-
-    def __init__(self, layout: ChatLayout) -> None:
-        self._layout = layout
-
-    def clear_output(self) -> None:
-        """Clear the output area."""
-        self._layout.clear_output()
-
-    def post_output(self, content: str) -> None:
-        """Write plain text to output."""
-        self._layout.write(content)
-
-    def post_renderable(self, obj: Any) -> None:
-        """Write Rich renderable to output."""
-        self._layout.write(obj)
 
 
 class SetupWizardScreen(Screen):
@@ -84,9 +61,6 @@ class SetupWizardScreen(Screen):
         # Layout component
         self._layout: Optional[ChatLayout] = None
 
-        # Store original output sink to restore on unmount
-        self._original_output_sink: Optional["RichRenderableProtocol"] = None
-
     def compose(self) -> ComposeResult:
         """Create wizard UI using ChatLayout."""
         yield ChatLayout(
@@ -103,24 +77,16 @@ class SetupWizardScreen(Screen):
         self._layout = self.query_one(ChatLayout)
         self._layout.focus_input()
 
-        # Swap output sink to write directly to our layout
-        self._original_output_sink = self._io.output_sink
-        self._io.output_sink = WizardOutputSink(self._layout)
-
         # Create and start wizard
         self._wizard = SetupWizard(self._io, self._key_validator)
-        self._wizard.start(
-            allow_cancel=self._allow_cancel,
-            on_complete=self._handle_wizard_complete
-        )
+        with self._wizard_output_context():
+            self._wizard.start(
+                allow_cancel=self._allow_cancel,
+                on_complete=self._handle_wizard_complete
+            )
 
         # Update placeholder with current prompt
         self._update_placeholder()
-
-    def on_unmount(self) -> None:
-        """Restore original output sink on unmount."""
-        if self._original_output_sink is not None:
-            self._io.output_sink = self._original_output_sink
 
     def _handle_wizard_complete(self, has_provider: bool) -> None:
         """Handle wizard completion."""
@@ -163,16 +129,18 @@ class SetupWizardScreen(Screen):
         state_before = self._wizard._state
 
         # Pass to wizard state machine
-        self._wizard.handle_input(user_input)
+        with self._wizard_output_context():
+            self._wizard.handle_input(user_input)
 
         # If we transitioned to MENU from AWAITING_KEY, clear and re-show fresh menu
         # (DISCLAIMER -> MENU transition already shows menu, don't clear it)
         state_after = self._wizard._state
         if state_after == WizardState.MENU and state_before == WizardState.AWAITING_KEY:
-            output_sink = self._io._output_sink
-            if isinstance(output_sink, WizardOutputSink):
-                output_sink.clear_output()
-            self._wizard._show_menu()
+            cast(Any, self.app).tui_event_sink.post_event(
+                TranscriptClear(target=TuiEventTarget.WIZARD_TRANSCRIPT)
+            )
+            with self._wizard_output_context():
+                self._wizard._show_menu()
 
         # Update placeholder for next prompt
         self._update_placeholder()
@@ -185,5 +153,28 @@ class SetupWizardScreen(Screen):
         prompt = self._wizard.current_prompt
         if prompt and self._layout:
             self._layout.input.placeholder = prompt
+
+    def write_output(self, content: str) -> None:
+        """Write plain text to the wizard transcript."""
+        if self._layout is not None:
+            self._layout.write(content)
+
+    def write_renderable(self, renderable: Any) -> None:
+        """Write a Rich renderable to the wizard transcript."""
+        if self._layout is not None:
+            self._layout.write(renderable)
+
+    def clear_output(self) -> None:
+        """Clear the wizard transcript."""
+        if self._layout is not None:
+            self._layout.clear_output()
+
+    def _wizard_output_context(self):
+        """Route wizard business output to the wizard transcript target."""
+        sink = self._io.output_sink
+        transcript_target = getattr(sink, "transcript_target", None)
+        if callable(transcript_target):
+            return transcript_target(TuiEventTarget.WIZARD_TRANSCRIPT)
+        return nullcontext()
 
     # Note: ctrl+q and escape are handled at app level (ScrappyApp.on_key)

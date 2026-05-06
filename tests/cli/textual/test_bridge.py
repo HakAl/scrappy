@@ -7,7 +7,27 @@ from unittest.mock import Mock
 import pytest
 
 from scrappy.cli.textual.bridge import ThreadSafeAsyncBridge
-from scrappy.cli.textual.messages import RequestInlineInput
+from scrappy.cli.textual.tui_events import PromptRequested
+
+
+class RecordingSink:
+    """Event sink double that records prompt events."""
+
+    def __init__(self) -> None:
+        self.events: list[PromptRequested] = []
+
+    def post_event(self, event: PromptRequested) -> None:
+        self.events.append(event)
+
+    def flush(self, timeout: float = 5.0) -> bool:
+        return True
+
+
+class RecordingApp:
+    """App double exposing the typed event sink used by the bridge."""
+
+    def __init__(self) -> None:
+        self.tui_event_sink = RecordingSink()
 
 
 def wait_for(condition, timeout: float = 1.0) -> None:
@@ -22,9 +42,7 @@ def wait_for(condition, timeout: float = 1.0) -> None:
 
 def test_blocking_prompt_posts_request_and_returns_result():
     """Worker-thread prompt should round-trip through provide_result."""
-    app = Mock()
-    requests: list[RequestInlineInput] = []
-    app.post_message.side_effect = requests.append
+    app = RecordingApp()
     bridge = ThreadSafeAsyncBridge(app)
     result_holder: dict[str, str] = {}
 
@@ -33,8 +51,8 @@ def test_blocking_prompt_posts_request_and_returns_result():
     )
     worker.start()
 
-    wait_for(lambda: len(requests) == 1)
-    request = requests[0]
+    wait_for(lambda: len(app.tui_event_sink.events) == 1)
+    request = app.tui_event_sink.events[0]
     assert request.message == "Name?"
     assert request.input_type == "prompt"
     assert request.default == "User"
@@ -48,7 +66,7 @@ def test_blocking_prompt_posts_request_and_returns_result():
 
 def test_blocking_confirm_returns_false_on_shutdown():
     """Pending confirmations should fail closed when the bridge shuts down."""
-    app = Mock()
+    app = RecordingApp()
     bridge = ThreadSafeAsyncBridge(app)
     result_holder: dict[str, bool] = {}
 
@@ -57,7 +75,7 @@ def test_blocking_confirm_returns_false_on_shutdown():
     )
     worker.start()
 
-    wait_for(lambda: app.post_message.called)
+    wait_for(lambda: len(app.tui_event_sink.events) == 1)
     bridge.shutdown()
     worker.join(timeout=1.0)
 
@@ -67,9 +85,7 @@ def test_blocking_confirm_returns_false_on_shutdown():
 
 def test_blocking_confirm_yna_normalizes_invalid_response():
     """Unexpected confirmation values should normalize to deny."""
-    app = Mock()
-    requests: list[RequestInlineInput] = []
-    app.post_message.side_effect = requests.append
+    app = RecordingApp()
     bridge = ThreadSafeAsyncBridge(app)
     result_holder: dict[str, str] = {}
 
@@ -78,8 +94,8 @@ def test_blocking_confirm_yna_normalizes_invalid_response():
     )
     worker.start()
 
-    wait_for(lambda: len(requests) == 1)
-    bridge.provide_result(requests[0].prompt_id, "maybe")
+    wait_for(lambda: len(app.tui_event_sink.events) == 1)
+    bridge.provide_result(app.tui_event_sink.events[0].prompt_id, "maybe")
     worker.join(timeout=1.0)
 
     assert worker.is_alive() is False
