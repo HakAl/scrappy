@@ -130,7 +130,11 @@ class MainAppScreen(Screen):
         """Create child widgets using the shared chat surface."""
         yield ChatSurface(
             config=ChatSurfaceConfig(
+                show_activity=True,
+                show_tasks=True,
                 show_status_bar=True,
+                history_enabled=True,
+                capture_enabled=True,
                 input_placeholder="Type your message or command...",
             ),
             id="chat_surface"
@@ -172,14 +176,8 @@ class MainAppScreen(Screen):
         if self._surface is None:
             return
 
-        # Block up-arrow history during capture mode
-        if self.capture_manager.is_capturing:
-            if event.key == "up":
-                event.stop()
-                return
-
         # Already focused on input, let it handle naturally
-        if self._surface.input.has_focus:
+        if self._surface.input_has_focus():
             return
 
         # Don't steal focus from other interactive widgets (except SelectableLog
@@ -232,38 +230,58 @@ class MainAppScreen(Screen):
 
     def action_history_previous(self) -> None:
         """Handle Up arrow to navigate to previous history entry."""
-        if self.capture_manager.is_capturing or self._surface is None:
+        if self._surface is None:
             return
-        if not self._surface.input.has_focus:
+
+        if not self._surface.history_enabled:
+            return
+
+        if not self._surface.input_has_focus():
             self._surface.output.action_scroll_up()
             return
 
-        current_text = self._surface.input.text
+        if self._surface.move_composer_up_before_history():
+            return
+
+        if self.capture_manager.is_capturing:
+            return
+
+        current_text = self._surface.input_text
         if self._history_temp_input == "" and current_text:
             self._history_temp_input = current_text
 
         previous = self._history.get_previous()
         if previous is not None:
             # Use text setter instead of clear()+insert() to properly reset cursor state
-            self._surface.input.text = previous
+            self._surface.input_text = previous
 
     def action_history_next(self) -> None:
         """Handle Down arrow to navigate to next history entry."""
-        if self.capture_manager.is_capturing or self._surface is None:
+        if self._surface is None:
             return
-        if not self._surface.input.has_focus:
+
+        if not self._surface.history_enabled:
+            return
+
+        if not self._surface.input_has_focus():
             self._surface.output.action_scroll_down()
+            return
+
+        if self._surface.move_composer_down_before_history():
+            return
+
+        if self.capture_manager.is_capturing:
             return
 
         next_entry = self._history.get_next()
         if next_entry is not None:
             # Use text setter instead of clear()+insert() to properly reset cursor state
-            self._surface.input.text = next_entry
+            self._surface.input_text = next_entry
         else:
             # Restore saved input when navigating past history end
             restored = self._history_temp_input
             self._history_temp_input = ""
-            self._surface.input.text = restored
+            self._surface.input_text = restored
 
     def action_transcript_home(self) -> None:
         """Move the transcript to the oldest visible output."""
@@ -385,6 +403,8 @@ class MainAppScreen(Screen):
         default: str = ""
     ) -> None:
         """Enter capture mode for inline input."""
+        if self._surface is not None and not self._surface.capture_enabled:
+            return
         self.capture_manager.enter_capture_mode(
             prompt_id, message, input_type, default
         )
@@ -464,16 +484,7 @@ class MainAppScreen(Screen):
         input_container = self.query_one("#input_container")
         input_container.add_class("capture-mode")
 
-        if request.input_type == "confirm":
-            self._surface.input.placeholder = "Type y or n..."
-        elif request.input_type == "confirm_yna":
-            self._surface.input.placeholder = "Type y, n, or a (allow all)..."
-        elif request.input_type == "checkpoint":
-            self._surface.input.placeholder = "Type c, g, a, or s..."
-        else:
-            hint = f" (default: {request.default})" if request.default else ""
-            self._surface.input.placeholder = f"Enter value{hint}..."
-
+        self._surface.prepare_capture_input(request)
         self._surface.focus_input()
 
     def _exit_capture_ui(self) -> None:
@@ -481,7 +492,7 @@ class MainAppScreen(Screen):
         if self._surface is None:
             return
 
-        self._surface.input.placeholder = "Type your message or command..."
+        self._surface.restore_input_placeholder()
 
         self.prompt_display.hide_prompt()
         status_bar = self.query_one(StatusBar)

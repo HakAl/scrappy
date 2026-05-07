@@ -1,6 +1,7 @@
 """Provider setup wizard - TUI-based configuration."""
 import os
 from contextlib import contextmanager
+from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, Optional, Tuple, Callable, TYPE_CHECKING
 
@@ -67,6 +68,14 @@ class WizardState(Enum):
     AWAITING_KEY = auto()  # Waiting for API key input
     CONFIRM_REMOVE = auto()  # Confirming key removal
     DONE = auto()          # Wizard complete
+
+
+@dataclass(frozen=True)
+class WizardInputResult:
+    """Transition-aware follow-up instructions from non-blocking wizard input."""
+
+    clear_transcript: bool = False
+    append_entries: tuple[Any, ...] = ()
 
 
 DISCLAIMER_TEXT = """
@@ -178,7 +187,7 @@ class SetupWizard:
             )
         return self._current_provider
 
-    def handle_input(self, user_input: str) -> None:
+    def handle_input(self, user_input: str) -> WizardInputResult:
         """
         Handle user input based on current state (non-blocking for TUI).
 
@@ -186,8 +195,12 @@ class SetupWizard:
 
         Args:
             user_input: Raw user input
+
+        Returns:
+            Follow-up instructions for the hosting surface.
         """
         user_input = user_input.strip()
+        state_before = self._state
 
         if self._state == WizardState.DISCLAIMER:
             self._handle_disclaimer_input(user_input.lower())
@@ -199,6 +212,17 @@ class SetupWizard:
             self._handle_key_input(user_input)
         elif self._state == WizardState.CONFIRM_REMOVE:
             self._handle_confirm_remove_input(user_input.lower())
+
+        if (
+            self._state == WizardState.MENU
+            and state_before in {WizardState.AWAITING_KEY, WizardState.CONFIRM_REMOVE}
+        ):
+            return WizardInputResult(
+                clear_transcript=True,
+                append_entries=self.menu_renderables(),
+            )
+
+        return WizardInputResult()
 
     def _handle_disclaimer_input(self, response: str) -> None:
         """Handle disclaimer acknowledgment input."""

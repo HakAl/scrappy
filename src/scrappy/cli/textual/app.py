@@ -988,7 +988,7 @@ class ScrappyApp(App):
                 screen.capture_manager.cancel()
                 # Full UI cleanup without restarting timer
                 if screen._surface:
-                    screen._surface.input.placeholder = "Type your message or command..."
+                    screen._surface.restore_input_placeholder()
                 screen.prompt_display.hide_prompt()
                 try:
                     from ..textual import StatusBar

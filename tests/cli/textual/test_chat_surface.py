@@ -12,18 +12,25 @@ from textual.events import MouseDown
 from scrappy.cli.screens.chat_surface import (
     AppendTranscript,
     ChatSurface,
+    ChatSurfaceConfig,
     ClearTranscript,
     SubmitResult,
     UpdatePlaceholder,
 )
+from scrappy.cli.textual import ActivityIndicator, StatusBar
+from scrappy.cli.widgets import TaskProgressWidget
 from scrappy.cli.widgets import SelectableLog
 
 
 class SurfaceHarnessApp(App):
     """Minimal app that mounts one chat surface."""
 
+    def __init__(self, config: ChatSurfaceConfig | None = None) -> None:
+        super().__init__()
+        self._config = config
+
     def compose(self) -> ComposeResult:
-        yield ChatSurface(id="surface")
+        yield ChatSurface(config=self._config, id="surface")
 
 
 @dataclass
@@ -105,3 +112,30 @@ async def test_submit_clears_input_and_applies_local_follow_up_actions() -> None
         assert surface.output.transcript_model.entries()[-1].renderable == "after submit"
         assert surface.input.placeholder == "next prompt"
         assert unhandled == ()
+
+
+@pytest.mark.asyncio
+async def test_config_disables_optional_status_widgets() -> None:
+    """Feature flags should make wizard-style surfaces omit unused widgets."""
+    app = SurfaceHarnessApp(
+        ChatSurfaceConfig(
+            show_activity=False,
+            show_tasks=False,
+            show_status_bar=False,
+            history_enabled=False,
+            capture_enabled=False,
+            input_placeholder="wizard prompt",
+        )
+    )
+
+    async with app.run_test(size=(80, 12)) as pilot:
+        await pilot.pause()
+
+        surface = app.query_one(ChatSurface)
+
+        assert list(app.query(ActivityIndicator)) == []
+        assert list(app.query(TaskProgressWidget)) == []
+        assert list(app.query(StatusBar)) == []
+        assert surface.input.placeholder == "wizard prompt"
+        assert surface.history_enabled is False
+        assert surface.capture_enabled is False

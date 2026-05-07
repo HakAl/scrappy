@@ -77,7 +77,11 @@ class SetupWizardScreen(Screen):
         """Create wizard UI using ChatSurface."""
         yield ChatSurface(
             config=ChatSurfaceConfig(
+                show_activity=False,
+                show_tasks=False,
                 show_status_bar=False,
+                history_enabled=False,
+                capture_enabled=False,
                 input_placeholder="Select provider (1-5 or q)",
             ),
             id="chat_surface"
@@ -140,27 +144,17 @@ class SetupWizardScreen(Screen):
         if self._wizard is None:
             return SubmitResult(accepted=False)
 
-        # Track state before handling input
-        from ..setup_wizard import WizardState
-        state_before = self._wizard._state
-
         # Pass to wizard state machine
         with self._wizard_output_context():
-            self._wizard.handle_input(user_input)
+            wizard_result = self._wizard.handle_input(user_input)
 
-        # If we transitioned to MENU from AWAITING_KEY, clear and re-show fresh menu
-        # (DISCLAIMER -> MENU transition already shows menu, don't clear it)
-        state_after = self._wizard._state
-        if state_after == WizardState.MENU and state_before in {
-            WizardState.AWAITING_KEY,
-            WizardState.CONFIRM_REMOVE,
-        }:
+        if wizard_result.clear_transcript:
             return SubmitResult(
                 accepted=True,
                 follow_up_actions=(
                     ClearTranscript(target=TuiEventTarget.WIZARD_TRANSCRIPT),
                     AppendTranscript(
-                        entries=self._wizard.menu_renderables(),
+                        entries=wizard_result.append_entries,
                         target=TuiEventTarget.WIZARD_TRANSCRIPT,
                     ),
                 ),
@@ -181,7 +175,7 @@ class SetupWizardScreen(Screen):
 
         prompt = self._wizard.current_prompt
         if prompt and self._surface:
-            self._surface.input.placeholder = prompt
+            self._surface.set_input_placeholder(prompt)
 
     def write_output(self, content: str) -> None:
         """Write plain text to the wizard transcript."""

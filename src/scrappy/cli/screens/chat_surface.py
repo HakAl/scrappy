@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import logging
 from typing import Any, Protocol, TypeAlias
 
 from rich.console import RenderableType
@@ -16,15 +15,18 @@ from ..input_capture import InputRequest
 from ..textual import ActivityIndicator, StatusBar
 from ..textual.tui_events import TuiEventTarget
 from ..widgets import SelectableLog, TaskProgressWidget
-
-logger = logging.getLogger(__name__)
+from .composer_controller import ComposerController, ComposerControllerProtocol
 
 
 @dataclass(frozen=True)
 class ChatSurfaceConfig:
     """Feature configuration for the shared chat surface."""
 
+    show_activity: bool = True
+    show_tasks: bool = True
     show_status_bar: bool = True
+    history_enabled: bool = True
+    capture_enabled: bool = True
     input_placeholder: str = ""
 
 
@@ -105,12 +107,15 @@ class ChatSurface(Widget):
         self._config = config or ChatSurfaceConfig()
         self._output: SelectableLog | None = None
         self._input: TextArea | None = None
+        self._composer: ComposerControllerProtocol | None = None
 
     def compose(self) -> ComposeResult:
         """Create the shared chat widgets."""
         yield SelectableLog(id="output")
-        yield ActivityIndicator()
-        yield TaskProgressWidget()
+        if self._config.show_activity:
+            yield ActivityIndicator()
+        if self._config.show_tasks:
+            yield TaskProgressWidget()
 
         with Container(id="input_container"):
             yield Label(">", id="input_prompt")
@@ -128,8 +133,10 @@ class ChatSurface(Widget):
         """Cache widget references after mounting."""
         self._output = self.query_one("#output", SelectableLog)
         self._input = self.query_one("#input", TextArea)
-        if self._config.input_placeholder:
-            self._input.placeholder = self._config.input_placeholder
+        self._composer = ComposerController(
+            self._input,
+            default_placeholder=self._config.input_placeholder,
+        )
 
     @property
     def output(self) -> SelectableLog:
@@ -145,6 +152,26 @@ class ChatSurface(Widget):
             self._input = self.query_one("#input", TextArea)
         return self._input
 
+    @property
+    def history_enabled(self) -> bool:
+        """Return whether this surface supports command history."""
+        return self._config.history_enabled
+
+    @property
+    def capture_enabled(self) -> bool:
+        """Return whether this surface supports inline capture prompts."""
+        return self._config.capture_enabled
+
+    @property
+    def composer(self) -> ComposerControllerProtocol:
+        """Return the shared composer controller."""
+        if self._composer is None:
+            self._composer = ComposerController(
+                self.input,
+                default_placeholder=self._config.input_placeholder,
+            )
+        return self._composer
+
     def write(self, content: RenderableType) -> None:
         """Write text or a Rich renderable to the transcript."""
         self.output.write(content)
@@ -159,13 +186,45 @@ class ChatSurface(Widget):
 
     def clear_input(self) -> str:
         """Clear the composer and return its previous text."""
-        text = self.input.text
-        self.input.clear()
-        return text
+        return self.composer.clear()
 
     def focus_input(self) -> None:
         """Focus the composer."""
-        self.input.focus()
+        self.composer.focus()
+
+    @property
+    def input_text(self) -> str:
+        """Return the current composer text."""
+        return self.composer.text
+
+    @input_text.setter
+    def input_text(self, value: str) -> None:
+        """Replace the current composer text."""
+        self.composer.text = value
+
+    def input_has_focus(self) -> bool:
+        """Return whether the composer has keyboard focus."""
+        return self.composer.has_focus
+
+    def set_input_placeholder(self, text: str) -> None:
+        """Set the composer placeholder."""
+        self.composer.set_placeholder(text)
+
+    def restore_input_placeholder(self) -> None:
+        """Restore the configured default composer placeholder."""
+        self.composer.restore_default_placeholder()
+
+    def move_composer_up_before_history(self) -> bool:
+        """Move the composer cursor up before history if possible."""
+        return self.composer.move_up_before_history()
+
+    def move_composer_down_before_history(self) -> bool:
+        """Move the composer cursor down before history if possible."""
+        return self.composer.move_down_before_history()
+
+    def prepare_capture_input(self, request: InputRequest) -> None:
+        """Apply capture prompt text through the shared composer controller."""
+        self.composer.prepare_capture(request)
 
     def submit(self, handler: ChatCommandHandlerProtocol) -> SubmitResult:
         """Submit the current composer text through the handler protocol."""
@@ -197,22 +256,7 @@ class ChatSurface(Widget):
 
     def paste_from_clipboard(self, clipboard: Any) -> bool:
         """Paste clipboard text into the composer."""
-        try:
-            text = clipboard.paste_text()
-        except Exception as exc:
-            logger.warning("Failed to paste from clipboard: %s", exc)
-            return False
-
-        if not text:
-            return False
-
-        self.input.replace(
-            text,
-            self.input.selection.start,
-            self.input.selection.end,
-            maintain_selection_offset=True,
-        )
-        return True
+        return self.composer.paste_from_clipboard(clipboard)
 
     def apply_follow_up_actions(
         self,
@@ -229,7 +273,7 @@ class ChatSurface(Widget):
             elif isinstance(action, RefocusInput):
                 self.focus_input()
             elif isinstance(action, UpdatePlaceholder):
-                self.input.placeholder = action.text
+                self.set_input_placeholder(action.text)
             else:
                 unhandled.append(action)
         return tuple(unhandled)

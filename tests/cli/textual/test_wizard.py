@@ -209,6 +209,31 @@ class TestWizardInputHandling:
         # Should still be active
         assert wizard.is_active is True
 
+    def test_wizard_returns_clear_and_menu_follow_up_after_key_save(self):
+        """Saving a key should tell the screen to clear and reshow the menu."""
+        mock_io = MagicMock()
+        mock_io.theme = MagicMock()
+        mock_io.theme.success = "green"
+        mock_validator = MagicMock()
+        mock_validator.validate_key.return_value = (True, "")
+        mock_config = MagicMock()
+        mock_config.is_disclaimer_acknowledged.return_value = True
+        mock_config.get_key.return_value = None
+
+        wizard = SetupWizard(
+            io=mock_io,
+            key_validator=mock_validator,
+            config_service=mock_config,
+        )
+        wizard.start(allow_cancel=True)
+        wizard.handle_input("1")
+
+        result = wizard.handle_input("sk-test-valid-key-123")
+
+        assert result.clear_transcript is True
+        assert result.append_entries != ()
+        mock_config.set_key.assert_called_once()
+
 
 class TestWizardScreenIntegration:
     """Integration tests for wizard screen with Textual."""

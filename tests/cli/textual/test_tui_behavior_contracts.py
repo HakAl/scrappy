@@ -11,6 +11,7 @@ from textual.app import App, ComposeResult
 from textual.events import MouseDown, MouseMove, MouseUp
 from textual.widgets import TextArea
 
+from scrappy.cli.command_history import InMemoryCommandHistory
 from scrappy.cli.screens.chat_surface import ChatSurface
 from scrappy.cli.screens.main_screen import MainAppScreen
 from scrappy.cli.screens.wizard_screen import SetupWizardScreen
@@ -293,10 +294,6 @@ class TestTranscriptScrollContracts:
             assert int(log.scroll_offset.y) < bottom
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 7 routes multiline composer Up/Down through cursor boundaries.",
-    )
     async def test_multiline_composer_up_moves_cursor_before_history(self, monkeypatch):
         """Up in multiline composer should move the cursor before history navigation."""
         force_main_screen(monkeypatch)
@@ -316,6 +313,54 @@ class TestTranscriptScrollContracts:
 
             assert composer.text == "alpha\nbeta"
             assert composer.cursor_location[0] == 0
+
+    @pytest.mark.asyncio
+    async def test_multiline_composer_down_moves_cursor_before_history(
+        self,
+        monkeypatch,
+    ):
+        """Down in multiline composer should move the cursor before history navigation."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            composer = app.screen.query_one(ChatSurface).input
+            composer.text = "alpha\nbeta"
+            composer.cursor_location = (0, 2)
+            composer.focus()
+            await pilot.pause()
+
+            await pilot.press("down")
+            await pilot.pause()
+
+            assert composer.text == "alpha\nbeta"
+            assert composer.cursor_location[0] == 1
+
+    @pytest.mark.asyncio
+    async def test_multiline_composer_up_uses_history_at_first_line(self, monkeypatch):
+        """Up at the first composer line should navigate command history."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            history = InMemoryCommandHistory()
+            history.add_to_history("remembered command")
+            app.screen._history = history
+
+            composer = app.screen.query_one(ChatSurface).input
+            composer.text = "alpha\nbeta"
+            composer.cursor_location = (0, 2)
+            composer.focus()
+            await pilot.pause()
+
+            await pilot.press("up")
+            await pilot.pause()
+
+            assert composer.text == "remembered command"
 
 
 class TestClipboardPriorityContracts:
