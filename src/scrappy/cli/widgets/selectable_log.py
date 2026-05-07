@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Optional
+from typing import Callable, Optional
 
 from rich.console import RenderableType
 from rich.segment import Segment
 from rich.style import Style
 from textual._cells import cell_len
+from textual import events
 from textual.events import MouseDown, MouseMove, MouseUp
 from textual.geometry import Size
 from textual.scroll_view import ScrollView
@@ -33,18 +34,17 @@ class SelectableLog(ScrollView, can_focus=True):
     """Transcript view with model-backed rendering and text selection."""
 
     _VIEWPORT_RENDER_BUFFER = 8
+    _BOTTOM_TOLERANCE_ROWS = 2
 
     def __init__(
         self,
         max_lines: Optional[int] = None,
-        auto_scroll: bool = True,
         **kwargs,
     ):
         """Initialize SelectableLog.
 
         Args:
             max_lines: Maximum retained rendered rows, trimmed by whole entries.
-            auto_scroll: Auto-scroll to bottom on new content.
         """
         super().__init__(**kwargs)
         self._model = TranscriptModel()
@@ -56,13 +56,26 @@ class SelectableLog(ScrollView, can_focus=True):
         self._selection_end: Optional[tuple[int, int]] = None
         self._is_selecting = False
         self._max_lines = max_lines
-        self._auto_scroll = auto_scroll
+        self._following = True
+        self._programmatic_scroll = False
         self._widest_line_width = 0
 
     @property
     def selection_text(self) -> str:
         """Return the selected transcript text."""
         return self._get_selected_text()
+
+    @property
+    def is_following(self) -> bool:
+        """Return whether the transcript is pinned to live output."""
+        return self._following
+
+    @property
+    def is_at_bottom(self) -> bool:
+        """Return whether the viewport is within bottom tolerance."""
+        max_scroll_y = self._max_scroll_y()
+        current_y = float(self.scroll_offset.y)
+        return current_y >= max_scroll_y - self._BOTTOM_TOLERANCE_ROWS
 
     @property
     def transcript_model(self) -> TranscriptModel:
@@ -72,13 +85,19 @@ class SelectableLog(ScrollView, can_focus=True):
     def write(self, renderable: RenderableType) -> None:
         """Add a Rich renderable to the log."""
         self._sync_render_width()
+        should_follow = self._following and self.is_at_bottom
+        reviewing_y = float(self.scroll_offset.y)
+
         self._model.append(renderable)
         self._render_new_entries_if_cache_complete()
         self._apply_max_lines()
         self._update_virtual_size()
 
-        if self._auto_scroll:
-            self.scroll_end(animate=False)
+        if should_follow:
+            self.scroll_to_bottom()
+        else:
+            self._following = False
+            self._scroll_to_y(reviewing_y)
 
     def clear(self) -> None:
         """Clear all content from the log."""
@@ -86,7 +105,58 @@ class SelectableLog(ScrollView, can_focus=True):
         self._clear_render_cache()
         self._clear_selection()
         self.virtual_size = Size(0, 0)
+        self._following = True
         self.refresh()
+
+    def set_following(self, following: bool) -> None:
+        """Set follow/review mode for transcript output."""
+        self._following = following
+        if following:
+            self.scroll_to_bottom()
+
+    def scroll_to_bottom(self) -> None:
+        """Scroll to the live bottom and enter following mode."""
+        self._following = True
+        self._with_programmatic_scroll(
+            lambda: self.scroll_end(
+                animate=False,
+                x_axis=False,
+                y_axis=True,
+            )
+        )
+
+    def follow_latest(self) -> None:
+        """Return to live transcript output."""
+        self.scroll_to_bottom()
+
+    def action_scroll_up(self) -> None:
+        """Scroll up and enter review mode."""
+        self._following = False
+        self.scroll_up(animate=False, immediate=True)
+
+    def action_scroll_down(self) -> None:
+        """Scroll down and follow again when the bottom is reached."""
+        self.scroll_down(animate=False, immediate=True)
+        self._update_following_after_user_scroll()
+
+    def action_page_up(self) -> None:
+        """Page up and enter review mode."""
+        self._following = False
+        self.scroll_page_up(animate=False)
+
+    def action_page_down(self) -> None:
+        """Page down and follow again when the bottom is reached."""
+        self.scroll_page_down(animate=False)
+        self._update_following_after_user_scroll()
+
+    def action_scroll_home(self) -> None:
+        """Scroll to transcript start and enter review mode."""
+        self._following = False
+        self.scroll_home(animate=False, immediate=True, x_axis=False, y_axis=True)
+
+    def action_scroll_end(self) -> None:
+        """Scroll to transcript end and follow live output."""
+        self.scroll_to_bottom()
 
     def render_line(self, y: int) -> Strip:
         """Render a single visible line with selection highlighting."""
@@ -108,6 +178,59 @@ class SelectableLog(ScrollView, can_focus=True):
 
         strip = strip.crop_extend(int(scroll_x), int(scroll_x) + width, self.rich_style)
         return strip.apply_style(self.rich_style)
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        """Keep follow/review mode in sync with manual scroll movement."""
+        super().watch_scroll_y(old_value, new_value)
+        if self._programmatic_scroll:
+            return
+        if new_value < old_value:
+            self._following = False
+            return
+        self._update_following_after_user_scroll()
+
+    def _on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
+        """Mouse wheel up enters review mode."""
+        self._following = False
+        super()._on_mouse_scroll_up(event)
+
+    def _on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
+        """Mouse wheel down follows again when the bottom is reached."""
+        super()._on_mouse_scroll_down(event)
+        self._update_following_after_user_scroll()
+
+    def _max_scroll_y(self) -> float:
+        """Return the current maximum vertical scroll offset."""
+        return max(0.0, float(getattr(self, "max_scroll_y", 0.0) or 0.0))
+
+    def _update_following_after_user_scroll(self) -> None:
+        """Update state after user-driven scrolling."""
+        if self.is_at_bottom:
+            self._following = True
+            max_scroll_y = self._max_scroll_y()
+            if float(self.scroll_offset.y) < max_scroll_y:
+                self._scroll_to_y(max_scroll_y)
+        else:
+            self._following = False
+
+    def _scroll_to_y(self, y: float) -> None:
+        """Scroll vertically without changing follow/review state."""
+        self._with_programmatic_scroll(
+            lambda: self.scroll_to(
+                y=y,
+                animate=False,
+                immediate=True,
+            )
+        )
+
+    def _with_programmatic_scroll(self, operation: Callable[[], None]) -> None:
+        """Run a scroll operation without treating it as user navigation."""
+        previous = self._programmatic_scroll
+        self._programmatic_scroll = True
+        try:
+            operation()
+        finally:
+            self._programmatic_scroll = previous
 
     def _current_render_width(self) -> int:
         """Return the width used to render transcript entries."""

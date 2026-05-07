@@ -210,3 +210,37 @@ async def test_resize_does_not_render_every_entry_synchronously(monkeypatch) -> 
         await pilot.pause()
 
         assert 0 < calls < 200
+
+
+@pytest.mark.asyncio
+async def test_sustained_scrolling_materializes_bounded_entries(monkeypatch) -> None:
+    """Paging through a large transcript should not render every retained entry."""
+    log = SelectableLog(id="log")
+    app = LogHarnessApp(log)
+
+    async with app.run_test(size=(80, 12)) as pilot:
+        await pilot.pause()
+
+        for index in range(2000):
+            log.write(f"entry {index}")
+        await pilot.pause()
+
+        await pilot.resize_terminal(40, 12)
+        await pilot.pause()
+
+        calls = 0
+        original_render_entry = log._render_entry
+
+        def count_render(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return original_render_entry(*args, **kwargs)
+
+        monkeypatch.setattr(log, "_render_entry", count_render)
+
+        for offset in range(0, 1000, 100):
+            log.scroll_to(y=offset, animate=False, immediate=True)
+            for row in range(12):
+                log.render_line(row)
+
+        assert 0 < calls < 200

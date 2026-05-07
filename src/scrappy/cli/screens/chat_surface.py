@@ -108,7 +108,7 @@ class ChatSurface(Widget):
 
     def compose(self) -> ComposeResult:
         """Create the shared chat widgets."""
-        yield SelectableLog(id="output", auto_scroll=True)
+        yield SelectableLog(id="output")
         yield ActivityIndicator()
         yield TaskProgressWidget()
 
@@ -153,6 +153,10 @@ class ChatSurface(Widget):
         """Clear the transcript."""
         self.output.clear()
 
+    def follow_latest(self) -> None:
+        """Return transcript scrolling to live output."""
+        self.output.follow_latest()
+
     def clear_input(self) -> str:
         """Clear the composer and return its previous text."""
         text = self.input.text
@@ -166,7 +170,10 @@ class ChatSurface(Widget):
     def submit(self, handler: ChatCommandHandlerProtocol) -> SubmitResult:
         """Submit the current composer text through the handler protocol."""
         user_input = self.clear_input().strip()
-        return handler.handle_submit(user_input)
+        result = handler.handle_submit(user_input)
+        if result.accepted:
+            self.follow_latest()
+        return result
 
     def handle_click(self, event: Any, clipboard: Any) -> None:
         """Apply shared click, focus, and right-click paste policy."""

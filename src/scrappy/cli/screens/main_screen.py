@@ -58,6 +58,10 @@ class MainAppScreen(Screen):
         Binding("enter", "submit_input", "Submit", priority=True),
         Binding("up", "history_previous", "Previous", priority=True),
         Binding("down", "history_next", "Next", priority=True),
+        Binding("pageup", "transcript_page_up", "Transcript Page Up", priority=True),
+        Binding("pagedown", "transcript_page_down", "Transcript Page Down", priority=True),
+        Binding("home,ctrl+home", "transcript_home", "Transcript Start", priority=True),
+        Binding("end,ctrl+end", "transcript_follow_latest", "Transcript End", priority=True),
         # Note: escape is handled at app level (ScrappyApp.on_key)
     ]
 
@@ -227,6 +231,9 @@ class MainAppScreen(Screen):
         """Handle Up arrow to navigate to previous history entry."""
         if self.capture_manager.is_capturing or self._surface is None:
             return
+        if not self._surface.input.has_focus:
+            self._surface.output.action_scroll_up()
+            return
 
         current_text = self._surface.input.text
         if self._history_temp_input == "" and current_text:
@@ -241,6 +248,9 @@ class MainAppScreen(Screen):
         """Handle Down arrow to navigate to next history entry."""
         if self.capture_manager.is_capturing or self._surface is None:
             return
+        if not self._surface.input.has_focus:
+            self._surface.output.action_scroll_down()
+            return
 
         next_entry = self._history.get_next()
         if next_entry is not None:
@@ -251,6 +261,26 @@ class MainAppScreen(Screen):
             restored = self._history_temp_input
             self._history_temp_input = ""
             self._surface.input.text = restored
+
+    def action_transcript_page_up(self) -> None:
+        """Page the transcript up without moving the composer."""
+        if self._surface is not None:
+            self._surface.output.action_page_up()
+
+    def action_transcript_page_down(self) -> None:
+        """Page the transcript down without moving the composer."""
+        if self._surface is not None:
+            self._surface.output.action_page_down()
+
+    def action_transcript_home(self) -> None:
+        """Move the transcript to the oldest visible output."""
+        if self._surface is not None:
+            self._surface.output.action_scroll_home()
+
+    def action_transcript_follow_latest(self) -> None:
+        """Move the transcript to live output."""
+        if self._surface is not None:
+            self._surface.follow_latest()
 
     def _cancel_ui_cleanup(self) -> None:
         """Stop timer and hide activity indicator after cancellation."""

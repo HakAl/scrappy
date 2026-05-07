@@ -147,14 +147,8 @@ class TestTranscriptScrollContracts:
             assert int(log.scroll_offset.y) < bottom
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 6 adds reviewing mode so new output does not yank the viewport.",
-    )
     async def test_new_output_preserves_reviewing_viewport(self):
         """New transcript output should not move the viewport while reviewing old output."""
-        # PR 6: move this to SingleScreenApp/create_test_app when scroll state
-        # lives in the surface/controller instead of the widget.
         app = LogHarnessApp()
 
         async with app.run_test(size=(80, 12)) as pilot:
@@ -174,10 +168,6 @@ class TestTranscriptScrollContracts:
             assert int(log.scroll_offset.y) == before
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 6 routes End/Ctrl+End to transcript follow-latest behavior.",
-    )
     async def test_end_key_returns_to_live_bottom(self, monkeypatch):
         """End should return a reviewing transcript to the live bottom."""
         force_main_screen(monkeypatch)
@@ -199,10 +189,6 @@ class TestTranscriptScrollContracts:
             assert int(log.scroll_offset.y) >= max_scroll_y - 2
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 7 separates command history from transcript scroll ownership.",
-    )
     async def test_history_navigation_does_not_block_transcript_up_scroll(
         self, monkeypatch
     ):
