@@ -1,6 +1,5 @@
 """Setup wizard screen for Scrappy TUI."""
 
-from contextlib import nullcontext
 from typing import TYPE_CHECKING, Optional, Callable, Any
 import logging
 
@@ -186,8 +185,10 @@ class SetupWizardScreen(Screen):
         """Route wizard business output to the wizard transcript target."""
         sink = self._io.output_sink
         transcript_target = getattr(sink, "transcript_target", None)
-        if callable(transcript_target):
-            return transcript_target(TuiEventTarget.WIZARD_TRANSCRIPT)
-        return nullcontext()
+        if not callable(transcript_target):
+            raise RuntimeError(
+                "SetupWizardScreen requires an output sink with transcript_target()"
+            )
+        return transcript_target(TuiEventTarget.WIZARD_TRANSCRIPT)
 
     # Note: ctrl+q and escape are handled at app level (ScrappyApp.on_key)

@@ -219,13 +219,12 @@ class TestSelectionViaMouseDrag:
             await pilot.pause()
 
             log = get_output_log(app)
+            log.clear()
             log.write("End to end copy test")
             await pilot.pause()
 
-            # Select the last line (banner content comes before our text)
-            last_row = len(log._strips) - 1
-            log._selection_start = (last_row, 0)
-            log._selection_end = (last_row, 20)
+            log._selection_start = (0, 0)
+            log._selection_end = (0, 20)
 
             with patch.object(app, "copy_to_clipboard", side_effect=lambda t: copied.update(text=t)):
                 await pilot.press("ctrl+c")

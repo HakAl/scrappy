@@ -138,6 +138,35 @@ async def test_trim_removes_entries_by_id_and_clears_selection() -> None:
 
 
 @pytest.mark.asyncio
+async def test_trim_continues_when_placeholder_rows_exist() -> None:
+    """Sustained writes should trim even after lazy placeholder rows exist."""
+    max_lines = 20
+    log = SelectableLog(id="log", max_lines=max_lines)
+    app = LogHarnessApp(log)
+
+    async with app.run_test(size=(80, 12)) as pilot:
+        await pilot.pause()
+
+        for index in range(max_lines):
+            log.write(f"seed {index}")
+        await pilot.pause()
+
+        await pilot.resize_terminal(40, 12)
+        await pilot.pause()
+        log.render_line(max_lines - 1)
+
+        assert any(line.is_placeholder for line in log._rendered_lines)
+
+        for index in range(max_lines * 2):
+            log.write(f"stream {index}")
+        await pilot.pause()
+
+        entries = log.transcript_model.entries()
+        assert len(entries) == max_lines
+        assert all(str(entry.renderable).startswith("stream ") for entry in entries)
+
+
+@pytest.mark.asyncio
 async def test_resize_does_not_render_every_entry_synchronously(monkeypatch) -> None:
     """Width invalidation should rebuild only the visible transcript rows."""
     log = SelectableLog(id="log")

@@ -60,6 +60,21 @@ class TestSetupWizardScreen:
 
         screen._surface.handle_click.assert_called_once_with(event, mock_clipboard)
 
+    def test_wizard_output_context_requires_transcript_target(self):
+        """Wizard output routing should fail closed when sink cannot retarget."""
+        mock_io = MagicMock()
+        mock_io.theme = MagicMock()
+        mock_io.output_sink = object()
+        screen = SetupWizardScreen(
+            io=mock_io,
+            key_validator=MagicMock(),
+            clipboard=MagicMock(),
+        )
+
+        with pytest.raises(RuntimeError, match="transcript_target"):
+            with screen._wizard_output_context():
+                pass
+
 
 class TestSetupWizard:
     """Tests for SetupWizard logic (non-UI)."""

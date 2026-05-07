@@ -65,12 +65,6 @@ class SelectableLog(ScrollView, can_focus=True):
         return self._get_selected_text()
 
     @property
-    def _strips(self) -> list[Strip]:
-        """Compatibility view for older tests while internals move to entries."""
-        self._ensure_all_rendered()
-        return [line.strip for line in self._rendered_lines]
-
-    @property
     def transcript_model(self) -> TranscriptModel:
         """Return the runtime transcript model."""
         return self._model
@@ -171,13 +165,6 @@ class SelectableLog(ScrollView, can_focus=True):
                 self._render_entries_until_count(self._rendered_entry_count + 1)
         self._update_virtual_size()
 
-    def _ensure_all_rendered(self) -> None:
-        """Render every retained entry for compatibility and copy operations."""
-        self._sync_render_width()
-        self._materialize_all_placeholders()
-        self._render_entries_until_count(len(self._model))
-        self._update_virtual_size()
-
     def _render_entries_until_count(self, entry_count: int) -> None:
         """Render retained entries up to entry_count."""
         entries = self._model.entries()
@@ -232,14 +219,6 @@ class SelectableLog(ScrollView, can_focus=True):
             )
         self._rebuild_entry_line_ranges()
 
-    def _materialize_all_placeholders(self) -> None:
-        """Render all placeholder rows."""
-        row = 0
-        while row < len(self._rendered_lines):
-            before = len(self._rendered_lines)
-            self._materialize_placeholder_at(row)
-            row += max(1, len(self._rendered_lines) - before + 1)
-
     def _update_virtual_size(self) -> None:
         """Update ScrollView's virtual size from known rendered rows."""
         if self._rendered_entry_count == len(self._model):
@@ -252,9 +231,12 @@ class SelectableLog(ScrollView, can_focus=True):
         """Trim old entries when rendered rows exceed max_lines."""
         if not self._max_lines:
             return
+        entry_overflow = len(self._model) - self._max_lines
+        if entry_overflow > 0:
+            last_overflow_id = self._model.entry_ids()[entry_overflow - 1]
+            self._trim_model_through(last_overflow_id)
+
         if self._rendered_entry_count != len(self._model):
-            return
-        if any(line.is_placeholder for line in self._rendered_lines):
             return
 
         last_removed_id: EntryId | None = None
@@ -263,11 +245,24 @@ class SelectableLog(ScrollView, can_focus=True):
             self._drop_rendered_entry(last_removed_id)
 
         if last_removed_id is not None:
-            self._model.trim_through(last_removed_id)
-            self._clear_selection()
-            self._rendered_entry_count = len(self._model)
-            self._rebuild_entry_line_ranges()
-            self._recompute_widest_line_width()
+            self._trim_model_through(last_removed_id)
+
+    def _trim_model_through(self, entry_id: EntryId) -> None:
+        """Trim model and rendered rows through entry_id."""
+        removed_ids = set(self._model.trim_through(entry_id))
+        if not removed_ids:
+            return
+
+        self._rendered_lines = [
+            line for line in self._rendered_lines if line.entry_id not in removed_ids
+        ]
+        self._rendered_entry_count = max(
+            0,
+            self._rendered_entry_count - len(removed_ids),
+        )
+        self._clear_selection()
+        self._rebuild_entry_line_ranges()
+        self._recompute_widest_line_width()
 
     def _drop_rendered_entry(self, entry_id: EntryId) -> None:
         """Drop rendered rows for an entry already selected for trimming."""
@@ -430,10 +425,6 @@ class SelectableLog(ScrollView, can_focus=True):
         """End selection on mouse up."""
         self._is_selecting = False
         self.release_mouse()
-
-    def _has_selection(self) -> bool:
-        """Check if there is an active selection."""
-        return self._selection_start is not None and self._selection_end is not None
 
     def _get_selected_text(self) -> str:
         """Extract plain text from selected rendered rows."""
