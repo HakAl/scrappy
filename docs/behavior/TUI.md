@@ -27,6 +27,8 @@ The user enters reviewing mode by scrolling upward with mouse wheel, PageUp or H
 
 The user returns to following mode with Ctrl+End, submitting a command, or scrolling back within the bottom tolerance. The bottom tolerance is 1-2 terminal rows from the maximum scroll offset.
 
+Ctrl+Home and Ctrl+End are transcript shortcuts regardless of focus. They override TextArea's default cursor-to-buffer-start/end behavior.
+
 ## Composer And History
 
 Printable input goes to the composer. Command history is available with Up and Down only when composer focus is active and the composer cursor is at the relevant boundary.

@@ -189,6 +189,32 @@ class TestTranscriptScrollContracts:
             assert int(log.scroll_offset.y) >= max_scroll_y - 2
 
     @pytest.mark.asyncio
+    async def test_plain_end_on_focused_transcript_returns_to_live_bottom(
+        self,
+        monkeypatch,
+    ):
+        """End should follow latest when the transcript owns focus."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            log = app.screen.query_one(ChatSurface).output
+            write_transcript_lines(log, "transcript end contract")
+            await pilot.pause()
+
+            log.scroll_to(y=0, animate=False)
+            log.focus()
+            await pilot.pause()
+
+            await pilot.press("end")
+            await pilot.pause()
+
+            max_scroll_y = int(getattr(log, "max_scroll_y"))
+            assert int(log.scroll_offset.y) >= max_scroll_y - 2
+
+    @pytest.mark.asyncio
     async def test_plain_home_end_stay_in_focused_composer(self, monkeypatch):
         """Home and End should keep normal TextArea cursor behavior."""
         force_main_screen(monkeypatch)
