@@ -167,6 +167,23 @@ async def test_trim_continues_when_placeholder_rows_exist() -> None:
 
 
 @pytest.mark.asyncio
+async def test_trim_caps_rendered_rows_for_multiline_entries() -> None:
+    """Rendered rows should stay capped even when entries render to multiple rows."""
+    max_lines = 10
+    log = SelectableLog(id="log", max_lines=max_lines)
+    app = LogHarnessApp(log)
+
+    async with app.run_test(size=(80, 12)) as pilot:
+        await pilot.pause()
+
+        for index in range(max_lines * 2):
+            log.write(f"line a {index}\nline b {index}\nline c {index}")
+        await pilot.pause()
+
+        assert len(log._rendered_lines) <= max_lines
+
+
+@pytest.mark.asyncio
 async def test_resize_does_not_render_every_entry_synchronously(monkeypatch) -> None:
     """Width invalidation should rebuild only the visible transcript rows."""
     log = SelectableLog(id="log")
