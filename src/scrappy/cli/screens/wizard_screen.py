@@ -34,10 +34,13 @@ class SetupWizardScreen(Screen):
 
     BINDINGS = [
         Binding("enter", "submit_input", "Submit", priority=True),
-        Binding("pageup", "transcript_page_up", "Transcript Page Up", priority=True),
-        Binding("pagedown", "transcript_page_down", "Transcript Page Down", priority=True),
-        Binding("home,ctrl+home", "transcript_home", "Transcript Start", priority=True),
-        Binding("end,ctrl+end", "transcript_follow_latest", "Transcript End", priority=True),
+        Binding("ctrl+home", "transcript_home", "Transcript Start", priority=True),
+        Binding(
+            "ctrl+end",
+            "transcript_follow_latest",
+            "Transcript End",
+            priority=True,
+        ),
     ]
 
     def __init__(
@@ -121,16 +124,6 @@ class SetupWizardScreen(Screen):
 
         # Update placeholder for next prompt
         self._update_placeholder()
-
-    def action_transcript_page_up(self) -> None:
-        """Page the transcript up without moving wizard input."""
-        if self._surface is not None:
-            self._surface.output.action_page_up()
-
-    def action_transcript_page_down(self) -> None:
-        """Page the transcript down without moving wizard input."""
-        if self._surface is not None:
-            self._surface.output.action_page_down()
 
     def action_transcript_home(self) -> None:
         """Move the transcript to the oldest visible output."""

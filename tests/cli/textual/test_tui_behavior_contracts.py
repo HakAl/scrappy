@@ -182,11 +182,65 @@ class TestTranscriptScrollContracts:
 
             log.scroll_to(y=0, animate=False)
             await pilot.pause()
-            await pilot.press("end")
+            await pilot.press("ctrl+end")
             await pilot.pause()
 
             max_scroll_y = int(getattr(log, "max_scroll_y"))
             assert int(log.scroll_offset.y) >= max_scroll_y - 2
+
+    @pytest.mark.asyncio
+    async def test_plain_home_end_stay_in_focused_composer(self, monkeypatch):
+        """Home and End should keep normal TextArea cursor behavior."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            surface = app.screen.query_one(ChatSurface)
+            log = surface.output
+            composer = surface.input
+            write_transcript_lines(log, "composer cursor contract")
+            await pilot.pause()
+
+            bottom = int(log.scroll_offset.y)
+            composer.text = "alpha\nbeta"
+            composer.cursor_location = (0, 0)
+            composer.focus()
+            await pilot.pause()
+
+            await pilot.press("end")
+            await pilot.pause()
+            assert composer.cursor_location == (0, 5)
+            assert int(log.scroll_offset.y) == bottom
+
+            await pilot.press("home")
+            await pilot.pause()
+            assert composer.cursor_location == (0, 0)
+            assert int(log.scroll_offset.y) == bottom
+
+    @pytest.mark.asyncio
+    async def test_plain_page_keys_stay_in_focused_composer(self, monkeypatch):
+        """PageUp/PageDown should not scroll transcript while composer is focused."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            surface = app.screen.query_one(ChatSurface)
+            log = surface.output
+            write_transcript_lines(log, "composer page contract")
+            await pilot.pause()
+
+            bottom = int(log.scroll_offset.y)
+            surface.input.focus()
+            await pilot.pause()
+
+            await pilot.press("pageup")
+            await pilot.pause()
+
+            assert int(log.scroll_offset.y) == bottom
 
     @pytest.mark.asyncio
     async def test_history_navigation_does_not_block_transcript_up_scroll(
@@ -211,6 +265,31 @@ class TestTranscriptScrollContracts:
             await pilot.pause()
 
             assert int(log.scroll_offset.y) < bottom
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        strict=True,
+        reason="PR 7 routes multiline composer Up/Down through cursor boundaries.",
+    )
+    async def test_multiline_composer_up_moves_cursor_before_history(self, monkeypatch):
+        """Up in multiline composer should move the cursor before history navigation."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            composer = app.screen.query_one(ChatSurface).input
+            composer.text = "alpha\nbeta"
+            composer.cursor_location = (1, 2)
+            composer.focus()
+            await pilot.pause()
+
+            await pilot.press("up")
+            await pilot.pause()
+
+            assert composer.text == "alpha\nbeta"
+            assert composer.cursor_location[0] == 0
 
 
 class TestClipboardPriorityContracts:

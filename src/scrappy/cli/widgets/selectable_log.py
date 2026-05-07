@@ -46,6 +46,8 @@ class SelectableLog(ScrollView, can_focus=True):
         Args:
             max_lines: Maximum retained rendered rows, trimmed by whole entries.
         """
+        self._following: bool = True
+        self._programmatic_scroll: bool = False
         super().__init__(**kwargs)
         self._model = TranscriptModel()
         self._render_width: int | None = None
@@ -56,8 +58,6 @@ class SelectableLog(ScrollView, can_focus=True):
         self._selection_end: Optional[tuple[int, int]] = None
         self._is_selecting = False
         self._max_lines = max_lines
-        self._following = True
-        self._programmatic_scroll = False
         self._widest_line_width = 0
 
     @property

@@ -23,9 +23,9 @@ The transcript has two scroll modes:
 - Following: the viewport stays at the live bottom as new transcript output arrives.
 - Reviewing: the user has scrolled away from the live bottom, and new output does not move the viewport.
 
-The user enters reviewing mode by scrolling upward with mouse wheel, PageUp, Home, or scrollbar interaction.
+The user enters reviewing mode by scrolling upward with mouse wheel, PageUp or Home while the transcript has focus, Ctrl+Home, or scrollbar interaction.
 
-The user returns to following mode with End, Ctrl+End, submitting a command, or scrolling back within the bottom tolerance. The bottom tolerance is 1-2 terminal rows from the maximum scroll offset.
+The user returns to following mode with Ctrl+End, submitting a command, or scrolling back within the bottom tolerance. The bottom tolerance is 1-2 terminal rows from the maximum scroll offset.
 
 ## Composer And History
 
@@ -72,7 +72,7 @@ Manual Windows terminal smoke should include:
 
 - scroll up through old transcript output.
 - new output while reviewing old output.
-- End or Ctrl+End returning to live bottom.
+- Ctrl+End returning to live bottom.
 - mouse selection and Ctrl+C copy.
 - setup wizard input and paste behavior.
 - terminal resize during active output.
