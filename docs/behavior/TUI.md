@@ -64,6 +64,8 @@ Activity, indexing progress, and metrics shown after a wizard or non-main surfac
 
 On Windows terminals, Scrappy keeps `restore_mouse_support()` as the supported recovery layer for terminal mouse reporting after startup, command execution, or native-library noise. Subprocess output must still be captured or routed through the TUI sink; raw stdout/stderr writes while Textual owns the terminal are a bug.
 
+The observed failure mode is terminal state drift after non-Textual output or native-library terminal writes while the Textual app owns the terminal. This refactor does not switch command execution to `app.suspend()` because that would require a broader command-runner contract change and would weaken the single-sink output invariant. The supported recovery callsites are startup readiness, command completion, and banner/status transitions that may follow noisy initialization.
+
 ## Resize
 
 Existing transcript content reflows on terminal resize. Active transcript selection is cleared on width changes so selection cannot point at stale rendered rows.
