@@ -7,7 +7,12 @@ import uuid
 
 from scrappy.cli.protocols import ActivityState
 from scrappy.cli.textual.app import ScrappyApp
-from scrappy.cli.textual.tui_events import ActivityChanged, CliReadyChanged, TuiEventMessage
+from scrappy.cli.textual.tui_events import (
+    ActivityChanged,
+    CliReadyChanged,
+    TranscriptAppendText,
+    TuiEventMessage,
+)
 from scrappy.cli.widgets import SelectableLog
 
 
@@ -210,6 +215,22 @@ def test_on_cliready_reasserts_mouse_support_after_banner_status():
         call(app.restore_mouse_support),
         call(app._signal_integration_ready),
     ]
+
+
+def test_transcript_event_reasserts_mouse_support_after_refresh():
+    """Live transcript output should repair mouse tracking during active work."""
+    app = ScrappyApp(cli_factory=lambda: Mock())
+
+    with (
+        patch.object(app, "_route_transcript_event") as mock_route,
+        patch.object(app, "call_after_refresh") as mock_call_after_refresh,
+    ):
+        app.on_tui_event_message(
+            TuiEventMessage(TranscriptAppendText(content="streamed\n"))
+        )
+
+    mock_route.assert_called_once()
+    mock_call_after_refresh.assert_called_once_with(app.restore_mouse_support)
 
 
 def test_on_cliready_writes_ready_signal_when_integration_env_enabled(monkeypatch):

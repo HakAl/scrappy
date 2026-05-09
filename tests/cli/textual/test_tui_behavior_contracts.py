@@ -121,9 +121,15 @@ class TestTranscriptScrollContracts:
 
             surface = app.screen.query_one(ChatSurface)
             log = app.screen.query_one(SelectableLog)
+            write_transcript_lines(log, "single owner contract")
+            await pilot.pause()
 
             assert list(app.screen.query("#output_container")) == []
             assert log.parent is surface
+            assert getattr(app.screen, "max_scroll_y") == 0
+            assert getattr(surface, "max_scroll_y", 0) == 0
+            assert getattr(log, "max_scroll_y") > 0
+            assert surface.region.height == app.size.height
 
     @pytest.mark.asyncio
     async def test_page_up_scrolls_transcript_after_enough_output(self, monkeypatch):

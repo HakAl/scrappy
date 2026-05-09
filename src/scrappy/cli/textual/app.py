@@ -763,6 +763,19 @@ class ScrappyApp(App):
     def on_tui_event_message(self, message: TuiEventMessage) -> None:
         """Dispatch typed TUI events from the single boundary message."""
         event = message.event
+        should_restore_mouse = isinstance(
+            event,
+            (
+                TranscriptAppendText,
+                TranscriptAppendRenderable,
+                TranscriptClear,
+                ActivityChanged,
+                TasksUpdated,
+                MetricsUpdated,
+                IndexingProgressChanged,
+                PromptRequested,
+            ),
+        )
         if isinstance(event, (TranscriptAppendText, TranscriptAppendRenderable, TranscriptClear)):
             self._route_transcript_event(event)
         elif isinstance(event, ActivityChanged):
@@ -786,6 +799,8 @@ class ScrappyApp(App):
                 "on_tui_event_message: unhandled event %s",
                 type(event).__name__,
             )
+        if should_restore_mouse:
+            self.call_after_refresh(self.restore_mouse_support)
 
     def _active_main_screen(self):
         """Return the active main screen, if any."""

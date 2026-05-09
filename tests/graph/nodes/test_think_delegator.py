@@ -479,3 +479,28 @@ class TestLiteLLMThinkDelegator:
         result = delegator.complete([], None, None, "instruct")
 
         assert result.model_display == "groq: llama-3.1-70b-versatile"
+
+    def test_streamed_textual_tool_call_becomes_structured_tool_call(self):
+        """Provider-rendered function markup should not reach the transcript."""
+        from scrappy.graph.nodes.think_delegator import LiteLLMThinkDelegator
+
+        chunks = [
+            make_chunk(
+                content=(
+                    '<function(codebase_search {"query": "scrappy self-repair", '
+                    '"max_tokens": 4000})></function>'
+                ),
+                model="groq/moonshotai/kimi-k2-instruct",
+                provider="groq",
+            )
+        ]
+        orchestrator = MockOrchestrator(chunks=chunks)
+
+        delegator = LiteLLMThinkDelegator(orchestrator)
+        result = delegator.complete([], None, None, "instruct")
+
+        assert result.is_success
+        assert result.content == ""
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0]["function"]["name"] == "codebase_search"
+        assert "scrappy self-repair" in result.tool_calls[0]["function"]["arguments"]
