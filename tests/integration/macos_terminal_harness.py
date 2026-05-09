@@ -178,6 +178,11 @@ class MacOSTerminalHarness(RealTerminalHarnessProtocol):
             check=False,
         )
 
+    def capture_screen_artifact(self, label: str) -> Path | None:
+        """Capture the current terminal screen when the platform supports it."""
+        self.append_debug_event("screen_capture_unsupported", label=label)
+        return None
+
     def append_debug_event(self, stage: str, **fields: object) -> None:
         """Append a structured debug event to the session log."""
         session = self._session

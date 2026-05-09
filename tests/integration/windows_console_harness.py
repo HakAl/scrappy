@@ -85,6 +85,7 @@ class _WindowCandidate:
 
 
 CONSOLE_WINDOW_CLASSES = {"ConsoleWindowClass", "CASCADIA_HOSTING_WINDOW_CLASS"}
+WM_CLOSE = 0x0010
 
 
 def _collect_top_level_windows(win32gui: Any, win32process: Any) -> list[_WindowCandidate]:
@@ -316,9 +317,20 @@ class OwnedConsoleWindow:
         foreground_hwnd = self.win32gui.GetForegroundWindow()
         _, window_pid = self.win32process.GetWindowThreadProcessId(self.hwnd)
         if window_pid != self.process.pid:
-            raise IsolationError(
-                f"Refusing teardown because window pid {window_pid} no longer matches owned pid {self.process.pid}"
+            self.win32gui.PostMessage(self.hwnd, WM_CLOSE, 0, 0)
+            if self.process.poll() is None:
+                subprocess.run(
+                    ["taskkill", "/T", "/F", "/PID", str(self.process.pid)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            self.debug_log.append(
+                "closed_hosted_window "
+                f"pid={self.process.pid} hwnd={self.hwnd} window_pid={window_pid} "
+                f"foreground_before_close={foreground_hwnd}"
             )
+            return
 
         taskkill_result = subprocess.run(
             ["taskkill", "/T", "/F", "/PID", str(self.process.pid)],
@@ -336,6 +348,12 @@ class OwnedConsoleWindow:
             f"pid={self.process.pid} hwnd={self.hwnd} foreground_before_close={foreground_hwnd} "
             f"taskkill_returncode={taskkill_result.returncode}"
         )
+
+    def capture_screen_artifact(self, path: Path) -> Path:
+        """Capture the current owned window image to path."""
+        self.window.capture_as_image().save(path)
+        self.debug_log.append(f"capture_screen_artifact path={path}")
+        return path
 
 
 def _wait_for_file(path: Path, *, timeout_seconds: float, description: str) -> None:
@@ -484,6 +502,21 @@ class WindowsOwnedConsoleHarness(RealTerminalHarnessProtocol):
     def copy_selection_fallback(self) -> None:
         """Send the alternate Windows copy shortcut."""
         self._require_console().type_keys("^+c")
+
+    def capture_screen_artifact(self, label: str) -> Path | None:
+        """Capture the owned terminal window to an artifact PNG."""
+        session = self._require_session()
+        safe_label = re.sub(r"[^A-Za-z0-9_.-]+", "-", label).strip("-") or "screen"
+        path = session.debug_log_path.with_name(
+            f"{session.debug_log_path.stem}-{safe_label}.png"
+        )
+        captured_path = self._require_console().capture_screen_artifact(path)
+        self.append_debug_event(
+            "screen_captured",
+            label=label,
+            path=str(captured_path),
+        )
+        return captured_path
 
     def append_debug_event(self, stage: str, **fields: object) -> None:
         """Append a structured event to the workspace-local debug log."""
