@@ -56,9 +56,13 @@ Paste shortcuts are Ctrl+V, Ctrl+Shift+V, and Shift+Insert. They paste the OS cl
 
 Main chat, setup wizard, capture prompts, copy, paste, focus, and transcript behavior use the same chat surface infrastructure. Screens vary by feature configuration and command handler, not by reimplementing interaction policy.
 
+During capture mode, transcript scroll and composer cursor keys remain functional. Command history is blocked until capture mode exits.
+
 Wizard-specific transcript output routes to the wizard surface while the wizard is active. Main transcript events posted while a non-main surface is active are buffered and replayed when the main surface becomes active again.
 
 Activity, indexing progress, and metrics shown after a wizard or non-main surface closes reflect the latest state at that moment, not a replay of every intermediate change.
+
+On Windows terminals, Scrappy keeps `restore_mouse_support()` as the supported recovery layer for terminal mouse reporting after startup, command execution, or native-library noise. Subprocess output must still be captured or routed through the TUI sink; raw stdout/stderr writes while Textual owns the terminal are a bug.
 
 ## Resize
 

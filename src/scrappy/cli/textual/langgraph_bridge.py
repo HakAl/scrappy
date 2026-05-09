@@ -27,7 +27,7 @@ from scrappy.infrastructure.threading import CancellationToken
 from scrappy.tool_display import extract_tool_key_param
 from ..protocols import ActivityState, Task, TaskStatus
 from .tool_confirmation import ToolConfirmationHandler
-from .tui_events import MetricsUpdated
+from .tui_events import ActivityChanged, MetricsUpdated, TasksUpdated, TranscriptAppendText
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -176,7 +176,9 @@ class LangGraphBridge:
             message: Optional message to display
         """
         elapsed_ms = int((time.time() - self._start_time) * 1000) if self._start_time else 0
-        self._output_adapter.post_activity(state, message, elapsed_ms)
+        cast(Any, self.app).tui_event_sink.post_event(
+            ActivityChanged(state=state, message=message, elapsed_ms=elapsed_ms)
+        )
 
     def _show_provider_status(self, tier: str) -> None:
         """Update provider display in the metrics status line."""
@@ -286,7 +288,9 @@ class LangGraphBridge:
         Args:
             content: The content to output
         """
-        self._output_adapter.post_output(content)
+        cast(Any, self.app).tui_event_sink.post_event(
+            TranscriptAppendText(content=content)
+        )
 
     def _check_cancellation(self) -> bool:
         """
@@ -352,13 +356,12 @@ class LangGraphBridge:
         recent_completed = completed[-self._max_completed_tasks:]
         self._recent_tasks = recent_completed + in_progress
 
-        # Post update to TUI
-        self._output_adapter.post_tasks_updated(self._recent_tasks)
+        cast(Any, self.app).tui_event_sink.post_event(TasksUpdated(self._recent_tasks))
 
     def _clear_task_progress(self) -> None:
         """Clear the task progress widget."""
         self._recent_tasks = []
-        self._output_adapter.post_tasks_updated([])
+        cast(Any, self.app).tui_event_sink.post_event(TasksUpdated([]))
 
     def _output_tool_executions(self, node_output: dict[str, Any]) -> None:
         """
@@ -472,7 +475,9 @@ class LangGraphBridge:
                 ))
             # Keep only last N completed
             self._recent_tasks = self._recent_tasks[-self._max_completed_tasks:]
-            self._output_adapter.post_tasks_updated(self._recent_tasks)
+            cast(Any, self.app).tui_event_sink.post_event(
+                TasksUpdated(self._recent_tasks)
+            )
 
     def _truncate_result(self, result: str, max_lines: int = 3, max_chars: int = 200) -> str:
         """

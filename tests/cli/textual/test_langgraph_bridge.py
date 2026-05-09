@@ -16,6 +16,7 @@ from scrappy.cli.textual.langgraph_bridge import (
     AgentResult,
     LangGraphBridge,
 )
+from scrappy.cli.textual.tui_events import TasksUpdated, TranscriptAppendText
 from scrappy.cli.textual.tui_events import MetricsUpdated
 from scrappy.graph.state import AgentState
 from scrappy.infrastructure.threading import CancellationToken
@@ -661,11 +662,11 @@ class TestUpdateTaskProgress:
     @pytest.fixture
     def bridge(self):
         """Create a bridge with mocked dependencies."""
-        mock_output = Mock()
+        app = create_app_with_sink()
         bridge = LangGraphBridge(
-            app=Mock(),
+            app=app,
             bridge=Mock(),
-            output_adapter=mock_output,
+            output_adapter=Mock(),
             orchestrator=Mock(),
             tool_adapter=Mock(),
         )
@@ -680,8 +681,13 @@ class TestUpdateTaskProgress:
 
         bridge._update_task_progress(tool_tasks)
 
-        # Should have posted update
-        bridge._output_adapter.post_tasks_updated.assert_called_once()
+        task_events = [
+            event
+            for event in bridge.app.tui_event_sink.events
+            if isinstance(event, TasksUpdated)
+        ]
+        assert len(task_events) == 1
+        assert len(task_events[0].tasks) == 2
 
         # Check recent tasks
         assert len(bridge._recent_tasks) == 2
@@ -757,11 +763,11 @@ class TestClearTaskProgress:
     @pytest.fixture
     def bridge(self):
         """Create a bridge with mocked dependencies."""
-        mock_output = Mock()
+        app = create_app_with_sink()
         bridge = LangGraphBridge(
-            app=Mock(),
+            app=app,
             bridge=Mock(),
-            output_adapter=mock_output,
+            output_adapter=Mock(),
             orchestrator=Mock(),
             tool_adapter=Mock(),
         )
@@ -774,4 +780,29 @@ class TestClearTaskProgress:
         bridge._clear_task_progress()
 
         assert bridge._recent_tasks == []
-        bridge._output_adapter.post_tasks_updated.assert_called_once_with([])
+        task_events = [
+            event
+            for event in bridge.app.tui_event_sink.events
+            if isinstance(event, TasksUpdated)
+        ]
+        assert len(task_events) == 1
+        assert task_events[0].tasks == []
+
+
+class TestOutputCallback:
+    """Tests for worker output routing."""
+
+    def test_output_callback_posts_transcript_text(self):
+        """Agent output should route through the typed TUI event sink."""
+        app = create_app_with_sink()
+        bridge = LangGraphBridge(
+            app=app,
+            bridge=Mock(),
+            output_adapter=Mock(),
+            orchestrator=Mock(),
+            tool_adapter=Mock(),
+        )
+
+        bridge._output_callback("hello")
+
+        assert app.tui_event_sink.events == [TranscriptAppendText(content="hello")]

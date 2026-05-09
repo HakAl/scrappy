@@ -28,6 +28,7 @@ from ..textual import (
     ActivityIndicator,
 )
 from ..textual.tui_events import ActivityChanged, MetricsUpdated
+from ..textual.tui_events import TranscriptAppendRenderable, TranscriptAppendText
 
 from scrappy.infrastructure.theme import ThemeProtocol
 from ..protocols import ActivityState, ClipboardProtocol
@@ -206,7 +207,9 @@ class MainAppScreen(Screen):
             # Try to get updated reference from app
             self.interactive_mode = self.scrappy_app.interactive_mode
             if self.interactive_mode is None:
-                self.write_output("Still initializing...\n")
+                self.scrappy_app.tui_event_sink.post_event(
+                    TranscriptAppendText(content="Still initializing...\n")
+                )
                 return
 
         result = self._surface.submit(self)
@@ -350,7 +353,9 @@ class MainAppScreen(Screen):
                     self.interactive_mode = interactive_mode
             if interactive_mode is None:
                 logger.warning("process_command called before interactive mode was ready")
-                self.write_output("Still initializing...\n")
+                self.scrappy_app.tui_event_sink.post_event(
+                    TranscriptAppendText(content="Still initializing...\n")
+                )
                 return
 
             logger.debug("process_command: posted THINKING, calling _process_input")
@@ -369,11 +374,13 @@ class MainAppScreen(Screen):
             if suggestion:
                 error_text.append(f"\nSuggestion: {suggestion}", style="dim")
 
-            self.output_adapter.post_renderable(error_text)
+            self.scrappy_app.tui_event_sink.post_event(
+                TranscriptAppendRenderable(renderable=error_text)
+            )
             logger.exception("Error processing command")
         finally:
-            logger.debug("process_command: finally block, flushing output adapter")
-            self.output_adapter.flush(timeout=5.0)
+            logger.debug("process_command: finally block, flushing TUI event sink")
+            self.scrappy_app.tui_event_sink.flush(timeout=5.0)
             logger.debug("process_command: flush complete, posting IDLE")
             self.scrappy_app.tui_event_sink.post_event(ActivityChanged(ActivityState.IDLE))
             restore_mouse_support = getattr(self.app, "restore_mouse_support", None)

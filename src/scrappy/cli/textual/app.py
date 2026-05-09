@@ -381,8 +381,13 @@ class ScrappyApp(App):
         """
         if message.error:
             # Show error in status bar - user can /setup to fix
-            self.output_adapter.post_output(
-                f"Startup error: {message.error}\nUse /setup to configure providers.\n"
+            self.tui_event_sink.post_event(
+                TranscriptAppendText(
+                    content=(
+                        f"Startup error: {message.error}\n"
+                        "Use /setup to configure providers.\n"
+                    )
+                )
             )
             self._write_integration_event("cli_ready_error", error=message.error)
             # Still mark as ready so user can interact
@@ -691,8 +696,13 @@ class ScrappyApp(App):
         # Show welcome message if keys were found in environment
         if env_key_count > 0:
             key_word = "key" if env_key_count == 1 else "keys"
-            self.output_adapter.post_output(
-                f"Found {env_key_count} API {key_word} in environment. Use /setup to add more.\n"
+            self.tui_event_sink.post_event(
+                TranscriptAppendText(
+                    content=(
+                        f"Found {env_key_count} API {key_word} in environment. "
+                        "Use /setup to add more.\n"
+                    )
+                )
             )
 
         if self.ready and self.interactive_mode is not None:

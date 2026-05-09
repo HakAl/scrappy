@@ -25,6 +25,8 @@ class ChatSurfaceConfig:
     show_activity: bool = True
     show_tasks: bool = True
     show_status_bar: bool = True
+    # History and capture are enforced by screen action handlers; the surface
+    # exposes the flags so each screen can keep its behavior config-driven.
     history_enabled: bool = True
     capture_enabled: bool = True
     input_placeholder: str = ""
@@ -166,9 +168,8 @@ class ChatSurface(Widget):
     def composer(self) -> ComposerControllerProtocol:
         """Return the shared composer controller."""
         if self._composer is None:
-            self._composer = ComposerController(
-                self.input,
-                default_placeholder=self._config.input_placeholder,
+            raise RuntimeError(
+                "ChatSurface composer is available only after the surface mounts"
             )
         return self._composer
 

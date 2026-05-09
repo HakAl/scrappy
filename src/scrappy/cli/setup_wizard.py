@@ -72,7 +72,7 @@ class WizardState(Enum):
 
 @dataclass(frozen=True)
 class WizardInputResult:
-    """Transition-aware follow-up instructions from non-blocking wizard input."""
+    """Business-layer wizard output translated by the TUI screen layer."""
 
     clear_transcript: bool = False
     append_entries: tuple[Any, ...] = ()
