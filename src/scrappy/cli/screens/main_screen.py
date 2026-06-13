@@ -66,6 +66,8 @@ class MainAppScreen(Screen):
             "Transcript End",
             priority=True,
         ),
+        Binding("pageup", "transcript_page_up", "Scroll Up", priority=True),
+        Binding("pagedown", "transcript_page_down", "Scroll Down", priority=True),
         # Note: escape is handled at app level (ScrappyApp.on_key)
     ]
 
@@ -285,6 +287,16 @@ class MainAppScreen(Screen):
             restored = self._history_temp_input
             self._history_temp_input = ""
             self._surface.input_text = restored
+
+    def action_transcript_page_up(self) -> None:
+        """Page the transcript toward older output, regardless of input focus."""
+        if self._surface is not None:
+            self._surface.output.action_page_up()
+
+    def action_transcript_page_down(self) -> None:
+        """Page the transcript toward newer output, regardless of input focus."""
+        if self._surface is not None:
+            self._surface.output.action_page_down()
 
     def action_transcript_home(self) -> None:
         """Move the transcript to the oldest visible output."""
