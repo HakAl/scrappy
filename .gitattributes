@@ -1,3 +1,13 @@
+# Normalize line endings: store LF in the repo, convert per-platform on checkout.
+# Fixes the CRLF churn from Windows-synced checkouts without forcing a
+# working-tree EOL on any platform.
+* text=auto
+
+# Windows-native scripts must stay CRLF.
+*.ps1 text eol=crlf
+
+# Shell scripts must stay LF even when checked out on Windows.
+*.sh text eol=lf
 
 # Use bd merge for beads JSONL files
 .beads/issues.jsonl merge=beads
