@@ -22,6 +22,17 @@ class TuiEventSinkProtocol(Protocol):
         ...
 
 
+class TuiEventHostProtocol(Protocol):
+    """App surface that exposes the ordered TUI event sink.
+
+    Worker-thread components (the LangGraph bridge) depend on this boundary
+    instead of the concrete app, so mypy verifies sink access rather than
+    erasing it through cast(Any).
+    """
+
+    tui_event_sink: TuiEventSinkProtocol
+
+
 class TextualMessagePosterProtocol(Protocol):
     """Minimal Textual app surface required by the event sink."""
 

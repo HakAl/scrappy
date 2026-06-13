@@ -1,6 +1,7 @@
 """Main chat interface screen for Scrappy TUI."""
 
-from typing import TYPE_CHECKING, Any, Optional, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional, Protocol, cast
 import logging
 import time
 
@@ -42,6 +43,24 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
+
+
+class MouseRestoreHostProtocol(Protocol):
+    """App surface for restoring mouse capture after a worker command.
+
+    Consumer-side boundary co-located with the screen so mypy verifies these
+    calls, replacing the getattr lookups that previously erased them to Any.
+    """
+
+    def call_from_thread(
+        self, callback: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
+        """Run a callback on the app's main thread."""
+        ...
+
+    def restore_mouse_support(self) -> None:
+        """Re-enable mouse capture after a command completes."""
+        ...
 
 
 class MainAppScreen(Screen):
@@ -395,13 +414,8 @@ class MainAppScreen(Screen):
             self.scrappy_app.tui_event_sink.flush(timeout=5.0)
             logger.debug("process_command: flush complete, posting IDLE")
             self.scrappy_app.tui_event_sink.post_event(ActivityChanged(ActivityState.IDLE))
-            restore_mouse_support = getattr(self.app, "restore_mouse_support", None)
-            if callable(restore_mouse_support):
-                call_from_thread = getattr(self.app, "call_from_thread", None)
-                if callable(call_from_thread):
-                    call_from_thread(restore_mouse_support)
-                else:
-                    restore_mouse_support()
+            mouse_host: MouseRestoreHostProtocol = self.scrappy_app
+            mouse_host.call_from_thread(mouse_host.restore_mouse_support)
             logger.debug("process_command: IDLE posted, exiting")
 
     def write_output(self, content: str) -> None:

@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from scrappy.graph.tools import ToolAdapterProtocol
 
     from .bridge import ThreadSafeAsyncBridge
+    from .event_sink import TuiEventHostProtocol
     from .output_adapter import TextualOutputAdapter
 
 logger = logging.getLogger(__name__)
@@ -162,6 +163,15 @@ class LangGraphBridge:
         self._session_total_tokens: Optional[int] = None
         self._metrics_updated_this_run: bool = False
 
+    @property
+    def _event_host(self) -> "TuiEventHostProtocol":
+        """Typed view of the app's TUI event sink boundary.
+
+        The app is held as Textual's base ``App`` for worker-decorator context;
+        this accessor narrows it to the sink surface the bridge actually uses so
+        mypy checks the calls instead of erasing them through cast(Any).
+        """
+        return self.app
 
     def _post_activity(
         self,
@@ -176,7 +186,7 @@ class LangGraphBridge:
             message: Optional message to display
         """
         elapsed_ms = int((time.time() - self._start_time) * 1000) if self._start_time else 0
-        cast(Any, self.app).tui_event_sink.post_event(
+        self._event_host.tui_event_sink.post_event(
             ActivityChanged(state=state, message=message, elapsed_ms=elapsed_ms)
         )
 
@@ -226,7 +236,7 @@ class LangGraphBridge:
                 self._metrics_output_tokens, self._session_total_tokens,
                 self._metrics_context_percent
             )
-            cast(Any, self.app).tui_event_sink.post_event(
+            self._event_host.tui_event_sink.post_event(
                 MetricsUpdated(
                     provider_display=self._metrics_provider_display,
                     input_tokens=self._metrics_input_tokens,
@@ -288,7 +298,7 @@ class LangGraphBridge:
         Args:
             content: The content to output
         """
-        cast(Any, self.app).tui_event_sink.post_event(
+        self._event_host.tui_event_sink.post_event(
             TranscriptAppendText(content=content)
         )
 
@@ -356,12 +366,12 @@ class LangGraphBridge:
         recent_completed = completed[-self._max_completed_tasks:]
         self._recent_tasks = recent_completed + in_progress
 
-        cast(Any, self.app).tui_event_sink.post_event(TasksUpdated(self._recent_tasks))
+        self._event_host.tui_event_sink.post_event(TasksUpdated(self._recent_tasks))
 
     def _clear_task_progress(self) -> None:
         """Clear the task progress widget."""
         self._recent_tasks = []
-        cast(Any, self.app).tui_event_sink.post_event(TasksUpdated([]))
+        self._event_host.tui_event_sink.post_event(TasksUpdated([]))
 
     def _output_tool_executions(self, node_output: dict[str, Any]) -> None:
         """
@@ -475,7 +485,7 @@ class LangGraphBridge:
                 ))
             # Keep only last N completed
             self._recent_tasks = self._recent_tasks[-self._max_completed_tasks:]
-            cast(Any, self.app).tui_event_sink.post_event(
+            self._event_host.tui_event_sink.post_event(
                 TasksUpdated(self._recent_tasks)
             )
 
