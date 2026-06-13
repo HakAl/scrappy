@@ -85,7 +85,6 @@ class _WindowCandidate:
 
 
 CONSOLE_WINDOW_CLASSES = {"ConsoleWindowClass", "CASCADIA_HOSTING_WINDOW_CLASS"}
-WM_CLOSE = 0x0010
 
 
 def _collect_top_level_windows(win32gui: Any, win32process: Any) -> list[_WindowCandidate]:
@@ -317,20 +316,10 @@ class OwnedConsoleWindow:
         foreground_hwnd = self.win32gui.GetForegroundWindow()
         _, window_pid = self.win32process.GetWindowThreadProcessId(self.hwnd)
         if window_pid != self.process.pid:
-            self.win32gui.PostMessage(self.hwnd, WM_CLOSE, 0, 0)
-            if self.process.poll() is None:
-                subprocess.run(
-                    ["taskkill", "/T", "/F", "/PID", str(self.process.pid)],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-            self.debug_log.append(
-                "closed_hosted_window "
-                f"pid={self.process.pid} hwnd={self.hwnd} window_pid={window_pid} "
-                f"foreground_before_close={foreground_hwnd}"
+            raise IsolationError(
+                f"Refusing teardown because window pid {window_pid} "
+                f"no longer matches owned pid {self.process.pid}"
             )
-            return
 
         taskkill_result = subprocess.run(
             ["taskkill", "/T", "/F", "/PID", str(self.process.pid)],

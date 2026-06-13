@@ -66,6 +66,10 @@ class _FakeHarness:
         self.operations.append("copy_selection_fallback")
         self.clipboard_value = "/quit, /exit"
 
+    def capture_screen_artifact(self, label: str) -> Path | None:
+        self.operations.append(f"capture_screen_artifact:{label}")
+        return None
+
     def append_debug_event(self, stage: str, **fields: object) -> None:
         self.operations.append(f"append_debug_event:{stage}")
         self.debug_log.append(f"{stage}: {fields}")
