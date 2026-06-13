@@ -88,6 +88,7 @@ class ScrappyApp(App):
         theme: Optional[ThemeProtocol] = None,
         cli_factory: Optional[Callable[[], "CLI"]] = None,
         clipboard: Optional[ClipboardProtocol] = None,
+        now: Optional[Callable[[], float]] = None,
     ):
         """Initialize the Textual app controller.
 
@@ -101,6 +102,8 @@ class ScrappyApp(App):
             theme: Optional theme for consistent styling
             cli_factory: Factory function to create CLI (deferred mode)
             clipboard: Clipboard service for OS clipboard integration
+            now: Monotonic-ish clock for double-tap timing (injectable for
+                tests); defaults to time.time
         """
         super().__init__()
         self._theme = theme or DEFAULT_THEME
@@ -131,6 +134,7 @@ class ScrappyApp(App):
         self.bridge = ThreadSafeAsyncBridge(self)
 
         # Track last Ctrl+C time for double-tap exit
+        self._now: Callable[[], float] = now or time.time
         self._last_ctrl_c_time: float = 0.0
 
         # Codebase context for semantic search indexing
@@ -1111,7 +1115,7 @@ class ScrappyApp(App):
         Returns:
             True to stop event propagation, False to let it bubble.
         """
-        now = time.time()
+        now = self._now()
 
         # 1. Copy selection if available. Do this before exit-tap tracking so
         # normal clipboard use doesn't look like an exit request.

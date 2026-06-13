@@ -4,7 +4,7 @@ These tests pin user-visible behavior described in docs/behavior/TUI.md.
 Future PRs remove strict xfail markers as each behavior lands.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from textual.app import App, ComposeResult
@@ -390,8 +390,8 @@ class TestClipboardPriorityContracts:
         exit_app.assert_not_called()
 
         cancel_app = create_test_app()
+        cancel_app._now = lambda: 100.0
         with (
-            patch("scrappy.cli.textual.app.time.time", return_value=100.0),
             patch.object(cancel_app, "_handle_copy_shortcut", return_value=False),
             patch.object(
                 cancel_app, "_cancel_operation", return_value=True
@@ -404,8 +404,8 @@ class TestClipboardPriorityContracts:
         exit_app.assert_not_called()
 
         exit_app_instance = create_test_app()
+        exit_app_instance._now = Mock(side_effect=[200.0, 200.25])
         with (
-            patch("scrappy.cli.textual.app.time.time", side_effect=[200.0, 200.25]),
             patch.object(exit_app_instance, "_handle_copy_shortcut", return_value=False),
             patch.object(exit_app_instance, "_cancel_operation", return_value=False),
             patch.object(exit_app_instance, "notify") as notify,
