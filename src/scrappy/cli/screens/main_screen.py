@@ -85,8 +85,17 @@ class MainAppScreen(Screen):
             "Transcript End",
             priority=True,
         ),
-        Binding("pageup", "transcript_page_up", "Scroll Up", priority=True),
-        Binding("pagedown", "transcript_page_down", "Scroll Down", priority=True),
+        # Plain PageUp/PageDown stay with the focused widget: the composer pages
+        # its own text, and a focused transcript scrolls itself (SelectableLog is
+        # a focusable ScrollView). The Ctrl chord is the focus-independent path
+        # so keyboard users can review older output without leaving the input.
+        Binding("ctrl+pageup", "transcript_page_up", "Scroll Up", priority=True),
+        Binding(
+            "ctrl+pagedown",
+            "transcript_page_down",
+            "Scroll Down",
+            priority=True,
+        ),
         # Note: escape is handled at app level (ScrappyApp.on_key)
     ]
 

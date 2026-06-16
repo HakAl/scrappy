@@ -276,6 +276,40 @@ class TestTranscriptScrollContracts:
             assert int(log.scroll_offset.y) == bottom
 
     @pytest.mark.asyncio
+    async def test_ctrl_page_keys_scroll_transcript_while_composer_focused(
+        self,
+        monkeypatch,
+    ):
+        """Ctrl+PageUp/PageDown scroll the transcript even while the composer is focused.
+
+        Plain PageUp belongs to the focused composer; the Ctrl chord is the
+        keyboard path for reviewing older output without leaving the input.
+        """
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            surface = app.screen.query_one(ChatSurface)
+            log = surface.output
+            write_transcript_lines(log, "composer ctrl page contract")
+            await pilot.pause()
+
+            bottom = int(log.scroll_offset.y)
+            assert bottom > 0
+            surface.input.focus()
+            await pilot.pause()
+
+            await pilot.press("ctrl+pageup")
+            await pilot.pause()
+            assert int(log.scroll_offset.y) < bottom  # reviewed older output
+
+            await pilot.press("ctrl+pagedown")
+            await pilot.pause()
+            assert int(log.scroll_offset.y) == bottom  # returned to live bottom
+
+    @pytest.mark.asyncio
     async def test_history_navigation_does_not_block_transcript_up_scroll(
         self, monkeypatch
     ):

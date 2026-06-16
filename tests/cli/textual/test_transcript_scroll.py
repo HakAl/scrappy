@@ -64,11 +64,22 @@ def _screen_with_real_output() -> tuple[MainAppScreen, Mock]:
     return screen, surface
 
 
-def test_pageup_pagedown_are_bound_to_transcript_scroll() -> None:
-    """The chat screen must bind PageUp/PageDown to transcript scrolling."""
+def test_ctrl_pageup_pagedown_are_bound_to_transcript_scroll() -> None:
+    """The chat screen binds Ctrl+PageUp/PageDown to transcript scrolling.
+
+    Plain PageUp/PageDown stay with the focused composer (TextArea paging); the
+    Ctrl chord is the focus-independent keyboard path to older messages, so it
+    does not collide with composer navigation.
+    """
     actions_by_key = {b.key: b.action for b in MainAppScreen.BINDINGS}
-    assert "pageup" in actions_by_key, "PageUp is not bound -- cannot scroll to older messages"
-    assert "pagedown" in actions_by_key
+    assert "ctrl+pageup" in actions_by_key, (
+        "Ctrl+PageUp is not bound -- cannot scroll to older messages while typing"
+    )
+    assert actions_by_key["ctrl+pageup"] == "transcript_page_up"
+    assert actions_by_key["ctrl+pagedown"] == "transcript_page_down"
+    assert "pageup" not in actions_by_key, (
+        "plain PageUp must stay with the focused composer, not the transcript"
+    )
 
 
 def test_transcript_page_actions_drive_the_output_regardless_of_focus() -> None:
