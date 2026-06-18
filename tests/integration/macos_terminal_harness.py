@@ -233,8 +233,8 @@ class MacOSTerminalHarness(RealTerminalHarnessProtocol):
 
     def _require_iterm2(self) -> None:
         """Skip if iTerm2 is not installed or not scriptable."""
-        result = self._run_osascript(
-            ['tell application "iTerm2" to return version'],
+        result = self._run_command(
+            ["osascript", "-e", 'tell application "iTerm2" to return version'],
             check=False,
         )
         if result.returncode != 0:
