@@ -50,6 +50,86 @@ async def test_page_up_enters_review_and_page_down_returns_to_follow() -> None:
         assert float(log.scroll_offset.y) == bottom
 
 
+@pytest.mark.asyncio
+async def test_existing_content_rewraps_on_resize() -> None:
+    """Existing content is reflowed when the terminal width changes."""
+    app = _LogApp()
+    async with app.run_test(size=(100, 24)) as pilot:
+        await pilot.pause()
+        log = app.query_one("#log", SelectableLog)
+        log.write("word " * 40)
+        await pilot.pause()
+        log.refresh()
+        await pilot.pause()
+        h_wide = int(log.virtual_size.height)
+
+        await pilot.resize_terminal(40, 24)
+        await pilot.pause()
+        log.refresh()
+        await pilot.pause()
+        h_narrow = int(log.virtual_size.height)
+
+        assert h_narrow > h_wide
+
+
+@pytest.mark.asyncio
+async def test_follow_mode_is_preserved_on_resize() -> None:
+    """Resizing while following keeps the viewport pinned to the live bottom."""
+    app = _LogApp()
+    async with app.run_test(size=(80, 12)) as pilot:
+        await pilot.pause()
+        log = app.query_one("#log", SelectableLog)
+        for i in range(60):
+            log.write(f"line {i:02d} " + "x" * 30)
+        await pilot.pause()
+        log.refresh()
+        await pilot.pause()
+
+        assert log.is_following is True
+
+        await pilot.resize_terminal(40, 12)
+        await pilot.pause()
+        log.refresh()
+        await pilot.pause()
+
+        assert log.is_following is True
+        assert int(log.scroll_offset.y) >= int(log.max_scroll_y) - 2
+
+
+@pytest.mark.asyncio
+async def test_review_position_is_preserved_on_resize() -> None:
+    """Resizing in review mode does not snap to follow, top, or bottom."""
+    app = _LogApp()
+    async with app.run_test(size=(80, 12)) as pilot:
+        await pilot.pause()
+        log = app.query_one("#log", SelectableLog)
+        for i in range(60):
+            log.write(f"line {i:02d} " + "x" * 30)
+        await pilot.pause()
+        log.refresh()
+        await pilot.pause()
+
+        log.action_page_up()
+        log.action_page_up()
+        await pilot.pause()
+        log.refresh()
+        await pilot.pause()
+
+        assert log.is_following is False
+        y0 = int(log.scroll_offset.y)
+        m0 = int(log.max_scroll_y)
+        assert 0 < y0 < m0
+
+        await pilot.resize_terminal(100, 12)
+        await pilot.pause()
+        log.refresh()
+        await pilot.pause()
+
+        assert log.is_following is False
+        assert int(log.scroll_offset.y) > 0
+        assert int(log.scroll_offset.y) < int(log.max_scroll_y)
+
+
 def _screen_with_real_output() -> tuple[MainAppScreen, Mock]:
     """MainAppScreen whose surface.output is a stand-in we can assert on."""
     screen = MainAppScreen(
