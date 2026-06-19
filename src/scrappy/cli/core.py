@@ -96,7 +96,7 @@ class CLI:
         loaded_history = []
         self._session_is_stale = False
 
-        if conversation_store:
+        if conversation_store is not None:
             loaded_history = conversation_store.get_recent(token_budget=8000)
 
             # Check staleness for LLM context injection (helps LLM know context may be outdated)
