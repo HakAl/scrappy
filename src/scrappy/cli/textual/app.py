@@ -14,12 +14,17 @@ import time
 from pathlib import Path
 
 from textual.app import App
+from textual.binding import Binding
 from textual.theme import Theme
 from textual.reactive import reactive
 from textual import work
 from textual.widgets import TextArea
 
-from scrappy.cli.protocols import ActivityState, ClipboardProtocol
+from scrappy.cli.protocols import (
+    ActivityState,
+    ClipboardProtocol,
+    MouseReportingPolicyProtocol,
+)
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 
@@ -81,6 +86,8 @@ class ScrappyApp(App):
     # When using cli_factory, this is False until CLI is ready
     ready = reactive(True)
 
+    BINDINGS = [Binding("ctrl+t", "toggle_selection_mode", "Select mode")]
+
     def __init__(
         self,
         interactive_mode: Optional["InteractiveMode"] = None,
@@ -88,6 +95,7 @@ class ScrappyApp(App):
         theme: Optional[ThemeProtocol] = None,
         cli_factory: Optional[Callable[[], "CLI"]] = None,
         clipboard: Optional[ClipboardProtocol] = None,
+        mouse_policy: Optional[MouseReportingPolicyProtocol] = None,
         now: Optional[Callable[[], float]] = None,
     ):
         """Initialize the Textual app controller.
@@ -102,6 +110,7 @@ class ScrappyApp(App):
             theme: Optional theme for consistent styling
             cli_factory: Factory function to create CLI (deferred mode)
             clipboard: Clipboard service for OS clipboard integration
+            mouse_policy: Terminal mouse reporting policy
             now: Monotonic-ish clock for double-tap timing (injectable for
                 tests); defaults to time.time
         """
@@ -109,6 +118,7 @@ class ScrappyApp(App):
         self._theme = theme or DEFAULT_THEME
         self._shutdown_requested = False
         self._clipboard_service = clipboard or self._create_default_clipboard()
+        self._mouse_policy = mouse_policy or self._create_default_mouse_policy()
         self.tui_event_sink = TextualTuiEventSink(self)
         if output_adapter is not None:
             output_adapter.bind_event_sink(self.tui_event_sink)
@@ -156,6 +166,14 @@ class ScrappyApp(App):
 
         return PyperclipClipboard()
 
+    def _create_default_mouse_policy(self) -> MouseReportingPolicyProtocol:
+        """Create the default terminal mouse reporting policy."""
+        from .mouse_policy import TextualMouseReportingPolicy
+
+        return TextualMouseReportingPolicy(
+            driver_provider=lambda: getattr(self, "_driver", None)
+        )
+
     def copy_to_clipboard(self, text: str) -> None:
         """Copy text to both Textual's local clipboard and the system clipboard."""
         try:
@@ -166,21 +184,8 @@ class ScrappyApp(App):
         super().copy_to_clipboard(text)
 
     def restore_mouse_support(self) -> None:
-        """Re-enable terminal mouse reporting when the driver supports it.
-
-        Real Windows terminals can lose Textual mouse mode after subprocess-heavy
-        flows or noisy startup output. Reasserting mouse support is safe and helps
-        keep text selection working in the chat log.
-        """
-        driver = getattr(self, "_driver", None)
-        enable_mouse = getattr(driver, "_enable_mouse_support", None)
-        if not callable(enable_mouse):
-            return
-
-        try:
-            enable_mouse()
-        except Exception as e:
-            logger.debug("Failed to restore mouse support: %s", e)
+        """Re-assert mouse reporting via the policy."""
+        self._mouse_policy.enable()
 
     def _write_integration_event(self, event: str, **fields: object) -> None:
         """Append a structured integration event when the harness enables it."""
@@ -559,6 +564,7 @@ class ScrappyApp(App):
 
     def on_unmount(self) -> None:
         """Called when app is about to close."""
+        self._mouse_policy.restore()
         self._cleanup_runtime_resources()
 
     async def _shutdown(self) -> None:  # type: ignore[override]
@@ -959,6 +965,18 @@ class ScrappyApp(App):
     # =========================================================================
     # Global Key Handlers
     # =========================================================================
+
+    def action_toggle_selection_mode(self) -> None:
+        """Toggle native terminal selection mode."""
+        if self._mouse_policy.selection_mode:
+            self._mouse_policy.restore()
+            self.notify("Mouse mode on (scroll/click).", timeout=2)
+        else:
+            self._mouse_policy.disable_for_selection()
+            self.notify(
+                "Selection mode: drag to select, Cmd+C to copy. Ctrl+T to restore.",
+                timeout=4,
+            )
 
     def on_key(self, event) -> None:
         """Global key handler for app-wide shortcuts.

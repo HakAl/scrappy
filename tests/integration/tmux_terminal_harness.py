@@ -105,6 +105,17 @@ class TmuxTerminal:
         self._mouse(32, col2, row2, press=True)
         self._mouse(0, col2, row2, press=False)
 
+    def mouse_reporting_enabled(self) -> bool:
+        """Return whether tmux sees the pane as requesting mouse reporting."""
+        flags = self._tmux(
+            "display-message",
+            "-p",
+            "-t",
+            self.session,
+            "#{mouse_any_flag} #{mouse_sgr_flag} #{mouse_all_flag} #{mouse_button_flag}",
+        ).split()
+        return any(flag == "1" for flag in flags)
+
     def capture(self) -> str:
         """Capture the pane as plain text (the 'screenshot')."""
         return self._tmux("capture-pane", "-t", self.session, "-p")

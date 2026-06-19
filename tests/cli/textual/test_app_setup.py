@@ -187,14 +187,13 @@ def test_handle_ctrl_c_prefers_copy_over_exit_and_cancel():
 
 
 def test_restore_mouse_support_uses_driver_hook_when_available():
-    """Mouse restore should call the driver's enable hook when present."""
-    app = ScrappyApp(cli_factory=lambda: Mock())
-    driver = Mock()
-    app._driver = driver
+    """Mouse restore should route through the injected policy seam."""
+    policy = Mock()
+    app = ScrappyApp(cli_factory=lambda: Mock(), mouse_policy=policy)
 
     app.restore_mouse_support()
 
-    driver._enable_mouse_support.assert_called_once_with()
+    policy.enable.assert_called_once_with()
 
 
 def test_on_cliready_reasserts_mouse_support_after_banner_status():

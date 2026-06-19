@@ -81,6 +81,28 @@ class ClipboardProtocol(Protocol):
         ...
 
 
+@runtime_checkable
+class MouseReportingPolicyProtocol(Protocol):
+    """Single owner of the terminal mouse-reporting decision."""
+
+    @property
+    def selection_mode(self) -> bool:
+        """True when mouse reporting is suspended for native selection."""
+        ...
+
+    def enable(self) -> None:
+        """Assert mouse reporting on unless selection mode is active."""
+        ...
+
+    def disable_for_selection(self) -> None:
+        """Suspend mouse reporting so the terminal can handle native selection."""
+        ...
+
+    def restore(self) -> None:
+        """Exit selection mode and re-enable mouse reporting."""
+        ...
+
+
 # =============================================================================
 # CLI I/O Protocol (from protocols/io.py)
 # =============================================================================
