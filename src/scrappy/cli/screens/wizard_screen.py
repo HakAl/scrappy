@@ -7,51 +7,40 @@ from textual.screen import Screen
 from textual.app import ComposeResult
 from textual.binding import Binding
 
-from .chat_layout import ChatLayout
+from .chat_surface import (
+    AppendTranscript,
+    ChatSurface,
+    ChatSurfaceConfig,
+    ClearTranscript,
+    SubmitResult,
+)
 from scrappy.cli.protocols import ClipboardProtocol
+from scrappy.cli.textual.tui_events import TuiEventTarget
 from scrappy.orchestrator.protocols import KeyValidatorProtocol
 
 if TYPE_CHECKING:
-    from ..protocols import RichRenderableProtocol
     from ..setup_wizard import SetupWizard
     from ..unified_io import UnifiedIO
 
 logger = logging.getLogger(__name__)
 
 
-class WizardOutputSink:
-    """Output sink that writes directly to the wizard's ChatLayout.
-
-    Implements the same interface as TextualOutputAdapter so SetupWizard
-    can output via io.output_sink pattern, but writes go directly to
-    the screen's RichLog instead of the app's message queue.
-    """
-
-    def __init__(self, layout: ChatLayout) -> None:
-        self._layout = layout
-
-    def clear_output(self) -> None:
-        """Clear the output area."""
-        self._layout.clear_output()
-
-    def post_output(self, content: str) -> None:
-        """Write plain text to output."""
-        self._layout.write(content)
-
-    def post_renderable(self, obj: Any) -> None:
-        """Write Rich renderable to output."""
-        self._layout.write(obj)
-
-
 class SetupWizardScreen(Screen):
     """Provider setup wizard screen.
 
     Full-screen replacement that handles API key configuration.
-    Uses ChatLayout for consistent UI and direct output writing.
+    Uses ChatSurface for consistent UI and direct output writing.
     """
 
     BINDINGS = [
         Binding("enter", "submit_input", "Submit", priority=True),
+        Binding("ctrl+home", "transcript_home", "Transcript Start", priority=True),
+        Binding(
+            "ctrl+end",
+            "transcript_follow_latest",
+            "Transcript End",
+            priority=True,
+        ),
     ]
 
     def __init__(
@@ -81,46 +70,41 @@ class SetupWizardScreen(Screen):
         # Wizard business logic (created on mount)
         self._wizard: Optional["SetupWizard"] = None
 
-        # Layout component
-        self._layout: Optional[ChatLayout] = None
-
-        # Store original output sink to restore on unmount
-        self._original_output_sink: Optional["RichRenderableProtocol"] = None
+        # Shared chat surface
+        self._surface: Optional[ChatSurface] = None
 
     def compose(self) -> ComposeResult:
-        """Create wizard UI using ChatLayout."""
-        yield ChatLayout(
-            show_status_bar=False,
-            input_placeholder="Select provider (1-5 or q)",
-            id="chat_layout"
+        """Create wizard UI using ChatSurface."""
+        yield ChatSurface(
+            config=ChatSurfaceConfig(
+                show_activity=False,
+                show_tasks=False,
+                show_status_bar=False,
+                history_enabled=False,
+                capture_enabled=False,
+                input_placeholder="Select provider (1-5 or q)",
+            ),
+            id="chat_surface"
         )
 
     def on_mount(self) -> None:
         """Called when screen is mounted - start the wizard."""
         from ..setup_wizard import SetupWizard
 
-        # Get layout and focus input
-        self._layout = self.query_one(ChatLayout)
-        self._layout.focus_input()
-
-        # Swap output sink to write directly to our layout
-        self._original_output_sink = self._io.output_sink
-        self._io.output_sink = WizardOutputSink(self._layout)
+        # Get surface and focus input
+        self._surface = self.query_one(ChatSurface)
+        self._surface.focus_input()
 
         # Create and start wizard
         self._wizard = SetupWizard(self._io, self._key_validator)
-        self._wizard.start(
-            allow_cancel=self._allow_cancel,
-            on_complete=self._handle_wizard_complete
-        )
+        with self._wizard_output_context():
+            self._wizard.start(
+                allow_cancel=self._allow_cancel,
+                on_complete=self._handle_wizard_complete
+            )
 
         # Update placeholder with current prompt
         self._update_placeholder()
-
-    def on_unmount(self) -> None:
-        """Restore original output sink on unmount."""
-        if self._original_output_sink is not None:
-            self._io.output_sink = self._original_output_sink
 
     def _handle_wizard_complete(self, has_provider: bool) -> None:
         """Handle wizard completion."""
@@ -130,52 +114,59 @@ class SetupWizardScreen(Screen):
 
     def on_click(self, event) -> None:
         """Handle clicks - right-click to paste, otherwise refocus input."""
-        if self._layout is None:
+        if self._surface is None:
             return
-
-        # Right-click (button=3) pastes from clipboard
-        if hasattr(event, 'button') and event.button == 3:
-            try:
-                text = self._clipboard.paste_text()
-                if text:
-                    self._layout.input.replace(
-                        text,
-                        self._layout.input.selection.start,
-                        self._layout.input.selection.end,
-                        maintain_selection_offset=True
-                    )
-            except Exception:
-                pass
-            return
-
-        self._layout.focus_input()
+        self._surface.handle_click(event, self._clipboard)
 
     def action_submit_input(self) -> None:
         """Handle Enter to submit input to wizard."""
-        if self._wizard is None or self._layout is None:
+        if self._wizard is None or self._surface is None:
             return
 
-        # Get and clear input
-        user_input = self._layout.clear_input().strip()
-
-        # Track state before handling input
-        from ..setup_wizard import WizardState
-        state_before = self._wizard._state
-
-        # Pass to wizard state machine
-        self._wizard.handle_input(user_input)
-
-        # If we transitioned to MENU from AWAITING_KEY, clear and re-show fresh menu
-        # (DISCLAIMER -> MENU transition already shows menu, don't clear it)
-        state_after = self._wizard._state
-        if state_after == WizardState.MENU and state_before == WizardState.AWAITING_KEY:
-            output_sink = self._io._output_sink
-            if isinstance(output_sink, WizardOutputSink):
-                output_sink.clear_output()
-            self._wizard._show_menu()
+        result = self._surface.submit(self)
+        self._apply_submit_follow_up_actions(result)
 
         # Update placeholder for next prompt
         self._update_placeholder()
+
+    def action_transcript_home(self) -> None:
+        """Move the transcript to the oldest visible output."""
+        if self._surface is not None:
+            self._surface.output.action_scroll_home()
+
+    def action_transcript_follow_latest(self) -> None:
+        """Move the transcript to live output."""
+        if self._surface is not None:
+            self._surface.follow_latest()
+
+    def handle_submit(self, user_input: str) -> SubmitResult:
+        """Handle wizard input behind the shared surface protocol."""
+        if self._wizard is None:
+            return SubmitResult(accepted=False)
+
+        # Pass to wizard state machine
+        with self._wizard_output_context():
+            wizard_result = self._wizard.handle_input(user_input)
+
+        if wizard_result.clear_transcript:
+            return SubmitResult(
+                accepted=True,
+                follow_up_actions=(
+                    ClearTranscript(target=TuiEventTarget.WIZARD_TRANSCRIPT),
+                    AppendTranscript(
+                        entries=wizard_result.append_entries,
+                        target=TuiEventTarget.WIZARD_TRANSCRIPT,
+                    ),
+                ),
+            )
+
+        return SubmitResult(accepted=True)
+
+    def _apply_submit_follow_up_actions(self, result: SubmitResult) -> None:
+        """Apply wizard submit follow-up actions."""
+        if self._surface is None:
+            return
+        self._surface.apply_follow_up_actions(result.follow_up_actions)
 
     def _update_placeholder(self) -> None:
         """Update input placeholder based on wizard state."""
@@ -183,7 +174,32 @@ class SetupWizardScreen(Screen):
             return
 
         prompt = self._wizard.current_prompt
-        if prompt and self._layout:
-            self._layout.input.placeholder = prompt
+        if prompt and self._surface:
+            self._surface.set_input_placeholder(prompt)
+
+    def write_output(self, content: str) -> None:
+        """Write plain text to the wizard transcript."""
+        if self._surface is not None:
+            self._surface.write(content)
+
+    def write_renderable(self, renderable: Any) -> None:
+        """Write a Rich renderable to the wizard transcript."""
+        if self._surface is not None:
+            self._surface.write(renderable)
+
+    def clear_output(self) -> None:
+        """Clear the wizard transcript."""
+        if self._surface is not None:
+            self._surface.clear_output()
+
+    def _wizard_output_context(self):
+        """Route wizard business output to the wizard transcript target."""
+        sink = self._io.output_sink
+        transcript_target = getattr(sink, "transcript_target", None)
+        if not callable(transcript_target):
+            raise RuntimeError(
+                "SetupWizardScreen requires an output sink with transcript_target()"
+            )
+        return transcript_target(TuiEventTarget.WIZARD_TRANSCRIPT)
 
     # Note: ctrl+q and escape are handled at app level (ScrappyApp.on_key)

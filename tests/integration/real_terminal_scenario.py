@@ -140,6 +140,7 @@ def execute_help_selection_clipboard_scenario(
             harness.wait_for_render(scenario.post_command_wait_seconds)
         else:
             harness.append_debug_event("command_idle_observed")
+        harness.capture_screen_artifact("after-help")
 
         harness.clear_clipboard()
         harness.append_debug_event("clipboard_cleared_before_drag")
@@ -172,6 +173,9 @@ def execute_help_selection_clipboard_scenario(
                 timeout=scenario.clipboard_timeout_seconds,
             )
             harness.append_debug_event("clipboard_after_fallback_copy", value=clipboard_text)
+
+        if not any(substring in clipboard_text for substring in scenario.expected_substrings):
+            harness.capture_screen_artifact("selection-copy-failed")
 
         assert any(
             substring in clipboard_text for substring in scenario.expected_substrings

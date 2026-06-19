@@ -19,6 +19,7 @@
 Screen {
     background: $background;
     layout: vertical;
+    overflow: hidden;
     border: none;
 }
 
@@ -51,18 +52,14 @@ Widget {
     border: none;
 }
 
-/* ChatLayout widget */
-ChatLayout {
+/* ChatSurface widget */
+ChatSurface {
     border: none;
     background: $background;
-}
-
-/* Scrollable output container */
-#output_container {
+    layout: vertical;
+    width: 100%;
     height: 1fr;
-    overflow-y: auto;
-    border: none;
-    background: $background;
+    overflow: hidden;
 }
 
 /* Main scrollable output (includes banner as content) */
@@ -71,25 +68,11 @@ SelectableLog {
     color: $text;
     border: none;
     padding: 0 1 1 1;
-    height: 100%;
-    scrollbar-size-vertical: 0;
-    scrollbar-size-horizontal: 0;
-    scrollbar-background: $background;
-    scrollbar-color: $background;
+    height: 1fr;
 }
 
 SelectableLog:focus {
     border: none;
-}
-
-/* Legacy RichLog support (for screens still using RichLog) */
-RichLog {
-    background: $background;
-    color: $text;
-    border: none;
-    padding: 0 1 1 1;
-    height: 100%;
-    scrollbar-size-vertical: 0;
 }
 
 /* Input container at bottom */

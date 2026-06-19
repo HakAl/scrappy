@@ -231,6 +231,8 @@ class LiteLLMThinkDelegator:
         # Assemble result
         content = "".join(content_parts)
         tool_calls = self._process_tool_calls(all_fragments)
+        if not tool_calls:
+            content, tool_calls = self._tool_processor.extract_text_tool_calls(content)
         model_display = self._format_model_display(response_provider, response_model)
 
         logger.debug(

@@ -4,13 +4,15 @@ These tests pin user-visible behavior described in docs/behavior/TUI.md.
 Future PRs remove strict xfail markers as each behavior lands.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from textual.app import App, ComposeResult
 from textual.events import MouseDown, MouseMove, MouseUp
 from textual.widgets import TextArea
 
+from scrappy.cli.command_history import InMemoryCommandHistory
+from scrappy.cli.screens.chat_surface import ChatSurface
 from scrappy.cli.screens.main_screen import MainAppScreen
 from scrappy.cli.screens.wizard_screen import SetupWizardScreen
 from scrappy.cli.textual.app import ScrappyApp
@@ -92,10 +94,6 @@ class TestTranscriptScrollContracts:
     """Contracts for transcript scrolling and scrollbars."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 2 restores normal transcript scrollbars and removes the nested scroll owner.",
-    )
     async def test_transcript_uses_normal_scrollbar_on_overflow(self, monkeypatch):
         """Overflowing transcript content should expose a normal vertical scrollbar."""
         force_main_screen(monkeypatch)
@@ -111,6 +109,27 @@ class TestTranscriptScrollContracts:
             scrollbar_size = getattr(log.styles, "scrollbar_size_vertical", 0)
             assert scrollbar_size != 0
             assert getattr(log, "show_vertical_scrollbar") is True
+
+    @pytest.mark.asyncio
+    async def test_transcript_has_single_scroll_owner(self, monkeypatch):
+        """The transcript widget should be the only scroll owner for output."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            surface = app.screen.query_one(ChatSurface)
+            log = app.screen.query_one(SelectableLog)
+            write_transcript_lines(log, "single owner contract")
+            await pilot.pause()
+
+            assert list(app.screen.query("#output_container")) == []
+            assert log.parent is surface
+            assert getattr(app.screen, "max_scroll_y") == 0
+            assert getattr(surface, "max_scroll_y", 0) == 0
+            assert getattr(log, "max_scroll_y") > 0
+            assert surface.region.height == app.size.height
 
     @pytest.mark.asyncio
     async def test_page_up_scrolls_transcript_after_enough_output(self, monkeypatch):
@@ -135,14 +154,8 @@ class TestTranscriptScrollContracts:
             assert int(log.scroll_offset.y) < bottom
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 6 adds reviewing mode so new output does not yank the viewport.",
-    )
     async def test_new_output_preserves_reviewing_viewport(self):
         """New transcript output should not move the viewport while reviewing old output."""
-        # PR 6: move this to SingleScreenApp/create_test_app when scroll state
-        # lives in the surface/controller instead of the widget.
         app = LogHarnessApp()
 
         async with app.run_test(size=(80, 12)) as pilot:
@@ -162,10 +175,6 @@ class TestTranscriptScrollContracts:
             assert int(log.scroll_offset.y) == before
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 6 routes End/Ctrl+End to transcript follow-latest behavior.",
-    )
     async def test_end_key_returns_to_live_bottom(self, monkeypatch):
         """End should return a reviewing transcript to the live bottom."""
         force_main_screen(monkeypatch)
@@ -180,6 +189,32 @@ class TestTranscriptScrollContracts:
 
             log.scroll_to(y=0, animate=False)
             await pilot.pause()
+            await pilot.press("ctrl+end")
+            await pilot.pause()
+
+            max_scroll_y = int(getattr(log, "max_scroll_y"))
+            assert int(log.scroll_offset.y) >= max_scroll_y - 2
+
+    @pytest.mark.asyncio
+    async def test_plain_end_on_focused_transcript_returns_to_live_bottom(
+        self,
+        monkeypatch,
+    ):
+        """End should follow latest when the transcript owns focus."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            log = app.screen.query_one(ChatSurface).output
+            write_transcript_lines(log, "transcript end contract")
+            await pilot.pause()
+
+            log.scroll_to(y=0, animate=False)
+            log.focus()
+            await pilot.pause()
+
             await pilot.press("end")
             await pilot.pause()
 
@@ -187,10 +222,94 @@ class TestTranscriptScrollContracts:
             assert int(log.scroll_offset.y) >= max_scroll_y - 2
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 7 separates command history from transcript scroll ownership.",
-    )
+    async def test_plain_home_end_stay_in_focused_composer(self, monkeypatch):
+        """Home and End should keep normal TextArea cursor behavior."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            surface = app.screen.query_one(ChatSurface)
+            log = surface.output
+            composer = surface.input
+            write_transcript_lines(log, "composer cursor contract")
+            await pilot.pause()
+
+            bottom = int(log.scroll_offset.y)
+            composer.text = "alpha\nbeta"
+            composer.cursor_location = (0, 0)
+            composer.focus()
+            await pilot.pause()
+
+            await pilot.press("end")
+            await pilot.pause()
+            assert composer.cursor_location == (0, 5)
+            assert int(log.scroll_offset.y) == bottom
+
+            await pilot.press("home")
+            await pilot.pause()
+            assert composer.cursor_location == (0, 0)
+            assert int(log.scroll_offset.y) == bottom
+
+    @pytest.mark.asyncio
+    async def test_plain_page_keys_stay_in_focused_composer(self, monkeypatch):
+        """PageUp/PageDown should not scroll transcript while composer is focused."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            surface = app.screen.query_one(ChatSurface)
+            log = surface.output
+            write_transcript_lines(log, "composer page contract")
+            await pilot.pause()
+
+            bottom = int(log.scroll_offset.y)
+            surface.input.focus()
+            await pilot.pause()
+
+            await pilot.press("pageup")
+            await pilot.pause()
+
+            assert int(log.scroll_offset.y) == bottom
+
+    @pytest.mark.asyncio
+    async def test_ctrl_page_keys_scroll_transcript_while_composer_focused(
+        self,
+        monkeypatch,
+    ):
+        """Ctrl+PageUp/PageDown scroll the transcript even while the composer is focused.
+
+        Plain PageUp belongs to the focused composer; the Ctrl chord is the
+        keyboard path for reviewing older output without leaving the input.
+        """
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            surface = app.screen.query_one(ChatSurface)
+            log = surface.output
+            write_transcript_lines(log, "composer ctrl page contract")
+            await pilot.pause()
+
+            bottom = int(log.scroll_offset.y)
+            assert bottom > 0
+            surface.input.focus()
+            await pilot.pause()
+
+            await pilot.press("ctrl+pageup")
+            await pilot.pause()
+            assert int(log.scroll_offset.y) < bottom  # reviewed older output
+
+            await pilot.press("ctrl+pagedown")
+            await pilot.pause()
+            assert int(log.scroll_offset.y) == bottom  # returned to live bottom
+
+    @pytest.mark.asyncio
     async def test_history_navigation_does_not_block_transcript_up_scroll(
         self, monkeypatch
     ):
@@ -214,6 +333,75 @@ class TestTranscriptScrollContracts:
 
             assert int(log.scroll_offset.y) < bottom
 
+    @pytest.mark.asyncio
+    async def test_multiline_composer_up_moves_cursor_before_history(self, monkeypatch):
+        """Up in multiline composer should move the cursor before history navigation."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            composer = app.screen.query_one(ChatSurface).input
+            composer.text = "alpha\nbeta"
+            composer.cursor_location = (1, 2)
+            composer.focus()
+            await pilot.pause()
+
+            await pilot.press("up")
+            await pilot.pause()
+
+            assert composer.text == "alpha\nbeta"
+            assert composer.cursor_location[0] == 0
+
+    @pytest.mark.asyncio
+    async def test_multiline_composer_down_moves_cursor_before_history(
+        self,
+        monkeypatch,
+    ):
+        """Down in multiline composer should move the cursor before history navigation."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            composer = app.screen.query_one(ChatSurface).input
+            composer.text = "alpha\nbeta"
+            composer.cursor_location = (0, 2)
+            composer.focus()
+            await pilot.pause()
+
+            await pilot.press("down")
+            await pilot.pause()
+
+            assert composer.text == "alpha\nbeta"
+            assert composer.cursor_location[0] == 1
+
+    @pytest.mark.asyncio
+    async def test_multiline_composer_up_uses_history_at_first_line(self, monkeypatch):
+        """Up at the first composer line should navigate command history."""
+        force_main_screen(monkeypatch)
+        app = create_test_app()
+
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+
+            history = InMemoryCommandHistory()
+            history.add_to_history("remembered command")
+            app.screen._history = history
+
+            composer = app.screen.query_one(ChatSurface).input
+            composer.text = "alpha\nbeta"
+            composer.cursor_location = (0, 2)
+            composer.focus()
+            await pilot.pause()
+
+            await pilot.press("up")
+            await pilot.pause()
+
+            assert composer.text == "remembered command"
+
 
 class TestClipboardPriorityContracts:
     """Contracts for Ctrl+C copy, cancel, and double-tap priority."""
@@ -236,8 +424,8 @@ class TestClipboardPriorityContracts:
         exit_app.assert_not_called()
 
         cancel_app = create_test_app()
+        cancel_app._now = lambda: 100.0
         with (
-            patch("scrappy.cli.textual.app.time.time", return_value=100.0),
             patch.object(cancel_app, "_handle_copy_shortcut", return_value=False),
             patch.object(
                 cancel_app, "_cancel_operation", return_value=True
@@ -250,8 +438,8 @@ class TestClipboardPriorityContracts:
         exit_app.assert_not_called()
 
         exit_app_instance = create_test_app()
+        exit_app_instance._now = Mock(side_effect=[200.0, 200.25])
         with (
-            patch("scrappy.cli.textual.app.time.time", side_effect=[200.0, 200.25]),
             patch.object(exit_app_instance, "_handle_copy_shortcut", return_value=False),
             patch.object(exit_app_instance, "_cancel_operation", return_value=False),
             patch.object(exit_app_instance, "notify") as notify,
@@ -314,12 +502,8 @@ class TestSharedSurfaceContracts:
                 screen.on_click(event)
 
                 assert app.focused is log
-                assert log._has_selection()
+                assert log.selection_text != ""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PR 5 moves main and wizard paste policy into the shared surface.",
-    )
     @pytest.mark.asyncio
     async def test_transcript_right_click_does_not_paste_into_composer(self):
         """Transcript mouse actions should not paste into the composer."""
@@ -347,4 +531,4 @@ class TestSharedSurfaceContracts:
                 screen.on_click(event)
 
                 assert composer.text == ""
-                assert log._has_selection()
+                assert log.selection_text != ""

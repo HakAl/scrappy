@@ -22,7 +22,7 @@ from ..orchestrator.protocols import Orchestrator
 if TYPE_CHECKING:
     from rich.console import Console, RenderableType
     from textual.widget import Widget
-    from .unified_io import ProgressTracker, StreamWriter
+    from .unified_io import ProgressTrackerProtocol, StreamWriter
 
 
 # =============================================================================
@@ -78,6 +78,28 @@ class ClipboardProtocol(Protocol):
 
     def paste_text(self) -> str:
         """Read text from the system clipboard."""
+        ...
+
+
+@runtime_checkable
+class MouseReportingPolicyProtocol(Protocol):
+    """Single owner of the terminal mouse-reporting decision."""
+
+    @property
+    def selection_mode(self) -> bool:
+        """True when mouse reporting is suspended for native selection."""
+        ...
+
+    def enable(self) -> None:
+        """Assert mouse reporting on unless selection mode is active."""
+        ...
+
+    def disable_for_selection(self) -> None:
+        """Suspend mouse reporting so the terminal can handle native selection."""
+        ...
+
+    def restore(self) -> None:
+        """Exit selection mode and re-enable mouse reporting."""
         ...
 
 
@@ -762,7 +784,7 @@ class RichOutputProtocol(Protocol):
         self,
         total: int,
         description: str = "Progress"
-    ) -> Generator["ProgressTracker", None, None]:
+    ) -> Generator["ProgressTrackerProtocol", None, None]:
         """Create a progress bar context manager.
 
         Note: Visual representation varies by output mode.
@@ -774,7 +796,7 @@ class RichOutputProtocol(Protocol):
             description: Description text
 
         Yields:
-            ProgressTracker for updating progress
+            Progress tracker for updating progress
         """
         ...
 

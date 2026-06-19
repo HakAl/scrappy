@@ -36,7 +36,34 @@ from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 
-class ProgressTracker:
+class ProgressTrackerProtocol(Protocol):
+    """Common progress tracker contract for CLI and TUI output modes."""
+
+    @property
+    def total(self) -> int:
+        """Get total progress value."""
+        ...
+
+    @property
+    def current(self) -> int:
+        """Get current progress value."""
+        ...
+
+    @property
+    def completed(self) -> bool:
+        """Check if progress is complete."""
+        ...
+
+    def advance(self, amount: int = 1) -> None:
+        """Advance progress by specified amount."""
+        ...
+
+    def update_description(self, description: str) -> None:
+        """Update the progress description."""
+        ...
+
+
+class ProgressTracker(ProgressTrackerProtocol):
     """Wrapper for tracking progress within a context manager."""
 
     def __init__(self, progress: Progress, task_id):
@@ -137,7 +164,7 @@ class StreamWriter:
         return "".join(self._buffer)
 
 
-class SimplifiedProgressTracker:
+class SimplifiedProgressTracker(ProgressTrackerProtocol):
     """Simplified progress tracker for TUI mode.
 
     Logs text-based progress messages instead of animated progress bars.
@@ -317,7 +344,7 @@ class OutputStrategyProtocol(Protocol):
         self,
         total: int,
         description: str = "Progress"
-    ) -> Generator[ProgressTracker, None, None]:
+    ) -> Generator[ProgressTrackerProtocol, None, None]:
         """Create progress context for this output strategy.
 
         DirectConsoleOutput: Rich animated progress bar
@@ -516,7 +543,7 @@ class DirectConsoleOutput:
         self,
         total: int,
         description: str = "Progress"
-    ) -> Generator[ProgressTracker, None, None]:
+    ) -> Generator[ProgressTrackerProtocol, None, None]:
         """Create Rich animated progress bar."""
         with Progress(
             TextColumn("[progress.description]{task.description}"),
@@ -676,7 +703,7 @@ class OutputSinkAdapter:
     def output_plain(self, text: str, nl: bool = True) -> None:
         """Output plain text through sink.
 
-        Note: RichLog.write() handles line breaks automatically,
+        Note: SelectableLog.write() handles line breaks automatically,
         so we don't add extra newlines to avoid double-spacing.
         """
         self._sink.post_output(text)
@@ -690,7 +717,7 @@ class OutputSinkAdapter:
     ) -> None:
         """Output styled text through sink as Rich Text.
 
-        Note: RichLog.write() handles line breaks automatically,
+        Note: SelectableLog.write() handles line breaks automatically,
         so we don't add extra newlines to avoid double-spacing.
         """
         color_map = {
@@ -780,7 +807,7 @@ class OutputSinkAdapter:
         self,
         total: int,
         description: str = "Progress"
-    ) -> Generator[SimplifiedProgressTracker, None, None]:
+    ) -> Generator[ProgressTrackerProtocol, None, None]:
         """Create progress context (simplified for TUI).
 
         Uses text-based progress messages instead of live bars.
@@ -1001,20 +1028,6 @@ class UnifiedIO:
         """
         return self._output_sink
 
-    @output_sink.setter
-    def output_sink(self, sink: Optional[OutputSink]) -> None:
-        """Set the OutputSink (for wizard screen swapping).
-
-        Updates both the stored sink and the strategy's sink reference.
-
-        Args:
-            sink: New OutputSink to use, or None
-        """
-        self._output_sink = sink
-        # Also update strategy's sink if using OutputSinkAdapter
-        if isinstance(self._strategy, OutputSinkAdapter) and sink is not None:
-            self._strategy._sink = sink
-
     @property
     def theme(self) -> ThemeProtocol:
         """Get the current theme.
@@ -1173,7 +1186,7 @@ class UnifiedIO:
         self,
         total: int,
         description: str = "Progress"
-    ) -> Generator[ProgressTracker, None, None]:
+    ) -> Generator[ProgressTrackerProtocol, None, None]:
         """Create a progress bar context manager.
 
         Visual representation varies by mode:

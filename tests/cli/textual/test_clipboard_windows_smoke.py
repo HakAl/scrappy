@@ -128,12 +128,12 @@ async def test_ctrl_c_writes_real_windows_clipboard():
             await pilot.pause()
 
             log = app.screen.query_one(SelectableLog)
+            log.clear()
             log.write(copied_text)
             await pilot.pause()
 
-            last_row = len(log._strips) - 1
-            log._selection_start = (last_row, 0)
-            log._selection_end = (last_row, len(copied_text))
+            log._selection_start = (0, 0)
+            log._selection_end = (0, len(copied_text))
 
             await pilot.press("ctrl+c")
             await pilot.pause()

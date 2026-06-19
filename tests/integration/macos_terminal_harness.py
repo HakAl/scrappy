@@ -178,6 +178,11 @@ class MacOSTerminalHarness(RealTerminalHarnessProtocol):
             check=False,
         )
 
+    def capture_screen_artifact(self, label: str) -> Path | None:
+        """Capture the current terminal screen when the platform supports it."""
+        self.append_debug_event("screen_capture_unsupported", label=label)
+        return None
+
     def append_debug_event(self, stage: str, **fields: object) -> None:
         """Append a structured debug event to the session log."""
         session = self._session
@@ -228,8 +233,8 @@ class MacOSTerminalHarness(RealTerminalHarnessProtocol):
 
     def _require_iterm2(self) -> None:
         """Skip if iTerm2 is not installed or not scriptable."""
-        result = self._run_osascript(
-            ['tell application "iTerm2" to return version'],
+        result = self._run_command(
+            ["osascript", "-e", 'tell application "iTerm2" to return version'],
             check=False,
         )
         if result.returncode != 0:

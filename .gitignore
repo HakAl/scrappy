@@ -54,6 +54,8 @@ Thumbs.db
 .pytest_tmp/
 /.tmp/
 /.tmp_*/
+/.tmp_terminal_spike_logs/
+/Screenshot *.png
 /.tools/
 .coverage
 htmlcov/

@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from scrappy.cli.core import CLI
     from scrappy.cli.display import CLIDisplay
     from scrappy.cli.input_handler import InputHandler
+    from scrappy.cli.interactive import InteractiveMode
     from scrappy.cli.logging import CLILogger
     from scrappy.cli.session_context import SessionContextProtocol
     from scrappy.cli.state_manager import PlanStateManager

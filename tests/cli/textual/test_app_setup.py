@@ -6,8 +6,14 @@ from unittest.mock import Mock, call, patch
 import uuid
 
 from scrappy.cli.protocols import ActivityState
-from scrappy.cli.textual.app import CLIReady, ScrappyApp
-from scrappy.cli.textual.messages import ActivityStateChange
+from scrappy.cli.textual.app import ScrappyApp
+from scrappy.cli.textual.tui_events import (
+    ActivityChanged,
+    CliReadyChanged,
+    TranscriptAppendText,
+    TuiEventMessage,
+)
+from scrappy.cli.widgets import SelectableLog
 
 
 def test_setup_interactive_mode_uses_shared_helpers():
@@ -123,6 +129,45 @@ def test_handle_paste_shortcut_reads_system_clipboard():
     target.action_paste.assert_called_once_with()
 
 
+def test_get_paste_target_uses_active_chat_surface_input():
+    """Paste fallback should use any active screen's shared composer."""
+    app = ScrappyApp(cli_factory=lambda: Mock())
+    target = Mock()
+    mock_screen = Mock()
+    mock_screen._surface = Mock(input=target)
+
+    with patch.object(type(app), "screen", new_callable=lambda: property(lambda self: mock_screen)):
+        assert app._get_paste_target() is target
+
+
+class FakeSelectableLog(SelectableLog):
+    """SelectableLog test double that avoids clipboard side effects."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.copied = False
+
+    @property
+    def selection_text(self) -> str:
+        return "selected transcript"
+
+    def action_copy_selection(self) -> None:
+        self.copied = True
+
+
+def test_handle_copy_shortcut_uses_active_chat_surface_transcript():
+    """Copy fallback should use any active screen's shared transcript."""
+    app = ScrappyApp(cli_factory=lambda: Mock())
+    output = FakeSelectableLog()
+    mock_screen = Mock()
+    mock_screen._surface = Mock(output=output)
+
+    with patch.object(type(app), "screen", new_callable=lambda: property(lambda self: mock_screen)):
+        assert app._handle_copy_shortcut() is True
+
+    assert output.copied is True
+
+
 def test_handle_ctrl_c_prefers_copy_over_exit_and_cancel():
     """Copying selected text should not arm Ctrl+C exit behavior."""
     app = ScrappyApp(cli_factory=lambda: Mock())
@@ -142,14 +187,13 @@ def test_handle_ctrl_c_prefers_copy_over_exit_and_cancel():
 
 
 def test_restore_mouse_support_uses_driver_hook_when_available():
-    """Mouse restore should call the driver's enable hook when present."""
-    app = ScrappyApp(cli_factory=lambda: Mock())
-    driver = Mock()
-    app._driver = driver
+    """Mouse restore should route through the injected policy seam."""
+    policy = Mock()
+    app = ScrappyApp(cli_factory=lambda: Mock(), mouse_policy=policy)
 
     app.restore_mouse_support()
 
-    driver._enable_mouse_support.assert_called_once_with()
+    policy.enable.assert_called_once_with()
 
 
 def test_on_cliready_reasserts_mouse_support_after_banner_status():
@@ -163,13 +207,29 @@ def test_on_cliready_reasserts_mouse_support_after_banner_status():
         patch.object(app, "call_after_refresh") as mock_call_after_refresh,
         patch("scrappy.cli.interactive_banner.display_banner_status") as mock_banner_status,
     ):
-        app.on_cliready(CLIReady(cli=cli))
+        app.on_tui_event_message(TuiEventMessage(CliReadyChanged(cli=cli)))
 
     mock_banner_status.assert_called_once_with(cli.io)
     assert mock_call_after_refresh.call_args_list == [
         call(app.restore_mouse_support),
         call(app._signal_integration_ready),
     ]
+
+
+def test_transcript_event_reasserts_mouse_support_after_refresh():
+    """Live transcript output should repair mouse tracking during active work."""
+    app = ScrappyApp(cli_factory=lambda: Mock())
+
+    with (
+        patch.object(app, "_route_transcript_event") as mock_route,
+        patch.object(app, "call_after_refresh") as mock_call_after_refresh,
+    ):
+        app.on_tui_event_message(
+            TuiEventMessage(TranscriptAppendText(content="streamed\n"))
+        )
+
+    mock_route.assert_called_once()
+    mock_call_after_refresh.assert_called_once_with(app.restore_mouse_support)
 
 
 def test_on_cliready_writes_ready_signal_when_integration_env_enabled(monkeypatch):
@@ -190,7 +250,7 @@ def test_on_cliready_writes_ready_signal_when_integration_env_enabled(monkeypatc
         patch.object(app, "call_after_refresh", side_effect=lambda callback: callback()),
         patch("scrappy.cli.interactive_banner.display_banner_status"),
     ):
-        app.on_cliready(CLIReady(cli=cli))
+        app.on_tui_event_message(TuiEventMessage(CliReadyChanged(cli=cli)))
 
     assert ready_path.read_text(encoding="utf-8") == "ready\n"
     events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
@@ -212,7 +272,7 @@ def test_activity_idle_emits_command_idle_integration_event(monkeypatch, tmp_pat
         patch.object(app, "call_after_refresh", side_effect=lambda callback: callback()),
         patch.object(type(app), "screen", new_callable=lambda: property(lambda self: mock_screen)),
     ):
-        app.on_activity_state_change(ActivityStateChange(ActivityState.IDLE))
+        app.on_tui_event_message(TuiEventMessage(ActivityChanged(ActivityState.IDLE)))
 
     events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     assert any(
@@ -232,7 +292,7 @@ def test_activity_thinking_does_not_emit_command_idle(monkeypatch, tmp_path):
         patch.object(app, "call_after_refresh", side_effect=lambda callback: callback()),
         patch.object(type(app), "screen", new_callable=lambda: property(lambda self: mock_screen)),
     ):
-        app.on_activity_state_change(ActivityStateChange(ActivityState.THINKING))
+        app.on_tui_event_message(TuiEventMessage(ActivityChanged(ActivityState.THINKING)))
 
     if log_path.exists():
         events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]

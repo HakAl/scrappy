@@ -10,33 +10,43 @@ import asyncio
 import json
 import logging
 import os
-import threading
 import time
 from pathlib import Path
 
 from textual.app import App
+from textual.binding import Binding
 from textual.theme import Theme
 from textual.reactive import reactive
 from textual import work
 from textual.widgets import TextArea
 
-from scrappy.cli.protocols import ActivityState, ClipboardProtocol
+from scrappy.cli.protocols import (
+    ActivityState,
+    ClipboardProtocol,
+    MouseReportingPolicyProtocol,
+)
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 
 from .runtime_wiring import create_textual_runtime_session, wire_textual_runtime
-from .messages import (
-    WriteOutput,
-    WriteRenderable,
-    RequestInlineInput,
-    IndexingProgress,
-    ActivityStateChange,
-    MetricsUpdate,
-    TasksUpdated,
-    CLIReady,
-)
 from .bridge import ThreadSafeAsyncBridge
+from .event_sink import TextualTuiEventSink
 from .output_adapter import TextualOutputAdapter
+from .tui_events import (
+    ActivityChanged,
+    CliReadyChanged,
+    FlushRequested,
+    IndexingProgressChanged,
+    MetricsUpdated,
+    PromptRequested,
+    ShutdownRequested,
+    TranscriptClear,
+    TasksUpdated,
+    TranscriptAppendRenderable,
+    TranscriptAppendText,
+    TuiEventTarget,
+    TuiEventMessage,
+)
 
 if TYPE_CHECKING:
     from ..interactive import InteractiveMode
@@ -76,6 +86,8 @@ class ScrappyApp(App):
     # When using cli_factory, this is False until CLI is ready
     ready = reactive(True)
 
+    BINDINGS = [Binding("ctrl+t", "toggle_selection_mode", "Select mode")]
+
     def __init__(
         self,
         interactive_mode: Optional["InteractiveMode"] = None,
@@ -83,6 +95,8 @@ class ScrappyApp(App):
         theme: Optional[ThemeProtocol] = None,
         cli_factory: Optional[Callable[[], "CLI"]] = None,
         clipboard: Optional[ClipboardProtocol] = None,
+        mouse_policy: Optional[MouseReportingPolicyProtocol] = None,
+        now: Optional[Callable[[], float]] = None,
     ):
         """Initialize the Textual app controller.
 
@@ -96,11 +110,18 @@ class ScrappyApp(App):
             theme: Optional theme for consistent styling
             cli_factory: Factory function to create CLI (deferred mode)
             clipboard: Clipboard service for OS clipboard integration
+            mouse_policy: Terminal mouse reporting policy
+            now: Monotonic-ish clock for double-tap timing (injectable for
+                tests); defaults to time.time
         """
         super().__init__()
         self._theme = theme or DEFAULT_THEME
-        self._should_stop_consumer = False
+        self._shutdown_requested = False
         self._clipboard_service = clipboard or self._create_default_clipboard()
+        self._mouse_policy = mouse_policy or self._create_default_mouse_policy()
+        self.tui_event_sink = TextualTuiEventSink(self)
+        if output_adapter is not None:
+            output_adapter.bind_event_sink(self.tui_event_sink)
 
         # Deferred initialization mode
         self._cli_factory = cli_factory
@@ -108,7 +129,7 @@ class ScrappyApp(App):
 
         # In deferred mode, create output adapter now (needed for skeleton screen)
         if cli_factory is not None:
-            self.output_adapter = output_adapter or TextualOutputAdapter()
+            self.output_adapter = output_adapter or TextualOutputAdapter(self.tui_event_sink)
             self.interactive_mode: Optional["InteractiveMode"] = None
             self.ready = False  # Will be set True when CLI is ready
         else:
@@ -116,20 +137,24 @@ class ScrappyApp(App):
             if interactive_mode is None:
                 raise ValueError("Must provide either interactive_mode or cli_factory")
             self.interactive_mode = interactive_mode
-            self.output_adapter = output_adapter or TextualOutputAdapter()
+            self.output_adapter = output_adapter or TextualOutputAdapter(self.tui_event_sink)
             self.ready = True
 
         # Thread-safe async bridge for prompts/confirms
         self.bridge = ThreadSafeAsyncBridge(self)
 
         # Track last Ctrl+C time for double-tap exit
+        self._now: Callable[[], float] = now or time.time
         self._last_ctrl_c_time: float = 0.0
 
         # Codebase context for semantic search indexing
         self._codebase_context: Optional["CodebaseContext"] = None
+        self._buffered_main_transcript_events: list[
+            TranscriptAppendText | TranscriptAppendRenderable | TranscriptClear
+        ] = []
+        self._buffered_main_transcript_omissions = 0
+        self._main_transcript_buffer_draining = False
 
-        # Consumer thread (daemon so it won't block exit)
-        self._consumer_thread: Optional[threading.Thread] = None
         self._runtime_cleanup_done = False
         self._integration_log_path = os.getenv("SCRAPPY_INTEGRATION_LOG_PATH")
         self._integration_ready_file = os.getenv("SCRAPPY_READY_FILE")
@@ -141,6 +166,14 @@ class ScrappyApp(App):
 
         return PyperclipClipboard()
 
+    def _create_default_mouse_policy(self) -> MouseReportingPolicyProtocol:
+        """Create the default terminal mouse reporting policy."""
+        from .mouse_policy import TextualMouseReportingPolicy
+
+        return TextualMouseReportingPolicy(
+            driver_provider=lambda: getattr(self, "_driver", None)
+        )
+
     def copy_to_clipboard(self, text: str) -> None:
         """Copy text to both Textual's local clipboard and the system clipboard."""
         try:
@@ -151,21 +184,8 @@ class ScrappyApp(App):
         super().copy_to_clipboard(text)
 
     def restore_mouse_support(self) -> None:
-        """Re-enable terminal mouse reporting when the driver supports it.
-
-        Real Windows terminals can lose Textual mouse mode after subprocess-heavy
-        flows or noisy startup output. Reasserting mouse support is safe and helps
-        keep text selection working in the chat log.
-        """
-        driver = getattr(self, "_driver", None)
-        enable_mouse = getattr(driver, "_enable_mouse_support", None)
-        if not callable(enable_mouse):
-            return
-
-        try:
-            enable_mouse()
-        except Exception as e:
-            logger.debug("Failed to restore mouse support: %s", e)
+        """Re-assert mouse reporting via the policy."""
+        self._mouse_policy.enable()
 
     def _write_integration_event(self, event: str, **fields: object) -> None:
         """Append a structured integration event when the harness enables it."""
@@ -238,11 +258,15 @@ class ScrappyApp(App):
         ) -> None:
             # Always try to post the message - post_message is thread-safe in Textual
             # Remove is_running check as it may reject valid messages during startup race
-            if not self._should_stop_consumer:
+            if not self._shutdown_requested:
                 logger.debug(f"Posting indexing progress: {message}")
-                self.post_message(IndexingProgress(
-                    message=message, progress=progress, total=total
-                ))
+                self.tui_event_sink.post_event(
+                    IndexingProgressChanged(
+                        message=message,
+                        progress=progress,
+                        total=total,
+                    )
+                )
 
         context.set_indexing_progress_callback(progress_callback)
 
@@ -250,7 +274,9 @@ class ScrappyApp(App):
         # If so, send a ready message to update the UI directly (bypass is_running check)
         if hasattr(context, 'is_semantic_search_ready') and context.is_semantic_search_ready():
             logger.info("Semantic search already ready when callback registered, posting ready message")
-            self.post_message(IndexingProgress(message="Semantic search ready", progress=0, total=0))
+            self.tui_event_sink.post_event(
+                IndexingProgressChanged(message="Semantic search ready")
+            )
 
     def _register_user_theme(self) -> None:
         """Register theme from ThemeProtocol with Textual."""
@@ -283,15 +309,6 @@ class ScrappyApp(App):
             deferred=self._cli_factory is not None,
             ready=self.ready,
         )
-
-        # Start daemon thread to consume output queue.
-        # This avoids keeping a long-running Textual worker alive during exit.
-        self._consumer_thread = threading.Thread(
-            target=self._consume_output_queue_loop,
-            daemon=True,
-            name="output-queue-consumer",
-        )
-        self._consumer_thread.start()
 
         # Navigate to appropriate screen
         has_provider, env_key_count = self._check_and_migrate_providers()
@@ -350,7 +367,7 @@ class ScrappyApp(App):
         CLI creation is CPU-bound (imports) and blocking I/O (disk reads),
         which would freeze the UI if run on the main event loop.
 
-        Posts CLIReady message directly (Textual handles thread safety for @work).
+        Posts a typed CLI-ready event through the shared sink.
         """
         if self._cli_factory is None:
             return
@@ -359,26 +376,27 @@ class ScrappyApp(App):
             # This is the slow part - runs in thread pool
             cli = self._cli_factory()
 
-            # Post message directly - Textual's @work handles thread safety
-            self.post_message(CLIReady(cli=cli))
+            self.tui_event_sink.post_event(CliReadyChanged(cli=cli))
         except Exception as e:
             error_msg = str(e)
             logger.exception("Failed to initialize CLI: %s", e)
-            self.post_message(CLIReady(error=error_msg))
+            self.tui_event_sink.post_event(CliReadyChanged(error=error_msg))
 
-    def on_cliready(self, message: CLIReady) -> None:
+    def _handle_cli_ready(self, message: CliReadyChanged) -> None:
         """Handle CLI initialization completion.
 
         Called on main thread after background worker finishes.
         Wires up InteractiveMode and sets ready=True.
-
-        Note: Handler name is 'on_cliready' (not 'on_cli_ready') because
-        Textual converts 'CLIReady' to 'cliready' (all lowercase, no underscores).
         """
         if message.error:
             # Show error in status bar - user can /setup to fix
-            self.output_adapter.post_output(
-                f"Startup error: {message.error}\nUse /setup to configure providers.\n"
+            self.tui_event_sink.post_event(
+                TranscriptAppendText(
+                    content=(
+                        f"Startup error: {message.error}\n"
+                        "Use /setup to configure providers.\n"
+                    )
+                )
             )
             self._write_integration_event("cli_ready_error", error=message.error)
             # Still mark as ready so user can interact
@@ -439,14 +457,15 @@ class ScrappyApp(App):
     ) -> None:
         """Override exit to ensure clean shutdown of all resources.
 
-        Signal consumer worker to exit via sentinel before Textual waits for workers.
+        Signal app-owned runtime resources before Textual waits for workers.
         """
         self._file_log("exit(): starting")
 
-        # Signal consumer to exit - puts sentinel on queue to wake it immediately
-        self._should_stop_consumer = True
+        # Signal event sinks and runtime resources before cancelling workers.
+        self._shutdown_requested = True
+        self.tui_event_sink.request_shutdown()
         self.output_adapter.request_shutdown()
-        self._file_log("exit(): consumer signaled")
+        self._file_log("exit(): event sinks signaled")
 
         # Unblock any bridge operations (prompts/confirms)
         self.bridge.shutdown()
@@ -494,8 +513,9 @@ class ScrappyApp(App):
             return
 
         self._runtime_cleanup_done = True
-        self._should_stop_consumer = True
-        self.output_adapter.request_shutdown()  # Wake consumer immediately
+        self._shutdown_requested = True
+        self.tui_event_sink.request_shutdown()
+        self.output_adapter.request_shutdown()
         OutputModeContext.set_tui_mode(False)
 
         # Signal bridge to release any blocked worker threads (redundant but safe)
@@ -544,6 +564,7 @@ class ScrappyApp(App):
 
     def on_unmount(self) -> None:
         """Called when app is about to close."""
+        self._mouse_policy.restore()
         self._cleanup_runtime_resources()
 
     async def _shutdown(self) -> None:  # type: ignore[override]
@@ -669,6 +690,7 @@ class ScrappyApp(App):
             clipboard=self._clipboard_service,
         )
         self.push_screen(screen)
+        self.call_later(self._drain_main_transcript_buffer)
 
         # Display banner header immediately (doesn't need CLI)
         from scrappy.cli.interactive_banner import display_banner_header_tui
@@ -684,8 +706,13 @@ class ScrappyApp(App):
         # Show welcome message if keys were found in environment
         if env_key_count > 0:
             key_word = "key" if env_key_count == 1 else "keys"
-            self.output_adapter.post_output(
-                f"Found {env_key_count} API {key_word} in environment. Use /setup to add more.\n"
+            self.tui_event_sink.post_event(
+                TranscriptAppendText(
+                    content=(
+                        f"Found {env_key_count} API {key_word} in environment. "
+                        "Use /setup to add more.\n"
+                    )
+                )
             )
 
         if self.ready and self.interactive_mode is not None:
@@ -739,124 +766,217 @@ class ScrappyApp(App):
         """
         self.call_later(lambda: self._show_wizard_screen(allow_cancel=True))
 
-    def _consume_output_queue_loop(self) -> None:
-        """Consume output queue on a daemon thread and post to UI."""
-        while not self._should_stop_consumer:
-            # Check shutdown before blocking on queue
-            if self.output_adapter.is_shutdown_requested():
-                break
-
-            try:
-                message = self.output_adapter.get_message(block=True, timeout=0.2)
-            except Exception as e:
-                logger.exception("Error consuming output queue: %s", e)
-                continue
-
-            if message is None:
-                # Timeout or shutdown sentinel received
-                continue
-
-            # Check shutdown again before processing (avoid posting during shutdown)
-            if self._should_stop_consumer or self.output_adapter.is_shutdown_requested():
-                break
-
-            msg_type, content = message
-
-            try:
-                if msg_type == "output":
-                    self.post_message(WriteOutput(content))
-                elif msg_type == "renderable":
-                    self.post_message(WriteRenderable(content))
-                elif msg_type == "tasks":
-                    self.post_message(TasksUpdated(content))
-                elif msg_type == "activity":
-                    state, msg, elapsed_ms = content
-                    self.post_message(ActivityStateChange(state, msg, elapsed_ms))
-                elif msg_type == "flush":
-                    self.output_adapter.acknowledge_flush(content)
-            except Exception:
-                # App shutting down, message pump closed
-                break
-
     # =========================================================================
     # Message Handlers - Route to Active Screen
     # =========================================================================
 
-    def on_write_output(self, message: WriteOutput) -> None:
-        """Route plain text output to active screen."""
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.write_output(message.content)
-
-    def on_write_renderable(self, message: WriteRenderable) -> None:
-        """Route Rich renderable to active screen."""
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.write_renderable(message.renderable)
-
-    def on_request_inline_input(self, message: RequestInlineInput) -> None:
-        """Route inline input request to active screen."""
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.enter_capture_mode(
-                message.prompt_id,
-                message.message,
-                message.input_type,
-                message.default
-            )
-
-    def on_indexing_progress(self, message: IndexingProgress) -> None:
-        """Route indexing progress to active screen."""
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.update_indexing_progress(
-                message=message.message,
-                progress=message.progress,
-                total=message.total,
-                complete=message.complete
-            )
-
-    def on_activity_state_change(self, message: ActivityStateChange) -> None:
-        """Route activity state changes to active screen."""
-        from ..screens import MainAppScreen
-
-        logger.debug("on_activity_state_change: state=%s, screen=%s", message.state, type(self.screen).__name__)
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.update_activity(message)
+    def on_tui_event_message(self, message: TuiEventMessage) -> None:
+        """Dispatch typed TUI events from the single boundary message."""
+        event = message.event
+        should_restore_mouse = isinstance(
+            event,
+            (
+                TranscriptAppendText,
+                TranscriptAppendRenderable,
+                TranscriptClear,
+                ActivityChanged,
+                TasksUpdated,
+                MetricsUpdated,
+                IndexingProgressChanged,
+                PromptRequested,
+            ),
+        )
+        if isinstance(event, (TranscriptAppendText, TranscriptAppendRenderable, TranscriptClear)):
+            self._route_transcript_event(event)
+        elif isinstance(event, ActivityChanged):
+            self._route_activity_changed(event)
+        elif isinstance(event, TasksUpdated):
+            self._route_tasks_updated(event)
+        elif isinstance(event, MetricsUpdated):
+            self._route_metrics_updated(event)
+        elif isinstance(event, IndexingProgressChanged):
+            self._route_indexing_progress_changed(event)
+        elif isinstance(event, PromptRequested):
+            self._route_prompt_requested(event)
+        elif isinstance(event, CliReadyChanged):
+            self._handle_cli_ready(event)
+        elif isinstance(event, FlushRequested):
+            self.tui_event_sink.acknowledge_flush(event.flush_id)
+        elif isinstance(event, ShutdownRequested):
+            self.exit()
         else:
-            logger.warning("on_activity_state_change: screen is not MainAppScreen, ignoring")
+            logger.debug(
+                "on_tui_event_message: unhandled event %s",
+                type(event).__name__,
+            )
+        if should_restore_mouse:
+            self.call_after_refresh(self.restore_mouse_support)
 
-        if message.state == ActivityState.IDLE:
+    def _active_main_screen(self):
+        """Return the active main screen, if any."""
+        from ..screens import MainAppScreen
+
+        screen = self.screen
+        return screen if isinstance(screen, MainAppScreen) else None
+
+    def _active_wizard_screen(self):
+        """Return the active wizard screen, if any."""
+        from ..screens import SetupWizardScreen
+
+        screen = self.screen
+        return screen if isinstance(screen, SetupWizardScreen) else None
+
+    def _route_transcript_event(
+        self,
+        event: TranscriptAppendText | TranscriptAppendRenderable | TranscriptClear,
+    ) -> None:
+        """Route transcript events to the intended surface."""
+        if event.target == TuiEventTarget.WIZARD_TRANSCRIPT:
+            wizard_screen = self._active_wizard_screen()
+            if wizard_screen is not None:
+                self._render_transcript_event(wizard_screen, event)
+            return
+
+        main_screen = self._active_main_screen()
+        if main_screen is None or getattr(main_screen, "_surface", None) is None:
+            self._buffer_main_transcript_event(event)
+            return
+
+        self._render_transcript_event(main_screen, event)
+
+    def _render_transcript_event(
+        self,
+        screen: Any,
+        event: TranscriptAppendText | TranscriptAppendRenderable | TranscriptClear,
+    ) -> None:
+        """Render a transcript event to a screen surface."""
+        if isinstance(event, TranscriptAppendText):
+            screen.write_output(event.content)
+        elif isinstance(event, TranscriptAppendRenderable):
+            screen.write_renderable(event.renderable)
+        else:
+            screen.clear_output()
+
+    def _buffer_main_transcript_event(
+        self,
+        event: TranscriptAppendText | TranscriptAppendRenderable | TranscriptClear,
+    ) -> None:
+        """Buffer main transcript events while another screen is active."""
+        if isinstance(event, TranscriptClear):
+            self._buffered_main_transcript_events.clear()
+            self._buffered_main_transcript_omissions = 0
+            self._buffered_main_transcript_events.append(event)
+            return
+
+        if len(self._buffered_main_transcript_events) >= 2000:
+            self._buffered_main_transcript_events.pop(0)
+            self._buffered_main_transcript_omissions += 1
+
+        self._buffered_main_transcript_events.append(event)
+
+    def _drain_main_transcript_buffer(self) -> None:
+        """Replay buffered main transcript events in UI-sized batches."""
+        if self._main_transcript_buffer_draining:
+            return
+        self._main_transcript_buffer_draining = True
+        self._drain_main_transcript_buffer_batch()
+
+    def _drain_main_transcript_buffer_batch(self) -> None:
+        """Drain one buffered transcript batch."""
+        main_screen = self._active_main_screen()
+        if main_screen is None:
+            self._main_transcript_buffer_draining = False
+            return
+        if getattr(main_screen, "_surface", None) is None:
+            self.call_later(self._drain_main_transcript_buffer_batch)
+            return
+
+        if self._buffered_main_transcript_omissions:
+            count = self._buffered_main_transcript_omissions
+            self._buffered_main_transcript_omissions = 0
+            main_screen.write_output(
+                f"{count} transcript events truncated while wizard was active\n"
+            )
+
+        batch = self._buffered_main_transcript_events[:100]
+        del self._buffered_main_transcript_events[:100]
+
+        for event in batch:
+            self._render_transcript_event(main_screen, event)
+
+        if self._buffered_main_transcript_events:
+            self.call_later(self._drain_main_transcript_buffer_batch)
+        else:
+            self._main_transcript_buffer_draining = False
+
+    def _route_prompt_requested(self, event: PromptRequested) -> None:
+        """Route inline input request to active screen."""
+        screen = self._active_main_screen()
+        if screen is not None:
+            screen.enter_capture_mode(
+                event.prompt_id,
+                event.message,
+                event.input_type,
+                event.default,
+            )
+
+    def _route_indexing_progress_changed(
+        self,
+        event: IndexingProgressChanged,
+    ) -> None:
+        """Route indexing progress to active screen."""
+        screen = self._active_main_screen()
+        if screen is not None:
+            screen.update_indexing_progress(
+                message=event.message,
+                progress=event.progress,
+                total=event.total,
+                complete=event.complete,
+            )
+
+    def _route_activity_changed(self, event: ActivityChanged) -> None:
+        """Route activity state changes to active screen."""
+        logger.debug(
+            "on_tui_event_message: activity state=%s, screen=%s",
+            event.state,
+            type(self.screen).__name__,
+        )
+        screen = self._active_main_screen()
+        if screen is not None:
+            screen.update_activity(event)
+        else:
+            logger.warning("ActivityChanged received while main screen is not active")
+
+        if event.state == ActivityState.IDLE:
             self.call_after_refresh(self._signal_command_idle)
 
-    def on_tasks_updated(self, message: TasksUpdated) -> None:
+    def _route_tasks_updated(self, event: TasksUpdated) -> None:
         """Route task updates to active screen."""
-        from ..screens import MainAppScreen
+        screen = self._active_main_screen()
+        if screen is not None:
+            screen.update_tasks(event.tasks)
 
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.update_tasks(message.tasks)
-
-    def on_metrics_update(self, message: MetricsUpdate) -> None:
+    def _route_metrics_updated(self, event: MetricsUpdated) -> None:
         """Route metrics updates to active screen."""
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen):
-            screen.update_metrics(message)
+        screen = self._active_main_screen()
+        if screen is not None:
+            screen.update_metrics(event)
 
     # =========================================================================
     # Global Key Handlers
     # =========================================================================
+
+    def action_toggle_selection_mode(self) -> None:
+        """Toggle native terminal selection mode."""
+        if self._mouse_policy.selection_mode:
+            self._mouse_policy.restore()
+            self.notify("Mouse mode on (scroll/click).", timeout=2)
+        else:
+            self._mouse_policy.disable_for_selection()
+            self.notify(
+                "Selection mode: drag to select, Cmd+C to copy. Ctrl+T to restore.",
+                timeout=4,
+            )
 
     def on_key(self, event) -> None:
         """Global key handler for app-wide shortcuts.
@@ -914,8 +1034,8 @@ class ScrappyApp(App):
             if screen.capture_manager.is_capturing:
                 screen.capture_manager.cancel()
                 # Full UI cleanup without restarting timer
-                if screen._layout:
-                    screen._layout.input.placeholder = "Type your message or command..."
+                if screen._surface:
+                    screen._surface.restore_input_placeholder()
                 screen.prompt_display.hide_prompt()
                 try:
                     from ..textual import StatusBar
@@ -947,17 +1067,19 @@ class ScrappyApp(App):
         """Handle ESC key: cancel whatever is running."""
         self._cancel_operation()
 
+    def _active_chat_surface(self) -> Any | None:
+        """Return the active screen's shared chat surface, if present."""
+        return getattr(self.screen, "_surface", None)
+
     def _get_paste_target(self) -> Optional[TextArea]:
-        """Return the focused TextArea, or the main input as a fallback."""
+        """Return the focused TextArea, or the active surface input as fallback."""
         focused = self.focused
         if isinstance(focused, TextArea):
             return focused
 
-        from ..screens import MainAppScreen
-
-        screen = self.screen
-        if isinstance(screen, MainAppScreen) and screen._layout is not None:
-            return screen._layout.input
+        surface = self._active_chat_surface()
+        if surface is not None:
+            return surface.input
 
         try:
             return self.screen.query_one(TextArea)
@@ -966,7 +1088,6 @@ class ScrappyApp(App):
 
     def _handle_copy_shortcut(self) -> bool:
         """Copy selected text from the focused input or output log."""
-        from ..screens import MainAppScreen
         from ..widgets.selectable_log import SelectableLog
 
         focused = self.focused
@@ -974,10 +1095,10 @@ class ScrappyApp(App):
             focused.action_copy()
             return True
 
-        screen = self.screen
-        if isinstance(screen, MainAppScreen) and screen._layout is not None:
-            output = screen._layout.output
-            if isinstance(output, SelectableLog) and output._has_selection():
+        surface = self._active_chat_surface()
+        if surface is not None:
+            output = surface.output
+            if isinstance(output, SelectableLog) and output.selection_text:
                 output.action_copy_selection()
                 return True
 
@@ -1012,7 +1133,7 @@ class ScrappyApp(App):
         Returns:
             True to stop event propagation, False to let it bubble.
         """
-        now = time.time()
+        now = self._now()
 
         # 1. Copy selection if available. Do this before exit-tap tracking so
         # normal clipboard use doesn't look like an exit request.

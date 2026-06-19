@@ -9,10 +9,9 @@ Test Coverage:
 5. Required provider enforcement (allow_cancel=False)
 """
 
-import pytest
 from io import StringIO
 from typing import List
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 
 from rich.console import Console
 
@@ -278,8 +277,6 @@ class TestSetupWizardMenuGeneration:
 class TestSetupWizardFlow:
     """Test wizard run flow."""
 
-
-
     def test_configure_provider_saves_valid_key(self):
         """Configuring a provider saves the key via config service."""
         io = MockIO()
@@ -321,6 +318,27 @@ class TestSetupWizardFlow:
         error_shown = any("validation failed" in msg for msg in io.output)
         assert error_shown
 
+    def test_configure_provider_rejects_missing_sanitized_key(self):
+        """A valid result without sanitized text fails closed."""
+        from scrappy.infrastructure.validation.sanitizer import ValidationResult
+
+        io = MockIO()
+        io.prompt_responses = ["valid_format_key_1234567890"]
+        mock_service = MockApiKeyConfigService()
+        mock_llm = MockLLMService(validate_key_result=(True, None))
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
+
+        with patch(
+            "scrappy.cli.setup_wizard.validate_api_key",
+            return_value=ValidationResult(is_valid=True, sanitized_value=None),
+        ):
+            result = wizard._configure_provider("groq")
+
+        assert result is False
+        assert not mock_service.save_called
+        assert not mock_llm.validate_key_calls
+        assert any("sanitized key is missing" in msg for msg in io.output)
+
 
 class TestSetupWizardActionMenu:
     """Test action menu for configured providers (update/remove)."""
@@ -331,7 +349,6 @@ class TestSetupWizardActionMenu:
         mock_service = MockApiKeyConfigService()
         # Configure the first provider (sorted by priority)
         sorted_providers = sorted(PROVIDERS.items(), key=lambda x: x[1].priority)
-        first_provider = sorted_providers[0][0]
         first_env_var = sorted_providers[0][1].env_var
         mock_service.keys = {first_env_var: "existing_key_12345"}
         mock_llm = MockLLMService()
@@ -451,6 +468,30 @@ class TestSetupWizardActionMenu:
         # Should return to menu
         from scrappy.cli.setup_wizard import WizardState
         assert wizard._state == WizardState.MENU
+
+    def test_key_input_rejects_missing_sanitized_key(self):
+        """TUI key input fails closed when validation returns no sanitized key."""
+        from scrappy.cli.setup_wizard import WizardState
+        from scrappy.infrastructure.validation.sanitizer import ValidationResult
+
+        io = MockIO()
+        mock_service = MockApiKeyConfigService()
+        mock_llm = MockLLMService(validate_key_result=(True, None))
+        wizard = SetupWizard(io, key_validator=mock_llm, config_service=mock_service)
+
+        wizard.start(allow_cancel=True)
+        wizard.handle_input("1")
+
+        with patch(
+            "scrappy.cli.setup_wizard.validate_api_key",
+            return_value=ValidationResult(is_valid=True, sanitized_value=None),
+        ):
+            wizard.handle_input("valid_format_key_1234567890")
+
+        assert wizard._state == WizardState.AWAITING_KEY
+        assert not mock_service.save_called
+        assert not mock_llm.validate_key_calls
+        assert any("sanitized key is missing" in msg for msg in io.output)
 
 
 class TestSetupWizardProviderTesting:

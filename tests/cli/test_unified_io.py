@@ -10,6 +10,7 @@ Test Matrix:
 """
 
 from typing import List, Any
+import pytest
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -198,6 +199,16 @@ class TestUnifiedIOTUIMode:
 
         assert len(sink.plain_messages) > 0
         assert "test message" in sink.get_all_output()
+
+    def test_output_sink_is_immutable_after_initialization(self):
+        """UnifiedIO does not allow runtime output sink swaps."""
+        sink = MockOutputSink()
+        io = UnifiedIO(output_sink=sink)
+
+        with pytest.raises(AttributeError):
+            io.output_sink = MockOutputSink()  # type: ignore[misc]
+
+        assert io.output_sink is sink
 
     def test_secho_posts_renderable(self):
         """TUI mode secho() posts Rich Text renderable."""

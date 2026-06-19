@@ -83,6 +83,9 @@ class RealTerminalHarnessProtocol(Protocol):
     def copy_selection_fallback(self) -> None:
         """Invoke an alternate copy shortcut when the primary one yields nothing."""
 
+    def capture_screen_artifact(self, label: str) -> Path | None:
+        """Capture the current terminal window for post-run inspection, if supported."""
+
     def append_debug_event(self, stage: str, **fields: object) -> None:
         """Persist a structured debug event for post-run inspection."""
 
