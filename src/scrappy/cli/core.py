@@ -25,6 +25,7 @@ from .utils.session_utils import display_previous_session_detected
 from .utils.cli_factory import initialize_cli_handlers, create_conversation_store
 from .error_recovery import graceful_degrade
 from .logging import get_logger
+from scrappy.infrastructure.persistence import ConversationStoreProtocol
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 
@@ -41,7 +42,8 @@ class CLI:
         io: Optional[CLIIOProtocol] = None,
         orchestrator: Optional[AgentOrchestrator] = None,
         state_manager: Optional[PlanStateManager] = None,
-        theme: Optional[ThemeProtocol] = None
+        theme: Optional[ThemeProtocol] = None,
+        conversation_store: Optional[ConversationStoreProtocol] = None
     ):
         """
         Initialize CLI with orchestrator and component handlers (dependencies only - NO side effects).
@@ -62,6 +64,9 @@ class CLI:
             orchestrator: Injectable orchestrator instance (default: creates new AgentOrchestrator)
             state_manager: Injectable state manager (default: creates new PlanStateManager)
             theme: Theme for styling. Defaults to DEFAULT_THEME.
+            conversation_store: Injectable persistence store (default: creates one
+                via create_conversation_store, which performs filesystem I/O).
+                Inject a store (or fake) to keep construction side effect free.
         """
         # Store config for factory methods and initialization
         self._brain = brain
@@ -79,14 +84,19 @@ class CLI:
         # Initialize state manager for plan tracking
         self.state_manager = state_manager or self._create_default_state_manager()
 
-        # Create conversation store for persistence
-        conversation_store = create_conversation_store(self.orchestrator)
+        # Create conversation store for persistence (injectable; the default path
+        # performs filesystem I/O, so tests inject a store to keep __init__ side
+        # effect free). Default on `is None` rather than truthiness: this dependency
+        # is Protocol-typed, so an implementation with a falsy __bool__/__len__ must
+        # not be silently replaced (matches SessionContext's `is not None` check).
+        if conversation_store is None:
+            conversation_store = create_conversation_store(self.orchestrator)
 
         # Load previous conversation history from store (token-budgeted)
         loaded_history = []
         self._session_is_stale = False
 
-        if conversation_store:
+        if conversation_store is not None:
             loaded_history = conversation_store.get_recent(token_budget=8000)
 
             # Check staleness for LLM context injection (helps LLM know context may be outdated)

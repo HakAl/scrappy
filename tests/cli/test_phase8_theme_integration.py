@@ -7,17 +7,15 @@ Verifies that:
 - Theme flows from config through to CLI components
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from scrappy.cli.cli_config import CLIConfig
+from scrappy.infrastructure.persistence import ConversationStoreProtocol
 from scrappy.infrastructure.theme import (
     ScrappyTheme,
     LightTheme,
     CustomTheme,
-    NoColorTheme,
     DEFAULT_THEME,
-    ThemeProtocol,
 )
 
 
@@ -179,6 +177,12 @@ class TestCLICoreTheme:
             "agent_mgr": MagicMock(),
         }
 
+    def _mock_store(self):
+        """Conversation store double that loads no history (no filesystem I/O)."""
+        store = MagicMock(spec=ConversationStoreProtocol)
+        store.get_recent.return_value = []
+        return store
+
     def test_cli_stores_theme(self):
         """CLI should store the theme."""
         from scrappy.cli.core import CLI
@@ -190,7 +194,7 @@ class TestCLICoreTheme:
             with patch.object(CLI, "_create_default_io") as mock_io:
                 mock_io.return_value = MagicMock()
                 with patch("scrappy.cli.core.initialize_cli_handlers", return_value=self._mock_handlers()):
-                    cli = CLI(theme=theme)
+                    cli = CLI(theme=theme, conversation_store=self._mock_store())
                     assert cli._theme is theme
 
     def test_cli_uses_default_theme(self):
@@ -202,8 +206,31 @@ class TestCLICoreTheme:
             with patch.object(CLI, "_create_default_io") as mock_io:
                 mock_io.return_value = MagicMock()
                 with patch("scrappy.cli.core.initialize_cli_handlers", return_value=self._mock_handlers()):
-                    cli = CLI()
+                    cli = CLI(conversation_store=self._mock_store())
                     assert cli._theme is DEFAULT_THEME
+
+    def test_injected_conversation_store_skips_default_io(self):
+        """Injecting a store bypasses create_conversation_store, so __init__ does no
+        filesystem I/O.
+
+        Regression guard for scrappy-g5mx: with a mocked orchestrator and the default
+        store path, the constructor wrote .scrappy/config.json to a Mock-derived path,
+        leaking junk files into CWD. The injectable seam must short-circuit that.
+        """
+        from scrappy.cli.core import CLI
+
+        with patch.object(CLI, "_create_default_orchestrator") as mock_orch:
+            mock_orch.return_value = MagicMock()
+            with patch.object(CLI, "_create_default_io") as mock_io:
+                mock_io.return_value = MagicMock()
+                with patch("scrappy.cli.core.initialize_cli_handlers", return_value=self._mock_handlers()):
+                    with patch("scrappy.cli.core.create_conversation_store") as mock_create:
+                        # Benign return so a regression (unconditional create) still
+                        # constructs cleanly and fails at the assertion below, not via
+                        # an incidental error in history loading.
+                        mock_create.return_value = self._mock_store()
+                        CLI(conversation_store=self._mock_store())
+                        mock_create.assert_not_called()
 
 
 
