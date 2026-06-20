@@ -48,13 +48,13 @@ class CLI:
         """
         Initialize CLI with orchestrator and component handlers.
 
-        Construction defers all conversation-persistence and command-history
-        filesystem I/O to initialize(): the default conversation store, history
-        loading, staleness checks, and the file-backed command history are created
-        there, not here. Construction is not yet fully side effect free, because the
-        default orchestrator still initializes providers in _create_default_orchestrator
-        (tracked separately as PR-B of scrappy-cli-init-side-effects); inject an
-        orchestrator and a conversation_store to keep construction free of I/O today.
+        Construction is side effect free: it assigns dependencies and builds bare
+        objects only. All I/O is deferred to initialize() -- the default
+        orchestrator's provider/brain setup and exploration (orch.initialize), the
+        default conversation store, history loading, staleness checks, and the
+        file-backed command history are all created there, not here. The default
+        orchestrator is built as a bare object in __init__ but not initialized until
+        initialize() runs.
 
         Call initialize() after construction to perform setup and display initialization messages.
 
@@ -86,6 +86,11 @@ class CLI:
 
         # Initialize dependencies using factory methods
         self.io = io or self._create_default_io()
+        # The default orchestrator is built as a bare object here; its provider
+        # probing / brain setup / exploration (orch.initialize) is deferred to
+        # CLI.initialize() so construction performs no I/O. An injected orchestrator
+        # is the caller's responsibility and is never initialized by the CLI.
+        self._orchestrator_is_default = orchestrator is None
         self.orchestrator = orchestrator or self._create_default_orchestrator()
         self.session_start = datetime.now()
 
@@ -142,7 +147,9 @@ class CLI:
             self (for method chaining)
         """
 
-        # Perform the filesystem I/O deferred out of __init__.
+        # Perform the setup/I/O deferred out of __init__. Orchestrator setup runs
+        # first so providers/brain are ready before conversation state loads.
+        self._initialize_orchestrator()
         self._load_persisted_conversation()
         self._load_command_history()
 
@@ -209,20 +216,36 @@ class CLI:
         return UnifiedIO(output_sink=output_adapter, theme=self._theme)
 
     def _create_default_orchestrator(self) -> AgentOrchestrator:
-        """Create default orchestrator."""
-        orch = AgentOrchestrator(
+        """Build the default orchestrator object (no provider setup / I/O).
+
+        Provider probing, brain setup, and exploration are deferred to
+        _initialize_orchestrator(), called from initialize(), so construction
+        stays side effect free. AgentOrchestrator.__init__ itself assigns
+        dependencies only.
+        """
+        return AgentOrchestrator(
             project_path=".",
             context_aware=self._context_aware,
             verbose_selection=self._verbose_selection,
             enable_semantic_search=True,  # Enable for CLI usage
         )
-        orch.initialize(
+
+    def _initialize_orchestrator(self) -> None:
+        """Set up the default orchestrator's providers/brain/exploration.
+
+        Deferred out of __init__ because it performs I/O (provider probing,
+        optional codebase exploration). Only the CLI-created default orchestrator
+        is initialized; an injected orchestrator is the caller's responsibility and
+        is left untouched (mirrors the injected conversation-store contract).
+        """
+        if not self._orchestrator_is_default:
+            return
+        self.orchestrator.initialize(
             auto_register=True,
             orchestrator_provider=self._brain,
             auto_explore=self._auto_explore,
-            show_provider_status=self._show_provider_status
+            show_provider_status=self._show_provider_status,
         )
-        return orch
 
     def _create_default_state_manager(self) -> PlanStateManager:
         """Create default state manager."""

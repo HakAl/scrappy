@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 from scrappy.cli.command_history import get_default_history_path
 from scrappy.cli.core import CLI
+from scrappy.orchestrator import AgentOrchestrator
 from scrappy.infrastructure.persistence import ConversationStoreProtocol
 
 
@@ -87,6 +88,65 @@ def test_initialize_creates_default_store_and_loads_history():
                         ]
                         # Command history rebuilt against the real default path.
                         mock_cmd_history.assert_any_call(history_file=get_default_history_path())
+
+
+def test_init_does_not_initialize_default_orchestrator():
+    """PR-B: constructing the CLI builds the default orchestrator object but must
+    not call its initialize() (provider probing / brain setup / exploration). That
+    side-effectful setup is deferred to CLI.initialize()."""
+    fake_orch = MagicMock()
+    with patch("scrappy.cli.core.AgentOrchestrator", return_value=fake_orch):
+        with patch.object(CLI, "_create_default_io", return_value=MagicMock()):
+            with patch("scrappy.cli.core.initialize_cli_handlers", return_value=_mock_handlers()):
+                with patch("scrappy.cli.core.create_conversation_store"):
+                    with patch("scrappy.cli.core.CommandHistory"):
+                        cli = CLI()
+
+                        assert cli.orchestrator is fake_orch
+                        fake_orch.initialize.assert_not_called()
+
+
+def test_initialize_initializes_default_orchestrator_with_config():
+    """PR-B: CLI.initialize() must initialize the default orchestrator exactly once,
+    forwarding the construction-time config (brain, auto_explore, provider status)."""
+    fake_orch = MagicMock()
+    with patch("scrappy.cli.core.AgentOrchestrator", return_value=fake_orch):
+        with patch.object(CLI, "_create_default_io", return_value=MagicMock()):
+            with patch("scrappy.cli.core.initialize_cli_handlers", return_value=_mock_handlers()):
+                with patch("scrappy.cli.core.create_conversation_store", return_value=None):
+                    with patch("scrappy.cli.core.CommandHistory"):
+                        cli = CLI(
+                            brain="myprov",
+                            auto_explore=True,
+                            show_provider_status=True,
+                        )
+                        fake_orch.initialize.assert_not_called()
+
+                        cli.initialize(offer_session_restore=False)
+
+                        fake_orch.initialize.assert_called_once_with(
+                            auto_register=True,
+                            orchestrator_provider="myprov",
+                            auto_explore=True,
+                            show_provider_status=True,
+                        )
+
+
+def test_injected_orchestrator_is_never_initialized_by_cli():
+    """PR-B: an injected orchestrator is the caller's responsibility. The CLI must
+    not call initialize() on it in __init__ or in CLI.initialize() (mirrors the
+    injected-store contract)."""
+    injected = MagicMock(spec=AgentOrchestrator)
+    with patch.object(CLI, "_create_default_io", return_value=MagicMock()):
+        with patch("scrappy.cli.core.initialize_cli_handlers", return_value=_mock_handlers()):
+            with patch("scrappy.cli.core.create_conversation_store", return_value=None):
+                with patch("scrappy.cli.core.CommandHistory"):
+                    cli = CLI(orchestrator=injected)
+                    injected.initialize.assert_not_called()
+
+                    cli.initialize(offer_session_restore=False)
+
+                    injected.initialize.assert_not_called()
 
 
 def test_injected_store_is_never_replaced_by_default():

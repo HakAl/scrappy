@@ -108,7 +108,15 @@ class ScrappyApp(App):
             interactive_mode: The InteractiveMode instance (immediate mode)
             output_adapter: The TextualOutputAdapter to consume messages from
             theme: Optional theme for consistent styling
-            cli_factory: Factory function to create CLI (deferred mode)
+            cli_factory: Factory function to create CLI (deferred mode). It is
+                called on a background thread and MUST return a CLI that the app
+                can wire directly into interactive mode. If the orchestrator needs
+                to be operational (a brain/provider configured), the factory must
+                return an INITIALIZED CLI -- call cli.initialize() before returning,
+                as the production factory create_cli_from_context does. CLI
+                construction is side effect free since the ctor I/O deferral, so a
+                bare CLI() yields an UNINITIALIZED orchestrator (no brain); that is
+                fine only for tests that never exercise the orchestrator.
             clipboard: Clipboard service for OS clipboard integration
             mouse_policy: Terminal mouse reporting policy
             now: Monotonic-ish clock for double-tap timing (injectable for
