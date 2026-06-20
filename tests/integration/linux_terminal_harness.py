@@ -85,6 +85,29 @@ def _find_free_display_number(
     raise LinuxHarnessError("Unable to find a free X display number for Xephyr")
 
 
+def build_app_launch_command(
+    venv_python: Path, entry_module: str, app_stderr_path: Path
+) -> list[str]:
+    """Build the ``xterm -e`` command that runs the app with its stderr captured.
+
+    xterm routes a child's stderr to its PTY, so an app crash (for example a Python
+    import error before readiness) would otherwise be invisible to the harness. The
+    launch is wrapped in ``sh -c 'exec ... 2>>file'`` so the app's stderr is appended
+    to a captured file while stdout stays on the PTY and the terminal UI still renders.
+    ``exec`` replaces the shell with python, so the process tree stays ``xterm -> python``
+    and liveness polling of the xterm child is unaffected. Paths are passed as shell
+    positional arguments to avoid quoting issues.
+    """
+    return [
+        "sh",
+        "-c",
+        'exec "$0" -m "$1" 2>>"$2"',
+        str(venv_python),
+        entry_module,
+        str(app_stderr_path),
+    ]
+
+
 class LinuxTerminalHarness(RealTerminalHarnessProtocol):
     """Linux implementation using Xephyr, xterm, xdotool, and xclip."""
 
@@ -99,6 +122,7 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
         self._xterm_process: subprocess.Popen[str] | None = None
         self._xephyr_stderr: CapturedStream | None = None
         self._xterm_stderr: CapturedStream | None = None
+        self._app_stderr: CapturedStream | None = None
         self._window_id: int | None = None
 
     def launch(self, session: RealTerminalSessionSpec) -> None:
@@ -129,6 +153,7 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
         self._wait_for_display_socket(display_number)
 
         self._xterm_stderr = CapturedStream.create("scrappy-xterm-")
+        self._app_stderr = CapturedStream.create("scrappy-app-")
         self._xterm_process = subprocess.Popen(
             [
                 "xterm",
@@ -137,9 +162,9 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
                 "-T",
                 session.title,
                 "-e",
-                str(session.venv_python),
-                "-m",
-                session.entry_module,
+                *build_app_launch_command(
+                    session.venv_python, session.entry_module, self._app_stderr.path
+                ),
             ],
             cwd=str(session.fixture_repo),
             env=self._cached_display_env,
@@ -183,16 +208,20 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
         return LaunchLiveness(alive=False, exit_code=code)
 
     def drain_launch_diagnostics(self) -> str:
-        """Return the captured xterm process-stderr tail.
+        """Return the launched app's captured stderr, falling back to xterm's own.
 
-        This is xterm's own stderr (X protocol/display/font errors that explain a
-        failed launch), not the launched app's stdout/stderr, which xterm routes to its
-        PTY. It is the diagnostic that was previously discarded to DEVNULL.
+        The app runs as ``xterm -e sh -c 'exec python ... 2>>file'``, so a Python crash
+        before readiness (the motivating app-death case) lands in the app-stderr file
+        rather than being lost to the PTY. When the app wrote nothing, fall back to
+        xterm's own stderr (X protocol/display/font errors that explain a failed launch),
+        which is the diagnostic that was previously discarded to DEVNULL.
         """
-        captured = self._xterm_stderr
-        if captured is None:
-            return ""
-        return captured.read_tail()
+        app = self._app_stderr
+        app_tail = app.read_tail() if app is not None else ""
+        if app_tail.strip():
+            return app_tail
+        xterm = self._xterm_stderr
+        return xterm.read_tail() if xterm is not None else ""
 
     def clear_clipboard(self) -> None:
         """Clear the X11 CLIPBOARD selection on the nested display."""
@@ -327,11 +356,12 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
             self._terminate_process(xephyr_process)
             self.append_debug_event("xephyr_closed", pid=xephyr_process.pid, display=self._display)
 
-        for captured in (self._xterm_stderr, self._xephyr_stderr):
+        for captured in (self._xterm_stderr, self._xephyr_stderr, self._app_stderr):
             if captured is not None:
                 captured.cleanup()
         self._xterm_stderr = None
         self._xephyr_stderr = None
+        self._app_stderr = None
 
     def _stderr_suffix(self, captured: CapturedStream | None) -> str:
         """Format a captured-stderr tail for inclusion in a launch-failure message."""
