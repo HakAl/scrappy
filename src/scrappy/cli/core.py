@@ -46,7 +46,15 @@ class CLI:
         conversation_store: Optional[ConversationStoreProtocol] = None
     ):
         """
-        Initialize CLI with orchestrator and component handlers (dependencies only - NO side effects).
+        Initialize CLI with orchestrator and component handlers.
+
+        Construction defers all conversation-persistence and command-history
+        filesystem I/O to initialize(): the default conversation store, history
+        loading, staleness checks, and the file-backed command history are created
+        there, not here. Construction is not yet fully side effect free, because the
+        default orchestrator still initializes providers in _create_default_orchestrator
+        (tracked separately as PR-B of scrappy-cli-init-side-effects); inject an
+        orchestrator and a conversation_store to keep construction free of I/O today.
 
         Call initialize() after construction to perform setup and display initialization messages.
 
@@ -84,35 +92,22 @@ class CLI:
         # Initialize state manager for plan tracking
         self.state_manager = state_manager or self._create_default_state_manager()
 
-        # Create conversation store for persistence (injectable; the default path
-        # performs filesystem I/O, so tests inject a store to keep __init__ side
-        # effect free). Default on `is None` rather than truthiness: this dependency
-        # is Protocol-typed, so an implementation with a falsy __bool__/__len__ must
-        # not be silently replaced (matches SessionContext's `is not None` check).
-        if conversation_store is None:
-            conversation_store = create_conversation_store(self.orchestrator)
-
-        # Load previous conversation history from store (token-budgeted)
-        loaded_history = []
+        # Conversation persistence is injectable. Default-store creation, history
+        # loading, and staleness checks all perform filesystem I/O, so they are
+        # deferred to initialize() (see _load_persisted_conversation). __init__ only
+        # holds the injected store (or None) and builds an empty session context so
+        # the attribute exists right after construction; initialize() rebuilds it
+        # with the loaded history. An injected store is held as-is and never
+        # replaced -- it is Protocol-typed, so a falsy __bool__/__len__ must not
+        # trigger a silent default.
+        self._conversation_store = conversation_store
         self._session_is_stale = False
 
-        if conversation_store is not None:
-            loaded_history = conversation_store.get_recent(token_budget=8000)
-
-            # Check staleness for LLM context injection (helps LLM know context may be outdated)
-            if loaded_history:
-                from scrappy.infrastructure.persistence import check_session_staleness, get_stale_context_message
-                last_time = conversation_store.get_last_message_time()
-                if check_session_staleness(last_time):
-                    self._session_is_stale = True
-                    # Inject system message to inform LLM about stale context
-                    loaded_history = [get_stale_context_message()] + loaded_history
-
-        # Create session context for shared state management with loaded history
+        # Create session context for shared state management (history loaded later)
         self.session_context = SessionContext(
-            conversation_history=loaded_history,
+            conversation_history=[],
             conversation_store=conversation_store,
-            was_stale_at_load=self._session_is_stale
+            was_stale_at_load=False,
         )
 
         # Initialize component handlers using factory (pass theme)
@@ -125,9 +120,10 @@ class CLI:
         self.tasks = handlers['tasks']
         self.agent_mgr = handlers['agent_mgr']
 
-        # Initialize command history for CLI mode (enables up/down arrow navigation)
-        # TUI mode uses Textual's TextArea which has its own history
-        self.command_history = CommandHistory(history_file=get_default_history_path())
+        # Command history for CLI mode (enables up/down arrow navigation). Starts
+        # in-memory (no I/O); initialize() loads the file-backed history via
+        # _load_command_history. TUI mode uses Textual's TextArea history.
+        self.command_history = CommandHistory(history_file=None)
         self.input_handler = InputHandler(self.io, history=self.command_history)
 
         # Logger for structured logging
@@ -146,6 +142,10 @@ class CLI:
             self (for method chaining)
         """
 
+        # Perform the filesystem I/O deferred out of __init__.
+        self._load_persisted_conversation()
+        self._load_command_history()
+
         # Silently restore previous session (working memory: files, searches, etc.)
         if offer_session_restore:
             self._silent_session_restore()
@@ -153,6 +153,48 @@ class CLI:
         self.io.echo()
 
         return self
+
+    def _load_persisted_conversation(self) -> None:
+        """Load previously persisted conversation history into the session context.
+
+        Deferred out of __init__ because it performs filesystem I/O: it creates the
+        default conversation store when none was injected, reads token-budgeted
+        recent history, and checks staleness. Rebuilds self.session_context with the
+        loaded history; safe because session_context consumers run after initialize().
+        """
+        store = self._conversation_store
+        if store is None:
+            store = create_conversation_store(self.orchestrator)
+            self._conversation_store = store
+
+        loaded_history: list = []
+        if store is not None:
+            loaded_history = store.get_recent(token_budget=8000)
+
+            # Staleness informs the LLM that restored context may be outdated.
+            if loaded_history:
+                from scrappy.infrastructure.persistence import (
+                    check_session_staleness,
+                    get_stale_context_message,
+                )
+                last_time = store.get_last_message_time()
+                if check_session_staleness(last_time):
+                    self._session_is_stale = True
+                    loaded_history = [get_stale_context_message()] + loaded_history
+
+        self.session_context = SessionContext(
+            conversation_history=loaded_history,
+            conversation_store=store,
+            was_stale_at_load=self._session_is_stale,
+        )
+
+    def _load_command_history(self) -> None:
+        """Load the file-backed command history (creates ~/.scrappy and reads it).
+
+        Deferred out of __init__; until called, an in-memory history is used.
+        """
+        self.command_history = CommandHistory(history_file=get_default_history_path())
+        self.input_handler = InputHandler(self.io, history=self.command_history)
 
     # Factory methods for default dependencies
 
