@@ -19,8 +19,17 @@ from tests.integration.windows_console_harness import (
 @dataclass
 class _FakeProcess:
     pid: int
+    poll_result: int | None = None
     wait_calls: int = 0
     kill_calls: int = 0
+
+    @property
+    def returncode(self) -> int | None:
+        return self.poll_result
+
+    def poll(self) -> int | None:
+        """Mirror subprocess.Popen.poll: None while alive, the exit code once done."""
+        return self.poll_result
 
     def wait(self, timeout: float) -> None:
         self.wait_calls += 1
@@ -120,9 +129,10 @@ def _build_owned_console(
     foreground_hwnd: int = 222,
     owner_pid: int = 101,
     foreground_sequence: list[int] | None = None,
+    poll_result: int | None = None,
 ) -> OwnedConsoleWindow:
     return OwnedConsoleWindow(
-        process=_FakeProcess(pid=pid),
+        process=_FakeProcess(pid=pid, poll_result=poll_result),
         title="owned-console",
         hwnd=hwnd,
         window=_FakeWindow(),
@@ -159,6 +169,17 @@ def test_close_refuses_pid_mismatch():
 
     with pytest.raises(IsolationError, match="Refusing teardown because window pid 404 no longer matches owned pid 101"):
         owned.close()
+
+
+def test_close_reaps_already_exited_host_without_pid_check():
+    """A host that already exited (it now propagates an app crash's exit code) is reaped
+    directly, skipping the foreground pid-match guard that would otherwise fail against
+    the already-gone console window."""
+    owned = _build_owned_console(owner_pid=404, poll_result=3)
+
+    owned.close()  # must not raise despite the pid mismatch, because the host is dead
+
+    assert owned.process.wait_calls == 1
 
 
 def test_drag_relative_aborts_when_foreground_changes(monkeypatch: pytest.MonkeyPatch):

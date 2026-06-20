@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import types
 from typing import Any
@@ -16,7 +17,14 @@ from typing import Any
 import pyperclip
 import pytest
 
-from .real_terminal_harness import RealTerminalHarnessProtocol, RealTerminalSessionSpec, RelativeSelection
+from .real_terminal_harness import (
+    DEFAULT_DIAGNOSTICS_TAIL_CHARS,
+    LaunchLiveness,
+    RealTerminalHarnessProtocol,
+    RealTerminalSessionSpec,
+    RelativeSelection,
+    wait_for_ready_file,
+)
 
 
 CONSOLE_READY_TIMEOUT_SECONDS = 20.0
@@ -313,6 +321,17 @@ class OwnedConsoleWindow:
         if self.process.pid <= 0:
             return
 
+        # The host now exits with the app on a crash (no -NoExit), so by teardown it
+        # may already be gone and its window with it. Reap it directly and skip the
+        # foreground pid-match guard, which would spuriously fail against a missing
+        # window.
+        if self.process.poll() is not None:
+            self.process.wait(timeout=5)
+            self.debug_log.append(
+                f"closed (already exited) pid={self.process.pid} code={self.process.returncode}"
+            )
+            return
+
         foreground_hwnd = self.win32gui.GetForegroundWindow()
         _, window_pid = self.win32process.GetWindowThreadProcessId(self.hwnd)
         if window_pid != self.process.pid:
@@ -345,16 +364,6 @@ class OwnedConsoleWindow:
         return path
 
 
-def _wait_for_file(path: Path, *, timeout_seconds: float, description: str) -> None:
-    """Wait for a file-based readiness marker produced by the launched app."""
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if path.exists():
-            return
-        time.sleep(0.1)
-    raise IsolationError(f"Timed out waiting for {description} at {path}")
-
-
 def launch_owned_console(
     *,
     title: str,
@@ -371,11 +380,14 @@ def launch_owned_console(
     encoded_script = _encode_powershell_command(
         f"$host.UI.RawUI.WindowTitle = '{safe_title}'\n{script}\n"
     )
+    # No -NoExit: the host must terminate when the launched app exits so that an
+    # app-only crash (Python dying before readiness) ends the host process and is
+    # observable via process liveness. The script ends with `exit $LASTEXITCODE`, so
+    # the host's exit code mirrors the app's.
     process = subprocess.Popen(
         [
             "powershell.exe",
             "-NoLogo",
-            "-NoExit",
             "-EncodedCommand",
             encoded_script,
         ],
@@ -418,6 +430,7 @@ class WindowsOwnedConsoleHarness(RealTerminalHarnessProtocol):
         self._console: OwnedConsoleWindow | None = None
         self._session: RealTerminalSessionSpec | None = None
         self._previous_clipboard: str = ""
+        self._app_stderr_path: Path | None = None
 
     def launch(self, session: RealTerminalSessionSpec) -> None:
         """Launch scrappy in an owned PowerShell console."""
@@ -426,6 +439,16 @@ class WindowsOwnedConsoleHarness(RealTerminalHarnessProtocol):
             _validate_env_var_name(key)
 
         self._previous_clipboard = pyperclip.paste()
+
+        # Capture the launched app's stderr to a file so a Python crash before
+        # readiness is preserved rather than scrolling past in the console. The temp
+        # handle is closed immediately so PowerShell can open the path for writing
+        # (Windows would otherwise raise a sharing violation against an open handle).
+        stderr_tmp = tempfile.NamedTemporaryFile(
+            prefix="scrappy-winapp-", suffix=".stderr.log", delete=False
+        )
+        stderr_tmp.close()
+        self._app_stderr_path = Path(stderr_tmp.name)
 
         launch_script_lines = [
             f"Set-Location -LiteralPath '{_escape_powershell_single_quoted(str(session.fixture_repo))}'",
@@ -438,7 +461,12 @@ class WindowsOwnedConsoleHarness(RealTerminalHarnessProtocol):
             [
                 f"$env:SCRAPPY_INTEGRATION_LOG_PATH = '{_escape_powershell_single_quoted(str(session.debug_log_path))}'",
                 f"$env:SCRAPPY_READY_FILE = '{_escape_powershell_single_quoted(str(session.ready_file))}'",
-                f"& '{_escape_powershell_single_quoted(str(session.venv_python))}' -m {session.entry_module}",
+                # Redirect app stderr to the capture file (stdout stays on the console
+                # so the TUI still renders), then propagate the app's exit code so the
+                # host (launched without -NoExit) dies with the child on a crash.
+                f"& '{_escape_powershell_single_quoted(str(session.venv_python))}' -m {session.entry_module}"
+                f" 2> '{_escape_powershell_single_quoted(str(self._app_stderr_path))}'",
+                "exit $LASTEXITCODE",
             ]
         )
         launch_script = "\n".join(launch_script_lines) + "\n"
@@ -452,13 +480,53 @@ class WindowsOwnedConsoleHarness(RealTerminalHarnessProtocol):
         self.append_debug_event("console_launched", pid=self._console.pid, hwnd=self._console.hwnd)
 
     def wait_until_ready(self, timeout_seconds: float) -> None:
-        """Wait for the app's file-based readiness signal."""
+        """Wait for readiness, failing fast if the owned console dies before signaling."""
         session = self._require_session()
-        _wait_for_file(
-            session.ready_file,
+        wait_for_ready_file(
+            ready_file=session.ready_file,
+            probe=self.probe_launched_app,
+            drain_diagnostics=self.drain_launch_diagnostics,
             timeout_seconds=timeout_seconds,
-            description="scrappy readiness signal",
+            error_factory=IsolationError,
         )
+
+    def probe_launched_app(self) -> LaunchLiveness:
+        """Report liveness from the owned PowerShell console process.
+
+        The host is launched without ``-NoExit`` and its script ends with
+        ``exit $LASTEXITCODE``, so when the inner python process crashes the host exits
+        with the app's code rather than dropping to a prompt. Polling the host process
+        therefore detects an app-only crash and reports the propagated exit code, which
+        lets the readiness wait fail fast instead of blocking to the timeout. The exit
+        code path could not be verified from macOS.
+        """
+        console = self._console
+        if console is None:
+            return LaunchLiveness(alive=True)
+        code = console.process.poll()
+        if code is None:
+            return LaunchLiveness(alive=True)
+        return LaunchLiveness(alive=False, exit_code=code)
+
+    def drain_launch_diagnostics(self) -> str:
+        """Return the launched app's captured stderr, falling back to the debug log.
+
+        The app's stderr is redirected to a capture file in the launch script, so a
+        Python crash before readiness lands there. When that file is empty (for example
+        a host/console failure before the app ran), fall back to the structured
+        debug-event trail.
+        """
+        path = self._app_stderr_path
+        if path is not None:
+            try:
+                tail = path.read_text(encoding="utf-8", errors="replace")[-DEFAULT_DIAGNOSTICS_TAIL_CHARS:]
+            except OSError:
+                tail = ""
+            if tail.strip():
+                return tail
+        if not self.debug_log:
+            return ""
+        return "\n".join(self.debug_log[-20:])
 
     def clear_clipboard(self) -> None:
         """Clear the Windows clipboard."""
@@ -540,6 +608,13 @@ class WindowsOwnedConsoleHarness(RealTerminalHarnessProtocol):
                 self.append_debug_event("clipboard_restored")
             except pyperclip.PyperclipException:
                 pass
+            stderr_path = self._app_stderr_path
+            if stderr_path is not None:
+                try:
+                    stderr_path.unlink()
+                except OSError:
+                    pass
+                self._app_stderr_path = None
 
     def _require_console(self) -> OwnedConsoleWindow:
         """Return the launched console or fail if launch() was never called."""

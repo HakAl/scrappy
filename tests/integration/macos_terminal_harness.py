@@ -13,7 +13,13 @@ from typing import Any
 
 import pytest
 
-from .real_terminal_harness import RealTerminalHarnessProtocol, RealTerminalSessionSpec, RelativeSelection
+from .real_terminal_harness import (
+    LaunchLiveness,
+    RealTerminalHarnessProtocol,
+    RealTerminalSessionSpec,
+    RelativeSelection,
+    wait_for_ready_file,
+)
 
 
 MACOS_REQUIRED_TOOLS = ("osascript", "pbcopy", "pbpaste")
@@ -51,16 +57,6 @@ def _parse_launch_identity(output: str) -> tuple[int, str]:
     return int(window_id_text), session_id
 
 
-def _wait_for_file(path: Path, *, timeout_seconds: float, description: str) -> None:
-    """Wait for a file-based readiness marker produced by the launched app."""
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if path.exists():
-            return
-        time.sleep(0.1)
-    raise MacOSHarnessError(f"Timed out waiting for {description} at {path}")
-
-
 class MacOSTerminalHarness(RealTerminalHarnessProtocol):
     """macOS implementation using iTerm2 session ownership and frontmost-app guards."""
 
@@ -88,8 +84,9 @@ class MacOSTerminalHarness(RealTerminalHarnessProtocol):
             [
                 'tell application "iTerm2"',
                 "activate",
-                f'set newWindow to (create window with default profile command "{_escape_applescript_string(shell_command)}")',
+                "set newWindow to (create window with default profile)",
                 "set newSession to current session of current tab of newWindow",
+                f'tell newSession to write text "{_escape_applescript_string(shell_command)}"',
                 'return ((id of newWindow) as string) & "|" & (unique id of newSession)',
                 "end tell",
             ]
@@ -102,12 +99,81 @@ class MacOSTerminalHarness(RealTerminalHarnessProtocol):
         )
 
     def wait_until_ready(self, timeout_seconds: float) -> None:
-        """Wait for the app's file-based readiness signal."""
+        """Wait for readiness, failing fast if the iTerm2 session dies before signaling."""
         session = self._require_session()
-        _wait_for_file(
-            session.ready_file,
+        wait_for_ready_file(
+            ready_file=session.ready_file,
+            probe=self.probe_launched_app,
+            drain_diagnostics=self.drain_launch_diagnostics,
             timeout_seconds=timeout_seconds,
-            description="scrappy readiness signal",
+            # osascript polling is costly; a coarser interval keeps the wait cheap.
+            poll_interval_seconds=0.25,
+            error_factory=MacOSHarnessError,
+        )
+
+    def probe_launched_app(self) -> LaunchLiveness:
+        """Report liveness via ownership of the launched iTerm2 window.
+
+        macOS launches the app inside an iTerm2 session (``exec python -m ...``) rather
+        than as a direct child, so there is no process handle to poll and no exit code
+        to read. Death is detected by the owned window disappearing when the session's
+        process ends; the exit code is therefore reported as unknown (None). Profiles
+        configured to keep the session open after the process exits cannot be detected
+        this way and fall through to the timeout path (still reported with diagnostics).
+        """
+        if self._window_id is None:
+            return LaunchLiveness(alive=True)
+        if self._owned_window_exists():
+            return LaunchLiveness(alive=True)
+        return LaunchLiveness(alive=False, exit_code=None)
+
+    def drain_launch_diagnostics(self) -> str:
+        """Return the visible iTerm2 session text as launch diagnostics.
+
+        The launched app's stderr is rendered into the iTerm2 session rather than a
+        capturable pipe, so the on-screen text (which includes any startup traceback)
+        is the best available diagnostic.
+        """
+        session_unique_id = self._session_unique_id
+        if session_unique_id is None:
+            return ""
+        try:
+            return self._read_owned_session_text(session_unique_id)
+        except MacOSHarnessError:
+            return ""
+
+    def _owned_window_exists(self) -> bool:
+        """Return True if the recorded iTerm2 window id is still present."""
+        window_id = self._require_window_id()
+        output = self._run_osascript(
+            [
+                'tell application "iTerm2"',
+                "repeat with aWindow in windows",
+                f'if id of aWindow is {window_id} then return "yes"',
+                "end repeat",
+                'return "no"',
+                "end tell",
+            ],
+            check=False,
+        )
+        return output.strip() == "yes"
+
+    def _read_owned_session_text(self, session_unique_id: str) -> str:
+        """Return the visible text of the owned iTerm2 session, or empty if it is gone."""
+        return self._run_osascript(
+            [
+                'tell application "iTerm2"',
+                "repeat with aWindow in windows",
+                "repeat with aTab in tabs of aWindow",
+                "repeat with aSession in sessions of aTab",
+                f'if unique id of aSession is "{session_unique_id}" then return (text of aSession)',
+                "end repeat",
+                "end repeat",
+                "end repeat",
+                'return ""',
+                "end tell",
+            ],
+            check=False,
         )
 
     def clear_clipboard(self) -> None:

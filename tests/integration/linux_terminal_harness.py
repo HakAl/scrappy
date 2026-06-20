@@ -14,7 +14,14 @@ from typing import Mapping
 
 import pytest
 
-from .real_terminal_harness import RealTerminalHarnessProtocol, RealTerminalSessionSpec, RelativeSelection
+from .real_terminal_harness import (
+    CapturedStream,
+    LaunchLiveness,
+    RealTerminalHarnessProtocol,
+    RealTerminalSessionSpec,
+    RelativeSelection,
+    wait_for_ready_file,
+)
 
 
 LINUX_REQUIRED_TOOLS = ("Xephyr", "xterm", "xdotool", "xclip")
@@ -78,14 +85,27 @@ def _find_free_display_number(
     raise LinuxHarnessError("Unable to find a free X display number for Xephyr")
 
 
-def _wait_for_file(path: Path, *, timeout_seconds: float, description: str) -> None:
-    """Wait for a file-based readiness marker produced by the launched app."""
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if path.exists():
-            return
-        time.sleep(0.1)
-    raise LinuxHarnessError(f"Timed out waiting for {description} at {path}")
+def build_app_launch_command(
+    venv_python: Path, entry_module: str, app_stderr_path: Path
+) -> list[str]:
+    """Build the ``xterm -e`` command that runs the app with its stderr captured.
+
+    xterm routes a child's stderr to its PTY, so an app crash (for example a Python
+    import error before readiness) would otherwise be invisible to the harness. The
+    launch is wrapped in ``sh -c 'exec ... 2>>file'`` so the app's stderr is appended
+    to a captured file while stdout stays on the PTY and the terminal UI still renders.
+    ``exec`` replaces the shell with python, so the process tree stays ``xterm -> python``
+    and liveness polling of the xterm child is unaffected. Paths are passed as shell
+    positional arguments to avoid quoting issues.
+    """
+    return [
+        "sh",
+        "-c",
+        'exec "$0" -m "$1" 2>>"$2"',
+        str(venv_python),
+        entry_module,
+        str(app_stderr_path),
+    ]
 
 
 class LinuxTerminalHarness(RealTerminalHarnessProtocol):
@@ -100,6 +120,9 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
         self._cached_display_env: dict[str, str] | None = None
         self._xephyr_process: subprocess.Popen[str] | None = None
         self._xterm_process: subprocess.Popen[str] | None = None
+        self._xephyr_stderr: CapturedStream | None = None
+        self._xterm_stderr: CapturedStream | None = None
+        self._app_stderr: CapturedStream | None = None
         self._window_id: int | None = None
 
     def launch(self, session: RealTerminalSessionSpec) -> None:
@@ -113,6 +136,7 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
         display_number = _find_free_display_number()
         self._display = f":{display_number}"
         self._cached_display_env = self._build_display_env(session.env)
+        self._xephyr_stderr = CapturedStream.create("scrappy-xephyr-")
         self._xephyr_process = subprocess.Popen(
             [
                 "Xephyr",
@@ -124,10 +148,12 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
                 "-noreset",
             ],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=self._xephyr_stderr.handle,
         )
         self._wait_for_display_socket(display_number)
 
+        self._xterm_stderr = CapturedStream.create("scrappy-xterm-")
+        self._app_stderr = CapturedStream.create("scrappy-app-")
         self._xterm_process = subprocess.Popen(
             [
                 "xterm",
@@ -136,14 +162,14 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
                 "-T",
                 session.title,
                 "-e",
-                str(session.venv_python),
-                "-m",
-                session.entry_module,
+                *build_app_launch_command(
+                    session.venv_python, session.entry_module, self._app_stderr.path
+                ),
             ],
             cwd=str(session.fixture_repo),
             env=self._cached_display_env,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=self._xterm_stderr.handle,
         )
         self._window_id = self._find_window_id(session.title)
         self.append_debug_event(
@@ -155,13 +181,47 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
         )
 
     def wait_until_ready(self, timeout_seconds: float) -> None:
-        """Wait for the app's file-based readiness signal."""
+        """Wait for readiness, failing fast if xterm/the app dies before signaling."""
         session = self._require_session()
-        _wait_for_file(
-            session.ready_file,
+        wait_for_ready_file(
+            ready_file=session.ready_file,
+            probe=self.probe_launched_app,
+            drain_diagnostics=self.drain_launch_diagnostics,
             timeout_seconds=timeout_seconds,
-            description="scrappy readiness signal",
+            error_factory=LinuxHarnessError,
         )
+
+    def probe_launched_app(self) -> LaunchLiveness:
+        """Report liveness from the xterm child that hosts the launched app.
+
+        ``xterm -e python ...`` exits when the launched python process exits, so xterm
+        terminating is the app's death signal for this harness. The reported exit code
+        is xterm's own (which does not always mirror the app's), but death itself is
+        what makes the readiness wait fail fast instead of blocking.
+        """
+        process = self._xterm_process
+        if process is None:
+            return LaunchLiveness(alive=True)
+        code = process.poll()
+        if code is None:
+            return LaunchLiveness(alive=True)
+        return LaunchLiveness(alive=False, exit_code=code)
+
+    def drain_launch_diagnostics(self) -> str:
+        """Return the launched app's captured stderr, falling back to xterm's own.
+
+        The app runs as ``xterm -e sh -c 'exec python ... 2>>file'``, so a Python crash
+        before readiness (the motivating app-death case) lands in the app-stderr file
+        rather than being lost to the PTY. When the app wrote nothing, fall back to
+        xterm's own stderr (X protocol/display/font errors that explain a failed launch),
+        which is the diagnostic that was previously discarded to DEVNULL.
+        """
+        app = self._app_stderr
+        app_tail = app.read_tail() if app is not None else ""
+        if app_tail.strip():
+            return app_tail
+        xterm = self._xterm_stderr
+        return xterm.read_tail() if xterm is not None else ""
 
     def clear_clipboard(self) -> None:
         """Clear the X11 CLIPBOARD selection on the nested display."""
@@ -296,6 +356,22 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
             self._terminate_process(xephyr_process)
             self.append_debug_event("xephyr_closed", pid=xephyr_process.pid, display=self._display)
 
+        for captured in (self._xterm_stderr, self._xephyr_stderr, self._app_stderr):
+            if captured is not None:
+                captured.cleanup()
+        self._xterm_stderr = None
+        self._xephyr_stderr = None
+        self._app_stderr = None
+
+    def _stderr_suffix(self, captured: CapturedStream | None) -> str:
+        """Format a captured-stderr tail for inclusion in a launch-failure message."""
+        if captured is None:
+            return ""
+        tail = captured.read_tail().strip()
+        if not tail:
+            return ""
+        return f"\ncaptured stderr tail:\n{tail}"
+
     def _build_display_env(self, extra_env: Mapping[str, str] | None = None) -> dict[str, str]:
         """Build the environment for processes that run inside the nested display."""
         session = self._require_session()
@@ -340,7 +416,10 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
                 return
             xephyr_process = self._xephyr_process
             if xephyr_process is not None and xephyr_process.poll() is not None:
-                raise LinuxHarnessError(f"Xephyr exited before opening display {self._display}")
+                raise LinuxHarnessError(
+                    f"Xephyr exited (code {xephyr_process.returncode}) before opening "
+                    f"display {self._display}" + self._stderr_suffix(self._xephyr_stderr)
+                )
             time.sleep(0.1)
         raise LinuxHarnessError(f"Timed out waiting for Xephyr display {self._display}")
 
@@ -356,7 +435,10 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
                 return int(result.stdout.strip().splitlines()[0])
             xterm_process = self._xterm_process
             if xterm_process is not None and xterm_process.poll() is not None:
-                raise LinuxHarnessError(f"xterm exited before window discovery for {title!r}")
+                raise LinuxHarnessError(
+                    f"xterm exited (code {xterm_process.returncode}) before window "
+                    f"discovery for {title!r}" + self._stderr_suffix(self._xterm_stderr)
+                )
             time.sleep(0.1)
         raise LinuxHarnessError(f"Timed out waiting for xterm window titled {title!r}")
 
