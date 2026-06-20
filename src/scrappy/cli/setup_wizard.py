@@ -235,7 +235,7 @@ class SetupWizard:
             self._state = WizardState.MENU
             self._show_menu()
         else:
-            self.io.secho("Please type 'ok' to continue or 'q' to quit.", fg="yellow")
+            self.io.secho("Please type 'ok' to continue or 'q' to quit.", fg=self.io.theme.warning)
 
     def _show_disclaimer(self) -> None:
         """Display disclaimer notice."""
@@ -282,7 +282,7 @@ class SetupWizard:
     def _handle_key_input(self, key: str) -> None:
         """Handle API key input."""
         if not key or key.lower() == 'q':
-            self.io.secho("Configuration cancelled.", fg="yellow")
+            self.io.secho("Configuration cancelled.", fg=self.io.theme.warning)
             self._state = WizardState.MENU
             # Screen will handle showing menu after clearing
             return
@@ -382,7 +382,7 @@ Current key: [dim]{masked}[/dim]
             self._state = WizardState.MENU
             # Screen will handle showing menu after clearing
         elif response in ('n', 'no', 'q'):
-            self.io.secho("Removal cancelled.", fg="yellow")
+            self.io.secho("Removal cancelled.", fg=self.io.theme.warning)
             self._state = WizardState.MENU
             # Screen will handle showing menu after clearing
         else:
@@ -466,7 +466,7 @@ Current key: [dim]{masked}[/dim]
                     provider_title = name.replace('_', ' ').title()
                     self.io.secho(f"{provider_title} API key removed.", fg=self.io.theme.success)
                 else:
-                    self.io.secho("Removal cancelled.", fg="yellow")
+                    self.io.secho("Removal cancelled.", fg=self.io.theme.warning)
                 break
             else:
                 self.io.secho("Invalid selection. Enter 1, 2, or q.", fg=self.io.theme.error)
@@ -567,7 +567,7 @@ Current key: [dim]{masked}[/dim]
         # Use TUI prompt (routes through InputCaptureManager)
         key = self.io.prompt(f"Enter {info.env_var}", default="").strip()
         if not key:
-            self.io.secho("Configuration cancelled.", fg="yellow")
+            self.io.secho("Configuration cancelled.", fg=self.io.theme.warning)
             return False
 
         # Validate key format and security
