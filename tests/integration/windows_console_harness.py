@@ -16,7 +16,13 @@ from typing import Any
 import pyperclip
 import pytest
 
-from .real_terminal_harness import RealTerminalHarnessProtocol, RealTerminalSessionSpec, RelativeSelection
+from .real_terminal_harness import (
+    LaunchLiveness,
+    RealTerminalHarnessProtocol,
+    RealTerminalSessionSpec,
+    RelativeSelection,
+    wait_for_ready_file,
+)
 
 
 CONSOLE_READY_TIMEOUT_SECONDS = 20.0
@@ -345,16 +351,6 @@ class OwnedConsoleWindow:
         return path
 
 
-def _wait_for_file(path: Path, *, timeout_seconds: float, description: str) -> None:
-    """Wait for a file-based readiness marker produced by the launched app."""
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if path.exists():
-            return
-        time.sleep(0.1)
-    raise IsolationError(f"Timed out waiting for {description} at {path}")
-
-
 def launch_owned_console(
     *,
     title: str,
@@ -452,13 +448,43 @@ class WindowsOwnedConsoleHarness(RealTerminalHarnessProtocol):
         self.append_debug_event("console_launched", pid=self._console.pid, hwnd=self._console.hwnd)
 
     def wait_until_ready(self, timeout_seconds: float) -> None:
-        """Wait for the app's file-based readiness signal."""
+        """Wait for readiness, failing fast if the owned console dies before signaling."""
         session = self._require_session()
-        _wait_for_file(
-            session.ready_file,
+        wait_for_ready_file(
+            ready_file=session.ready_file,
+            probe=self.probe_launched_app,
+            drain_diagnostics=self.drain_launch_diagnostics,
             timeout_seconds=timeout_seconds,
-            description="scrappy readiness signal",
+            error_factory=IsolationError,
         )
+
+    def probe_launched_app(self) -> LaunchLiveness:
+        """Report liveness from the owned PowerShell console process.
+
+        The app runs inside a ``-NoExit`` PowerShell host, so a crash of the inner
+        python process returns control to the PowerShell prompt without ending the
+        host. This probe therefore reliably detects the console process tree dying, but
+        an app-only crash that leaves the host alive cannot be observed here and falls
+        through to the timeout path (still reported with diagnostics). This asymmetry is
+        documented and could not be verified from macOS.
+        """
+        console = self._console
+        if console is None:
+            return LaunchLiveness(alive=True)
+        code = console.process.poll()
+        if code is None:
+            return LaunchLiveness(alive=True)
+        return LaunchLiveness(alive=False, exit_code=code)
+
+    def drain_launch_diagnostics(self) -> str:
+        """Return a tail of the structured debug log as launch diagnostics.
+
+        Windows launches a real console (no captured stderr pipe), so the harness
+        debug-event trail is the best available diagnostic.
+        """
+        if not self.debug_log:
+            return ""
+        return "\n".join(self.debug_log[-20:])
 
     def clear_clipboard(self) -> None:
         """Clear the Windows clipboard."""
