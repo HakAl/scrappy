@@ -301,7 +301,7 @@ class CLI:
             if self.orchestrator.context.is_semantic_search_ready():
                 self.io.secho("Semantic search ready", fg="green")
             else:
-                self.io.secho("Semantic search loading in background...", fg="yellow")
+                self.io.secho("Semantic search loading in background...", fg=self.io.theme.warning)
 
         except Exception:
             # Gracefully handle any errors
@@ -396,11 +396,11 @@ class CLI:
                     io.secho(f"Could not restore session: {error_msg}", fg=io.theme.error)
                     self.logger.warning("Session restore failed", extra={"error": error_msg})
             else:
-                io.secho("Starting fresh session.", fg="yellow")
+                io.secho("Starting fresh session.", fg=io.theme.warning)
                 self.logger.info("User declined session restore")
         except (EOFError, KeyboardInterrupt):
             # Non-interactive environment or user cancelled
-            io.secho("Starting fresh session.", fg="yellow")
+            io.secho("Starting fresh session.", fg=io.theme.warning)
             self.logger.info("Session restore skipped (non-interactive)")
 
     def reinitialize_handlers_with_bridge(
