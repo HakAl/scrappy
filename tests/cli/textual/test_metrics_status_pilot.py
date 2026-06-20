@@ -21,8 +21,16 @@ from scrappy.cli.screens.chat_surface import ChatSurface
 
 
 def create_test_app() -> ScrappyApp:
-    """Create a ScrappyApp instance with a real CLI in mock mode."""
-    return ScrappyApp(cli_factory=lambda: CLI())
+    """Create a ScrappyApp instance with a real, initialized CLI in mock mode.
+
+    The factory returns an INITIALIZED CLI. Since CLI construction was made side
+    effect free, the default orchestrator's brain/provider setup happens in
+    CLI.initialize(), not in the constructor. A bare CLI() would hand the app an
+    orchestrator with no mock brain configured, so the metrics line would stay
+    stuck at "provider: --". Production factories (create_cli_from_context) call
+    initialize() for exactly this reason.
+    """
+    return ScrappyApp(cli_factory=lambda: CLI().initialize(offer_session_restore=False))
 
 
 class TestMetricsStatusPilot:
