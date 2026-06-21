@@ -17,7 +17,9 @@ import time
 from datetime import datetime
 from typing import Any, Iterator, Optional, AsyncIterator
 
+from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
 from scrappy.orchestrator.types import StreamChunk
+from .model_selection import ModelSelectionType
 from .provider_types import LLMResponse
 
 
@@ -336,6 +338,64 @@ class MockLLMService:
         """Reset call tracking."""
         self._call_count = 0
         self._calls.clear()
+
+
+class MockModelSelectionService:
+    """
+    Model selection service for mock mode (implements ModelSelectionServiceProtocol).
+
+    In mock mode there are no API keys, so the real selector is built with an
+    empty configured set. The orchestrator's normal selection path then returns
+    no model: _select_initial_model returns None and
+    stream_completion_with_fallback raises "No model available" BEFORE
+    MockLLMService ever runs. The metrics path consequently posts provider=None
+    and the TUI status line stays stuck at "provider: --".
+
+    This service makes a single mock model always selectable for every selection
+    type and any context requirement, so streaming reaches MockLLMService and the
+    resulting chunks carry provider="mock" through the same path real providers
+    use. The mock model is never unhealthy and is treated as having unlimited
+    context.
+    """
+
+    MOCK_MODEL_ID = "mock/mock-model"
+
+    def select(
+        self,
+        selection_type: ModelSelectionType,
+        min_context: int = 0,
+        session_preferred: Optional[str] = None,
+        exclude: Optional[set[str]] = None,
+    ) -> str:
+        """Always return the mock model, honoring session stickiness trivially."""
+        if session_preferred == self.MOCK_MODEL_ID:
+            return session_preferred
+        return self.MOCK_MODEL_ID
+
+    def get_models_for_type(self, selection_type: ModelSelectionType) -> list[str]:
+        """The mock model is configured for every selection type."""
+        return [self.MOCK_MODEL_ID]
+
+    def mark_unhealthy(
+        self,
+        model: str,
+        kind: FailureKind,
+        retry_after: Optional[float] = None,
+    ) -> None:
+        """No-op: the mock model never becomes unhealthy."""
+        return None
+
+    def update_configured(self, new_set: set[str]) -> None:
+        """No-op: the mock configured set is fixed."""
+        return None
+
+    def clear_failure_kinds(self, kinds: set[FailureKind]) -> None:
+        """No-op: the mock model has no tracked health state to clear."""
+        return None
+
+    def is_available(self, model_id: str) -> bool:
+        """The mock model is always available; nothing else is configured."""
+        return model_id == self.MOCK_MODEL_ID
 
 
 def is_mock_mode_enabled() -> bool:
