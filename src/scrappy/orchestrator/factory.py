@@ -404,7 +404,18 @@ class OrchestratorFactory:
 
         Determines which models have API keys configured and creates
         a selector that provides deterministic, priority-based selection.
+
+        Mock Mode:
+        If SCRAPPY_MOCK_LLM is set, returns MockModelSelectionService so a mock
+        model is always selectable. Without it, mock mode has no API keys, the
+        selector is empty, and selection raises before MockLLMService runs,
+        leaving metrics stuck at provider=None.
         """
+        from .mock_llm_service import is_mock_mode_enabled, MockModelSelectionService
+        if is_mock_mode_enabled():
+            logger.info("Mock model selector enabled via SCRAPPY_MOCK_LLM env var")
+            return MockModelSelectionService()
+
         api_key_service = create_api_key_service()
         configured_models = self._get_configured_models(api_key_service)
         return ModelSelectionService(configured_models=configured_models)
