@@ -69,10 +69,11 @@ jobs:
         pip install "ruff==0.15.17" mypy
 
     - name: Run Ruff linter
-      # Blocking: src/ is lint-clean for E,F,W as of scrappy-1hgx. Pinned so a
-      # ruff release cannot change the gate underneath us; bump deliberately.
+      # Blocking: src/ and tests/ are lint-clean for E,F,W as of scrappy-1hgx.
+      # Pinned so a ruff release cannot change the gate underneath us; bump
+      # deliberately.
       run: |
-        ruff check src/ --select=E,F,W --ignore=E501
+        ruff check src/ tests/ --select=E,F,W --ignore=E501
 
     - name: Run type checking
       run: |
