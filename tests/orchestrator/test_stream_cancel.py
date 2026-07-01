@@ -15,15 +15,14 @@ Run with: pytest -m slow tests/orchestrator/test_stream_cancel.py
 
 import pytest
 
-# Mark all tests in this module as slow (skipped by default)
-pytestmark = pytest.mark.slow
 import asyncio
 from typing import AsyncIterator, List, Optional
-from unittest.mock import Mock
 
 from scrappy.orchestrator.types import StreamChunk
-from scrappy.orchestrator.protocols import StreamingCompletionProtocol
 from tests.helpers import make_stream_chunk
+
+# Mark all tests in this module as slow (skipped by default)
+pytestmark = pytest.mark.slow
 
 
 # =============================================================================

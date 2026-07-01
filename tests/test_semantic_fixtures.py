@@ -4,7 +4,6 @@ Test that semantic search fixtures work correctly.
 This ensures that tests don't load real FastEmbed models or LanceDB databases.
 """
 
-import pytest
 from helpers import MockSemanticSearch, MockSemanticInitializer
 
 
@@ -127,5 +126,5 @@ def test_mock_semantic_initializer_status():
 def test_fixture_mock_semantic_initializer(mock_semantic_initializer):
     """Test pytest fixture for semantic initializer."""
     assert mock_semantic_initializer is not None
-    assert mock_semantic_initializer.is_complete() == True
+    assert mock_semantic_initializer.is_complete() is True
     assert mock_semantic_initializer.get_status() == "Complete"

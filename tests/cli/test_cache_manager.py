@@ -7,9 +7,6 @@ Tests verify behavior of cache management commands:
 - Toggle caching on/off
 """
 
-import pytest
-from unittest.mock import Mock, patch
-from pathlib import Path
 
 import sys
 import os

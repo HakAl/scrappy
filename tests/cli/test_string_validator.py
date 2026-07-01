@@ -4,11 +4,9 @@ Tests the validation helpers for empty/whitespace string checks
 that standardize common patterns across the CLI.
 """
 
-import pytest
 from scrappy.cli.validators.string import (
     is_empty_or_whitespace,
     normalize_string,
-    StringValidationResult,
     validate_non_empty,
 )
 

@@ -2,7 +2,7 @@
 Tests for config_loader - centralized configuration loading with fallbacks.
 """
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestGetTruncationDefaults:

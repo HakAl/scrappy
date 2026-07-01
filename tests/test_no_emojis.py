@@ -49,5 +49,5 @@ def test_no_emojis_in_source_code():
                 violations.append(f"{rel_path}:{lineno}: {repr(string)}")
 
     assert not violations, (
-        f"Found emoji characters in source code:\n" + "\n".join(violations)
+        "Found emoji characters in source code:\n" + "\n".join(violations)
     )

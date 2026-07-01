@@ -9,7 +9,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
-import pytest
 
 from scrappy.infrastructure.threading import (
     ThreadSafeEventQueue,

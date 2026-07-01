@@ -5,7 +5,6 @@ Tests the shared session utilities that eliminate duplication
 across CLI modules for session restoration, save, and detection display.
 """
 
-import pytest
 from tests.helpers import MockIO
 
 
@@ -374,7 +373,7 @@ class TestDisplayPreviousSessionDetected:
 
         # Should not show "Yes" for conversation
         lines = output.split('\n')
-        conversation_lines = [l for l in lines if 'conversation' in l.lower()]
+        conversation_lines = [line for line in lines if 'conversation' in line.lower()]
         for line in conversation_lines:
             assert 'Yes' not in line
 
@@ -534,8 +533,7 @@ class TestIntegration:
     def test_full_session_restore_flow(self):
         """Test complete session restoration display flow."""
         from scrappy.cli.utils.session_utils import (
-            display_session_restored,
-            display_session_load_error
+            display_session_restored
         )
 
         io = MockIO()

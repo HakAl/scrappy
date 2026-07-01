@@ -5,7 +5,8 @@ Tests prove that command validation works correctly, catching dangerous
 commands and platform incompatibilities while allowing safe commands.
 """
 
-import pytest
+import re
+
 from tests.helpers import FakePlatformDetector
 from scrappy.platform.validation import SecurityCommandValidator
 
@@ -257,13 +258,14 @@ class TestDangerousCommands:
 
         dangerous = validator.get_dangerous_commands()
 
-        patterns_to_check = [
+        commands_to_flag = [
             'rmdir /s /q C:\\',
             'rd /s /q C:\\',
             'del /f /s C:\\',
         ]
 
-        assert len(dangerous) > 5
+        for command in commands_to_flag:
+            assert any(re.search(pattern, command) for pattern in dangerous), command
 
     def test_unix_root_delete_patterns(self):
         """Test that Unix root delete patterns are flagged."""
@@ -272,7 +274,14 @@ class TestDangerousCommands:
 
         dangerous = validator.get_dangerous_commands()
 
-        assert len(dangerous) > 5
+        commands_to_flag = [
+            'rm -rf /',
+            'sudo rm -rf /',
+            'dd if=/dev/zero of=/dev/sda',
+        ]
+
+        for command in commands_to_flag:
+            assert any(re.search(pattern, command) for pattern in dangerous), command
 
 
 class TestInteractiveCommands:

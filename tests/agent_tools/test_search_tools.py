@@ -1,7 +1,6 @@
 """Tests for FindExactTextTool."""
 
 import pytest
-from pathlib import Path
 from unittest.mock import Mock
 
 from scrappy.agent_tools.tools.search_tools import FindExactTextTool

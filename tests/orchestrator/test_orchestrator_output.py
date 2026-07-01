@@ -6,11 +6,8 @@ of the OutputInterface protocol.
 """
 
 import pytest
-from io import StringIO
-import sys
 
 from scrappy.orchestrator.output import (
-    BaseOutputProtocol,
     ConsoleOutput,
     NullOutput,
     CapturingOutput,

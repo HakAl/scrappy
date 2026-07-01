@@ -4,7 +4,6 @@ Tests for ProviderStatusReporter.
 Tests presentation logic for provider status display and information retrieval.
 """
 
-import pytest
 from unittest.mock import Mock
 
 from scrappy.orchestrator.output import CapturingOutput

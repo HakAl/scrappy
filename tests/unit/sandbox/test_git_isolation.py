@@ -2,13 +2,11 @@
 
 import subprocess
 from datetime import datetime
-from unittest.mock import patch
 
 import pytest
 
 from scrappy.sandbox.git_isolation import (
     BranchInfo,
-    GitError,
     GitIsolation,
     _run_git,
     create_git_isolation,

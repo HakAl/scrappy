@@ -6,12 +6,9 @@ including all 10 color properties and preset selection.
 """
 
 import json
-import os
-import pytest
 from pathlib import Path
 
 from scrappy.cli.config_factory import CLIConfigFactory
-from scrappy.cli.cli_config import CLIConfig
 from scrappy.infrastructure.theme import (
     ScrappyTheme,
     LightTheme,

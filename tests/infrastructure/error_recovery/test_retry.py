@@ -6,8 +6,7 @@ Following CLAUDE.md: Test BEHAVIOR. Prove retry works with backoff, jitter, and 
 
 import pytest
 import time
-import asyncio
-from unittest.mock import Mock, call
+from unittest.mock import Mock
 from scrappy.infrastructure.error_recovery import (
     ExponentialBackoffRetry,
     RetryConfig,
@@ -15,11 +14,9 @@ from scrappy.infrastructure.error_recovery import (
     retry_operation_async,
 )
 from scrappy.infrastructure.exceptions import (
-    BaseError,
     RetryableError,
     NonRetryableError,
     NetworkError,
-    AuthenticationError,
 )
 
 
@@ -69,7 +66,7 @@ class TestExponentialBackoffRetry:
             multiplier=2.0,
             jitter=False
         )
-        retry = ExponentialBackoffRetry(config=config)
+        ExponentialBackoffRetry(config=config)
 
         # Test delay calculation
         assert config.calculate_delay(0) == 0.1  # 0.1 * 2^0

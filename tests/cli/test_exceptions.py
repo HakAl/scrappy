@@ -399,7 +399,6 @@ class TestExceptionFormatting:
     def test_exception_to_dict_for_logging(self):
         """Exceptions should be convertible to dict for structured logging."""
         from scrappy.cli.exceptions import ProviderError
-        from scrappy.cli.utils.error_handler import ErrorCategory, ErrorSeverity
 
         error = ProviderError("Timeout", provider="openai", is_timeout=True)
         error_dict = error.to_dict()

@@ -6,7 +6,6 @@ all numeric default values used throughout the CLI. This eliminates
 magic numbers scattered across the codebase.
 """
 
-import pytest
 
 
 class TestTemperatureDefaults:

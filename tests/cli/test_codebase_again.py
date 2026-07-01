@@ -11,10 +11,8 @@ Run with:
 from __future__ import annotations
 
 import tempfile
-import textwrap
 from pathlib import Path
-from typing import Dict, List
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 import pytest
 

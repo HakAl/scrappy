@@ -2,8 +2,8 @@
 
 CRITICAL: NO REAL API CALLS. All tests use mocks/fakes.
 """
-from typing import Any, Dict
-from unittest.mock import Mock, patch
+from typing import Dict
+from unittest.mock import Mock
 
 import pytest
 import httpx

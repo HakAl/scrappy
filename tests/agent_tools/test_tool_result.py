@@ -1,6 +1,5 @@
 """Tests for ToolResult __str__ and __rich__ methods."""
 
-import pytest
 from rich.syntax import Syntax
 from rich.text import Text
 

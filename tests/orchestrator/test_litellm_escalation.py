@@ -6,7 +6,6 @@ fast -> quality tier with depth guards and metrics tracking.
 """
 
 import pytest
-from unittest.mock import Mock
 
 from scrappy.orchestrator.litellm_service import LiteLLMService, MAX_ESCALATION_DEPTH
 from scrappy.orchestrator.litellm_callbacks import RateTrackingCallback, EscalationMetrics

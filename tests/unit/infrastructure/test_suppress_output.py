@@ -8,7 +8,6 @@ import sys
 import io
 from unittest.mock import patch
 
-import pytest
 
 
 class TestSuppressOutput:
@@ -65,7 +64,7 @@ class TestLiteLLMNoOutput:
         from scrappy.orchestrator.litellm_config import create_litellm_router
 
         # Create router (this is where chatty output would happen)
-        router = create_litellm_router()
+        create_litellm_router()
 
         # Capture any output that leaked
         captured = capsys.readouterr()

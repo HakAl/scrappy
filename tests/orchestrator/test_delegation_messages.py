@@ -5,12 +5,8 @@ Tests that the messages parameter bypasses prompt augmentation and
 is passed directly to the LLM service.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock
-from datetime import datetime
 
 from scrappy.orchestrator.delegation import DelegationManager
-from scrappy.orchestrator.provider_types import LLMResponse
 from tests.helpers import MockLLMService
 
 

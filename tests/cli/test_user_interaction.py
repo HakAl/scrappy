@@ -9,9 +9,7 @@ Tests the three interaction strategies:
 Per CLAUDE.md: Focus on behavior tests that prove features work.
 """
 
-import pytest
-from unittest.mock import MagicMock, Mock
-import threading
+from unittest.mock import MagicMock
 
 from scrappy.cli.user_interaction import (
     CLIUserInteraction,
@@ -288,7 +286,6 @@ class TestBridgeWiring:
         from unittest.mock import MagicMock, patch
 
         # Create a mock CLI with the necessary attributes
-        mock_orchestrator = MagicMock()
         mock_io = MagicMock()
         mock_io.is_tui_mode = True
         mock_bridge = MagicMock()

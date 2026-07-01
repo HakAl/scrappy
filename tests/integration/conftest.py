@@ -10,7 +10,6 @@ To record new cassettes:
 Cassettes are stored in tests/integration/cassettes/ and committed to git.
 """
 import pytest
-import os
 from pathlib import Path
 from dotenv import load_dotenv
 import litellm

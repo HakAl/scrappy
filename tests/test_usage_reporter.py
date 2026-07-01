@@ -11,7 +11,6 @@ Following CLAUDE.md guidelines:
 - Tests would fail if feature breaks
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import Mock
 from scrappy.orchestrator.usage_reporter import UsageReporter

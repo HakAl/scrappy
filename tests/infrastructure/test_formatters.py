@@ -15,7 +15,6 @@ from scrappy.infrastructure.theme import (
     DEFAULT_THEME,
     LightTheme,
     NoColorTheme,
-    ScrappyTheme,
 )
 from tests.helpers import MockIO
 

@@ -12,16 +12,13 @@ Tests the stream_completion method including:
 
 import pytest
 from typing import List, Any
-from unittest.mock import Mock
 
-from scrappy.orchestrator.litellm_service import LiteLLMService, NotConfiguredError
-from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
-from scrappy.infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
+from scrappy.orchestrator.litellm_service import LiteLLMService
+from scrappy.orchestrator.types import StreamChunk
 from tests.helpers import (
     MockStreamingRouter,
     MockApiKeyService,
     CapturingStreamOutput,
-    make_stream_chunk,
     make_mock_litellm_response,
 )
 

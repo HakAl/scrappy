@@ -7,8 +7,6 @@ These tests verify that proper validation is performed on:
 """
 import pytest
 import logging
-from pathlib import Path
-from datetime import datetime
 
 from scrappy.context import CodebaseContext
 from scrappy.context.cache import ContextCache
@@ -23,7 +21,7 @@ class TestPathValidation:
         nonexistent = tmp_path / "does_not_exist"
 
         with caplog.at_level(logging.WARNING):
-            context = CodebaseContext(str(nonexistent))
+            CodebaseContext(str(nonexistent))
 
         # Should log a warning about non-existent path
         assert len(caplog.records) > 0
@@ -48,7 +46,7 @@ class TestPathValidation:
         file_path.write_text("content")
 
         with caplog.at_level(logging.WARNING):
-            context = CodebaseContext(str(file_path))
+            CodebaseContext(str(file_path))
 
         # Should log a warning about path being a file
         assert len(caplog.records) > 0

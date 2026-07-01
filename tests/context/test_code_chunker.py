@@ -1,9 +1,6 @@
 import pytest
-from typing import List
-from unittest.mock import Mock
 
 # Import actual protocol classes
-from scrappy.context.protocols import CodeChunk, CodeChunkerProtocol
 from scrappy.context.code_chunker import SemanticCodeChunker
 
 

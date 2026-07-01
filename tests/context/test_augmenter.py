@@ -2,7 +2,6 @@
 Tests for ContextAugmenter - prompt augmentation with codebase context.
 """
 import pytest
-from pathlib import Path
 from unittest.mock import Mock
 
 from scrappy.context.augmenter import ContextAugmenter, NullContextAugmenter

@@ -1,5 +1,4 @@
 """Tests for rate limit calculator."""
-import pytest
 
 from scrappy.orchestrator.rate_limiting.calculator import RateLimitCalculator
 

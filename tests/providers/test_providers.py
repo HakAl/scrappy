@@ -2,8 +2,6 @@
 Tests for LLM provider base classes and registry.
 """
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime
 
 from scrappy.orchestrator.provider_types import LLMResponse, ProviderLimits, LLMProviderBase, ProviderRegistry
 

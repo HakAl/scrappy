@@ -7,7 +7,6 @@ After LiteLLM integration (Phase 3):
 - Recovery/fallback tests are now in test_litellm_escalation.py
 """
 
-import pytest
 
 from scrappy.infrastructure.utils import is_rate_limit_error
 from scrappy.infrastructure.exceptions import RateLimitError, AllProvidersRateLimitedError

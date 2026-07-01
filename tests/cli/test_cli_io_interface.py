@@ -6,7 +6,6 @@ Following TDD: tests written first, then implementation.
 """
 
 import pytest
-from typing import List, Optional
 
 
 class TestTestIO:
@@ -114,8 +113,8 @@ class TestTestIO:
         result1 = io.confirm("Continue?")
         result2 = io.confirm("Are you sure?")
 
-        assert result1 == True
-        assert result2 == False
+        assert result1 is True
+        assert result2 is False
 
     @pytest.mark.unit
     def test_testio_confirm_uses_default_when_no_confirmation(self):
@@ -125,7 +124,7 @@ class TestTestIO:
 
         result = io.confirm("Continue?", default=True)
 
-        assert result == True
+        assert result is True
 
     @pytest.mark.unit
     def test_testio_input_line_returns_preset(self):
@@ -182,7 +181,7 @@ class TestTestIO:
         io.add_confirmation(True)
         result = io.confirm("Continue?")
 
-        assert result == True
+        assert result is True
 
 
 class TestMockIO:
@@ -217,7 +216,7 @@ class TestMockIO:
 
         result = io.confirm("Continue?")
 
-        assert result == True
+        assert result is True
 
     @pytest.mark.unit
     def test_mockio_reset(self):
@@ -287,7 +286,7 @@ class TestIOProtocolUsage:
         result = confirm_action(test_io, "delete all files")
 
         assert "About to: delete all files" in test_io.get_output()
-        assert result == True
+        assert result is True
 
     @pytest.mark.unit
     def test_function_with_prompt(self):
@@ -337,7 +336,7 @@ class TestIOProtocolUsage:
         result = setup_wizard(test_io)
 
         assert result["name"] == "awesome-project"
-        assert result["tests"] == True
+        assert result["tests"] is True
 
         output = test_io.get_output()
         assert "Welcome to Setup Wizard" in output

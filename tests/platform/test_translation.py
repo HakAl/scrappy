@@ -5,7 +5,6 @@ Tests prove that command translation features work correctly across platforms,
 handling Unix->Windows translation, path normalization, and special cases.
 """
 
-import pytest
 from tests.helpers import FakePlatformDetector
 from scrappy.platform.translation import SmartCommandTranslator
 
@@ -85,8 +84,8 @@ class TestCommandTranslation:
         assert command == "del file.txt"
         assert was_translated
 
-    def test_translates_cp_to_copy(self):
-        """Test that 'cp' is translated to 'copy' on Windows."""
+    def test_translates_cp_to_copy_with_extensions(self):
+        """Test that 'cp' with file extensions is translated to 'copy' on Windows."""
         detector = FakePlatformDetector(platform="Windows")
         translator = SmartCommandTranslator(detector)
 

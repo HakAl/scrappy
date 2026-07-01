@@ -5,13 +5,10 @@ Following TDD - these tests are written first, implementation comes after.
 """
 
 import os
-import tempfile
 import pytest
-from pathlib import Path
 
 from scrappy.cli.validators import (
     validate_path,
-    PathValidationResult,
 )
 
 

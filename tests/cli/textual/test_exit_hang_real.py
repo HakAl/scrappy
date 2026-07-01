@@ -10,7 +10,6 @@ executes an agent command.
 import os
 import subprocess
 import sys
-import tempfile
 
 import pytest
 
@@ -218,11 +217,11 @@ print("EXIT_OK", flush=True)
 
             if marker_exists:
                 # App actually exited, stdout was just blocked
-                print(f"Note: App exited (marker found) but subprocess timed out on stdout")
+                print("Note: App exited (marker found) but subprocess timed out on stdout")
                 print(f"Logfile:\n{logfile_content}")
                 return  # Test passes
 
-            print(f"HANG DETECTED!")
+            print("HANG DETECTED!")
             print(f"Logfile:\n{logfile_content}")
             pytest.fail(
                 f"EXIT HANG BUG: app hung for 20s after agent command.\n"

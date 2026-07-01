@@ -8,7 +8,6 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-import pytest
 
 from scrappy.context.protocols import IndexState
 from scrappy.context.semantic.state import LanceDBIndexStateManager

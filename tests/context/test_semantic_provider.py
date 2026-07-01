@@ -9,12 +9,11 @@ Tests cover:
 """
 
 from typing import List
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 from pathlib import Path
 
-import pytest
 
-from scrappy.context.protocols import CodeChunk, CodeChunkerProtocol, EmbeddingFunctionProtocol
+from scrappy.context.protocols import CodeChunk
 from scrappy.context.semantic.config import SemanticIndexConfig
 from scrappy.context.semantic.provider import (
     IndexingMetrics,
@@ -526,7 +525,6 @@ class TestNormalizePath:
         """Should normalize relative path to POSIX style."""
         # Create a real file to normalize
         import tempfile
-        import os
 
         with tempfile.TemporaryDirectory() as tmpdir:
             provider = LanceDBSearchProvider(
@@ -817,7 +815,6 @@ class TestBuildResultFromRanked:
 
     def test_build_result_from_ranked_empty_chunks(self):
         """Should handle empty chunk list."""
-        from scrappy.context.protocols import ScoredChunk
 
         result = self.provider._build_result_from_ranked([], max_tokens=4000)
 

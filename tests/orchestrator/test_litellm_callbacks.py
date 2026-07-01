@@ -16,7 +16,6 @@ from scrappy.orchestrator.litellm_callbacks import (
 
 from tests.helpers import (
     MockRateLimitTracker,
-    MockLiteLLMResponse,
     make_mock_litellm_response,
 )
 

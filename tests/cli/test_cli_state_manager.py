@@ -5,8 +5,7 @@ TDD: Tests written first for the state_manager.py module which handles
 plan state, task tracking, and plan progression.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from tests.helpers import MockIO, ConfigurableTestOrchestrator
 
 

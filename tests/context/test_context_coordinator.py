@@ -9,7 +9,6 @@ Following CLAUDE.md guidelines:
 - Tests would fail if feature breaks
 """
 
-import pytest
 from unittest.mock import Mock
 from scrappy.orchestrator.context_coordinator import ContextCoordinator
 
@@ -171,7 +170,7 @@ class TestManualExploration:
         output = MockOutput()
         coordinator = ContextCoordinator(context, output)
 
-        result = coordinator.explore_project(force=True)
+        coordinator.explore_project(force=True)
 
         assert context.clear_cache_called is True
         assert context.explore_called is True

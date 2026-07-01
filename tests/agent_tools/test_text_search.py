@@ -1,10 +1,9 @@
 """Tests for text search backends."""
 
-import pytest
 from pathlib import Path
 from unittest.mock import Mock
 
-from scrappy.agent_tools.protocols import ExecutionResult, SearchMetadata
+from scrappy.agent_tools.protocols import ExecutionResult
 from scrappy.agent_tools.components.text_search import RipgrepSearch, GrepSearch, FindstrSearch
 
 

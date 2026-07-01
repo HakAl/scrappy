@@ -5,8 +5,6 @@ Tests the task planning, reasoning, synthesis, and context summary functionality
 """
 
 import json
-import pytest
-from unittest.mock import Mock, MagicMock
 
 from scrappy.orchestrator.task_executor import TaskExecutor
 from scrappy.orchestrator.provider_types import LLMResponse
@@ -582,7 +580,9 @@ class TestTaskExecutorInitialization:
     def test_init_with_required_params(self):
         """TaskExecutor initializes with required parameters."""
         llm_service = MockLLMService()
-        record_fn = lambda t: None
+
+        def record_fn(t):
+            return None
 
         executor = TaskExecutor(llm_service=llm_service, record_task=record_fn)
 
@@ -592,7 +592,9 @@ class TestTaskExecutorInitialization:
     def test_init_ignores_legacy_params(self):
         """TaskExecutor ignores deprecated legacy parameters."""
         llm_service = MockLLMService()
-        record_fn = lambda t: None
+
+        def record_fn(t):
+            return None
 
         # Should not raise even with legacy params
         executor = TaskExecutor(

@@ -1,6 +1,5 @@
 """Tests for CommandHistory class."""
 
-import pytest
 from pathlib import Path
 
 

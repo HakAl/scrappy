@@ -4,7 +4,6 @@ Tests for base exception classes.
 Following CLAUDE.md: Test BEHAVIOR, not structure. Prove features work.
 """
 
-import pytest
 import logging
 from scrappy.infrastructure.exceptions import (
     BaseError,

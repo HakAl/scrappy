@@ -5,7 +5,6 @@ TDD: Tests written first for the tool_detector.py module which handles
 pattern matching to detect when user queries need tool support.
 """
 
-import pytest
 
 
 class TestNeedsToolSupport:

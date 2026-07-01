@@ -8,9 +8,6 @@ provides both human-readable output and machine-parseable structured data.
 import pytest
 import json
 import logging
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from io import StringIO
 
 
 class TestCLILogger:

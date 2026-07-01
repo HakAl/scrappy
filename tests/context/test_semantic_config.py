@@ -7,7 +7,6 @@ Tests cover:
 - Configuration validation
 """
 
-import pytest
 
 from scrappy.context.semantic.config import SemanticIndexConfig
 

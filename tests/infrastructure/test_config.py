@@ -19,7 +19,6 @@ from scrappy.infrastructure.config import (
     BaseConfig,
     EnvironmentConfig,
     ConfigLoader,
-    ConfigValidator,
     Environment,
     default_loader,
     default_validator,
@@ -354,7 +353,7 @@ class TestConfigIntegration:
 
     def test_load_with_defaults(self):
         """Test loading partial config with defaults."""
-        loader = ConfigLoader()
+        ConfigLoader()
         data = {"port": 9000}  # Only port, use defaults for rest
 
         config = ValidatedConfig.from_dict(data)

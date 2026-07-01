@@ -17,11 +17,9 @@ The fix: Add early bailout before expensive fingerprinting when:
 import pytest
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import Mock, MagicMock, call
 
 from scrappy.context.semantic_manager import SemanticSearchManager
 from scrappy.context.protocols import IndexState, IndexingDecision
-from scrappy.infrastructure.threading import ThreadSafeEventQueue
 
 
 class SpyFileCollector:

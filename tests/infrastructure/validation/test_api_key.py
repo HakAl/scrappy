@@ -13,7 +13,6 @@ from scrappy.infrastructure.validation.api_key import (
     validate_api_key,
     validate_env_var_name,
     is_placeholder_value,
-    MIN_KEY_LENGTH,
     MAX_KEY_LENGTH,
 )
 

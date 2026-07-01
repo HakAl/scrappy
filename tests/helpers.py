@@ -11,6 +11,7 @@ import tempfile
 
 from scrappy.orchestrator.provider_types import LLMResponse
 from scrappy.cli.session_context import SessionContext
+from scrappy.agent_tools.protocols import ExecutionResult
 
 
 class TestPathProvider:
@@ -1299,10 +1300,6 @@ def create_test_rate_limit_tracker(
 # =============================================================================
 # Command Tool Protocol Test Doubles
 # =============================================================================
-
-from scrappy.agent_tools.protocols import (
-    ExecutionResult,
-)
 
 
 class MockCommandSecurity:

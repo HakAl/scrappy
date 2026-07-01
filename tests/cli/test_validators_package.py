@@ -4,9 +4,6 @@ Tests that the validators package is properly decomposed into modules
 while maintaining backward compatibility.
 """
 
-import pytest
-import importlib
-import sys
 
 class TestBaseModule:
     """Tests for the base.py module."""

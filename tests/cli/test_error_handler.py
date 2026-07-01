@@ -4,10 +4,8 @@ Tests for CLI error handler utility.
 Tests for consistent error handling across the CLI modules.
 """
 
-import pytest
 import json
 from pathlib import Path
-from unittest.mock import Mock
 
 from tests.helpers import MockIO
 
@@ -129,7 +127,7 @@ class TestHandleError:
 
     def test_handle_error_displays_message(self):
         """handle_error outputs error message to IO."""
-        from scrappy.cli.utils.error_handler import handle_error, ErrorSeverity
+        from scrappy.cli.utils.error_handler import handle_error
 
         io = MockIO()
         error = ValueError("Test error message")

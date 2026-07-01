@@ -7,7 +7,6 @@ Tests general user input validation for different contexts:
 - Path input (path-aware)
 """
 
-import pytest
 
 from scrappy.infrastructure.validation.user_input import (
     validate_user_input,
@@ -15,7 +14,6 @@ from scrappy.infrastructure.validation.user_input import (
     validate_numeric_choice,
     DEFAULT_MAX_LENGTH,
     COMMAND_MAX_LENGTH,
-    CHOICE_MAX_LENGTH,
 )
 
 

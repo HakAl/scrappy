@@ -3,7 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
 
 from scrappy.agent_tools.tools.base import ToolContext
 from scrappy.agent_tools.tools.task_tools import (

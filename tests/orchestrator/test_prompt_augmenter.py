@@ -8,7 +8,6 @@ Tests follow CLAUDE.md guidelines:
 - Minimal mocking (only protocols)
 """
 
-import pytest
 from scrappy.orchestrator.prompt_augmenter import PromptAugmenter
 
 

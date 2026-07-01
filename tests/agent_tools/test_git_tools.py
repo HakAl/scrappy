@@ -1,10 +1,9 @@
 import pytest
 import subprocess
 from unittest.mock import MagicMock, Mock, patch
-from pathlib import Path
 
 from scrappy.agent_tools.tools.git_tools import (
-    GitTool, GitLogTool, GitStatusTool,
+    GitLogTool, GitStatusTool,
     GitDiffTool, GitBlameTool, GitShowTool,
     GitRecentChangesTool
 )

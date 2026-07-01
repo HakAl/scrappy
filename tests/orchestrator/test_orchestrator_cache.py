@@ -2,9 +2,6 @@
 Tests for ResponseCache - LLM response caching system.
 """
 import pytest
-from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from scrappy.orchestrator.cache import ResponseCache
 from scrappy.orchestrator.provider_types import LLMResponse

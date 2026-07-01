@@ -6,10 +6,9 @@ through the graph to verify data actually reaches the LLM service.
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 from typing import Any
 
-from scrappy.graph.state import AgentState
 
 
 class MockToolCall:
@@ -75,7 +74,7 @@ class TestBridgeDataFlow:
         llm_service = TracingLLMService()
 
         # Run agent with a simple task
-        result = run_agent(
+        run_agent(
             task="Say hello",
             working_dir=".",
             llm_service=llm_service,

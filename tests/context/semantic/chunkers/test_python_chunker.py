@@ -4,8 +4,6 @@ Tests for PythonASTChunker.
 Tests AST-aware chunking of Python code at function/class boundaries.
 """
 
-import pytest
-from scrappy.context.protocols import CodeChunk
 from scrappy.context.semantic.chunkers.python_chunker import (
     PythonASTChunker,
     PythonChunkerConfig,

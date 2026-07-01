@@ -1,7 +1,6 @@
 """Tests for rate limit storage."""
 import json
 from pathlib import Path
-import pytest
 
 from scrappy.orchestrator.rate_limiting.storage import RateLimitStorage
 from tests.helpers import FakeFileSystem

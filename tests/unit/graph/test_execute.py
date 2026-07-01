@@ -882,7 +882,7 @@ class TestExecuteNodeCancellation:
         )
         context_factory = create_test_context_factory()
 
-        result = execute_node(state, adapter, context_factory, run_context=None)
+        execute_node(state, adapter, context_factory, run_context=None)
 
         # Should run normally
         assert len(adapter.executed_calls) == 1
@@ -903,7 +903,7 @@ class TestExecuteNodeCancellation:
         context_factory = create_test_context_factory()
         run_context = MockRunContext(cancelled=False)
 
-        result = execute_node(
+        execute_node(
             state, adapter, context_factory, run_context=run_context
         )
 

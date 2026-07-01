@@ -11,7 +11,6 @@ Currently broken: estimates are used instead of actual API values.
 Issue: scrappy-zz5z
 """
 
-import pytest
 
 from scrappy.graph.nodes.think_delegator import LiteLLMThinkDelegator
 from scrappy.graph.protocols import ThinkResult

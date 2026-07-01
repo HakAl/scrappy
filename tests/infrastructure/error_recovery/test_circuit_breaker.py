@@ -5,7 +5,6 @@ Following CLAUDE.md: Test BEHAVIOR. Prove state machine works correctly.
 """
 
 import pytest
-import time
 import asyncio
 from unittest.mock import Mock
 from pathlib import Path

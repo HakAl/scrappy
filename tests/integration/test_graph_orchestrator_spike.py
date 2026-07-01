@@ -11,7 +11,7 @@ Run with: python -m pytest tests/integration/test_graph_orchestrator_spike.py -v
 
 import pytest
 from typing import Any, Literal, Optional
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 from pydantic import BaseModel, Field
 
 from langgraph.graph import END, StateGraph

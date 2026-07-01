@@ -53,7 +53,7 @@ class TestOutputForTesting:
         assert len(styles) == 1
         assert styles[0]['text'] == "Warning"
         assert styles[0]['color'] == "yellow"
-        assert styles[0]['bold'] == True
+        assert styles[0]['bold'] is True
 
     @pytest.mark.unit
     def test_test_output_style_returns_text(self):
@@ -84,8 +84,8 @@ class TestOutputForTesting:
         result1 = output.confirm("Continue?")
         result2 = output.confirm("Are you sure?")
 
-        assert result1 == True
-        assert result2 == False
+        assert result1 is True
+        assert result2 is False
 
     @pytest.mark.unit
     def test_test_output_clear(self):
@@ -128,7 +128,7 @@ class TestOutputUsage:
         styles = test_output.get_styled_calls()
         error_style = [s for s in styles if s['text'] == "Error occurred"][0]
         assert error_style['color'] == "red"
-        assert error_style['bold'] == True
+        assert error_style['bold'] is True
 
     @pytest.mark.unit
     def test_formatter_uses_output_abstraction(self):
@@ -248,7 +248,7 @@ class TestEdgeCases:
         output = TestOutput(confirmations=[])
         result = output.confirm("Continue?", default=True)
 
-        assert result == True
+        assert result is True
 
 
 class TestTuiModeGuards:

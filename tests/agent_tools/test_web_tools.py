@@ -1,5 +1,4 @@
 import pytest
-import json
 import httpx
 from unittest.mock import MagicMock, Mock, patch
 from scrappy.agent_tools.tools.web_tools import WebFetchTool
