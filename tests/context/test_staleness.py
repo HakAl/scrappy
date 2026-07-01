@@ -17,8 +17,6 @@ import pytest
 from scrappy.context.staleness import StalenessChecker
 from scrappy.context.protocols import (
     StalenessReport,
-    TimeProviderProtocol,
-    FingerprintScannerProtocol,
 )
 from scrappy.context.semantic.config import SemanticIndexConfig
 

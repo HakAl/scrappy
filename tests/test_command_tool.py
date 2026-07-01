@@ -5,11 +5,8 @@ These tests define the expected behavior of command execution extracted from Cod
 Following TDD: write tests first to specify behavior, then implement to satisfy tests.
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, call
-import subprocess
-import time
+from unittest.mock import Mock, patch, MagicMock
 
 # Import base tool infrastructure
 from scrappy.agent_tools.tools.base import ToolContext, ToolResult
@@ -41,7 +38,7 @@ class TestCommandToolInterface:
         assert len(tool.parameters) >= 1
         # First parameter should be the command string
         assert tool.parameters[0].name == "command"
-        assert tool.parameters[0].param_type == str
+        assert tool.parameters[0].param_type is str
         assert tool.parameters[0].required is True
 
     def test_execute_returns_tool_result(self):
@@ -256,7 +253,7 @@ class TestShellCommandExecutorSecurity:
     def test_allows_safe_command_through_security(self):
         """Safe commands should pass security validation."""
         from scrappy.agent_tools.tools.command_tool import ShellCommandExecutor
-        from scrappy.agent_tools.components import CommandSecurity, SubprocessRunner
+        from scrappy.agent_tools.components import CommandSecurity
 
         security = CommandSecurity(dangerous_patterns=[r'rm\s+-rf\s+/'])
         mock_runner = Mock()
@@ -356,7 +353,7 @@ class TestShellCommandExecutorRetry:
             timeout=10
         )
 
-        result = executor._run_command_with_retry(
+        executor._run_command_with_retry(
             "nonexistent_cmd",
             timeout=10,
             show_progress=False,

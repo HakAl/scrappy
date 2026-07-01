@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import pytest
 
 from scrappy.agent_tools.tools.control_tools import CompleteTool
 from scrappy.agent_tools.tools.base import ToolContext
@@ -29,7 +28,7 @@ class TestCompleteTool:
         params = tool.parameters
         assert len(params) == 1
         assert params[0].name == "result"
-        assert params[0].param_type == str
+        assert params[0].param_type is str
 
     def test_execute_returns_success(self):
         """Verify execute returns successful ToolResult."""

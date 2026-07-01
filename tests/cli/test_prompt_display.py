@@ -1,6 +1,5 @@
 """Tests for PromptDisplay status bar component."""
 
-import pytest
 from textual.widgets import Label
 
 from scrappy.cli.textual import PromptDisplay

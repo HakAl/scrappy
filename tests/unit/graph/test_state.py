@@ -1,7 +1,6 @@
 """Unit tests for AgentState model."""
 
 import json
-import pytest
 
 from scrappy.graph.state import AgentState
 

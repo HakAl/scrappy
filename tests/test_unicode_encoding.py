@@ -7,12 +7,6 @@ configuration properly handle Unicode characters (emojis, etc.) without crashing
 """
 
 import sys
-import io
-from unittest.mock import patch
-
-
-
-  # Test will show actual behavior
 
 
 def test_utf8_environment_variables():
@@ -24,8 +18,8 @@ def test_utf8_environment_variables():
         # Add parent directory to path to find scrappy
         parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         sys.path.insert(0, parent_dir)
-        import main  # This triggers the encoding setup (was scrappy.py, now main.py)
-
+        # Imported for its side effect: main.py sets the UTF-8 env vars below
+        import main  # noqa: F401
 
         # Check that environment variables are set
         assert os.environ.get('PYTHONUTF8') == '1', "PYTHONUTF8 should be set to '1'"
@@ -57,34 +51,3 @@ def test_subprocess_encoding_config():
 
     # Should contain the text (emoji may be replaced)
     assert 'Test output' in result.stdout
-
-
-
-
-if __name__ == '__main__':
-    print("Testing Unicode encoding handling...")
-
-    print("\n1. Testing safe_print with emojis...")
-    test_safe_print_with_emojis()
-    print("   PASSED")
-
-    print("\n2. Testing safe_print fallback...")
-    test_safe_print_fallback_with_encoding_error()
-    print("   PASSED")
-
-    print("\n3. Testing UTF-8 environment variables...")
-    if sys.platform == 'win32':
-        test_utf8_environment_variables()
-        print("   PASSED")
-    else:
-        print("   SKIPPED (not Windows)")
-
-    print("\n4. Testing subprocess encoding config...")
-    test_subprocess_encoding_config()
-    print("   PASSED")
-
-    print("\n5. Testing npm emoji output simulation...")
-    test_npm_emoji_output_simulation()
-    print("   PASSED")
-
-    print("\nAll tests passed!")

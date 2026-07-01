@@ -6,9 +6,6 @@ Tests verify behavior of session commands:
 - Clear session
 """
 
-import pytest
-from unittest.mock import Mock, patch, mock_open
-from pathlib import Path
 
 import sys
 import os

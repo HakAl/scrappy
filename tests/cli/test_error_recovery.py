@@ -6,8 +6,7 @@ retry logic, fallback providers, and graceful degradation.
 """
 
 import pytest
-from pathlib import Path
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch
 
 
 class TestRetryStrategy:
@@ -323,7 +322,6 @@ class TestRecoveryLogging:
     def test_retry_logs_attempts(self):
         """Retry should log each attempt."""
         from scrappy.cli.error_recovery import retry_operation
-        import logging
 
         attempts = []
 
@@ -346,7 +344,6 @@ class TestRecoveryLogging:
     def test_fallback_logs_provider_switch(self):
         """Fallback should log when switching providers."""
         from scrappy.cli.error_recovery import with_fallback
-        import logging
 
         def failing():
             raise Exception("Fail")

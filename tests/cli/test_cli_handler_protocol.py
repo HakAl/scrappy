@@ -11,9 +11,7 @@ Following Phase 5 principles:
 - Minimal mocking (only external dependencies)
 """
 
-import pytest
 from typing import Any, Dict
-from unittest.mock import Mock
 
 from tests.helpers import ConfigurableTestOrchestrator
 
@@ -27,7 +25,6 @@ class TestHandlerStatusBehavior:
 
     def test_returns_dict_with_status_information(self):
         """get_status returns a dictionary with meaningful status data."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class StatusHandler:
             def __init__(self, orchestrator):
@@ -63,7 +60,6 @@ class TestHandlerStatusBehavior:
 
     def test_status_includes_diagnostic_information(self):
         """get_status returns meaningful diagnostic information."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class DiagnosticHandler:
             def __init__(self, orchestrator):
@@ -114,7 +110,6 @@ class TestHandlerStatusBehavior:
 
     def test_status_reflects_current_state(self):
         """get_status reflects current handler state, not cached data."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class DynamicHandler:
             def __init__(self, orchestrator):
@@ -154,7 +149,6 @@ class TestHandlerResetBehavior:
 
     def test_clears_internal_state(self):
         """reset clears all internal handler state."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class StatefulHandler:
             def __init__(self, orchestrator):
@@ -195,7 +189,6 @@ class TestHandlerResetBehavior:
 
     def test_reset_makes_handler_reusable(self):
         """reset allows handler to be reused from clean state."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class ReusableHandler:
             def __init__(self, orchestrator):
@@ -240,7 +233,6 @@ class TestHandlerInitializationBehavior:
 
     def test_sets_up_required_state(self):
         """initialize sets up any required handler state."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class InitializableHandler:
             def __init__(self, orchestrator):
@@ -275,7 +267,6 @@ class TestHandlerInitializationBehavior:
 
     def test_prepare_handler_for_use(self):
         """initialize prepares handler for actual use."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class WorkingHandler:
             def __init__(self, orchestrator):
@@ -315,7 +306,6 @@ class TestHandlerCleanupBehavior:
 
     def test_releases_resources(self):
         """cleanup releases any handler resources."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class CleanableHandler:
             def __init__(self, orchestrator):
@@ -347,7 +337,6 @@ class TestHandlerCleanupBehavior:
 
     def test_makes_handler_safe_to_destroy(self):
         """cleanup prepares handler for safe destruction."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class ResourceHandler:
             def __init__(self, orchestrator):
@@ -391,7 +380,6 @@ class TestHandlerLifecycle:
 
     def test_complete_lifecycle_flow(self):
         """Handler works correctly through full lifecycle."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class LifecycleHandler:
             def __init__(self, orchestrator):
@@ -453,7 +441,6 @@ class TestHandlerExtensibility:
 
     def test_custom_methods_work_alongside_protocol(self):
         """Handlers with additional methods work correctly."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class FeatureRichHandler:
             """Handler with many custom methods beyond protocol requirements."""
@@ -511,7 +498,6 @@ class TestHandlerEdgeCases:
 
     def test_reset_before_initialize(self):
         """reset works even if initialize was never called."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class SafeHandler:
             def __init__(self, orchestrator):
@@ -539,7 +525,6 @@ class TestHandlerEdgeCases:
 
     def test_cleanup_before_initialize(self):
         """cleanup works even if initialize was never called."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class RobustHandler:
             def __init__(self, orchestrator):
@@ -567,7 +552,6 @@ class TestHandlerEdgeCases:
 
     def test_multiple_initializations(self):
         """initialize can be called multiple times safely."""
-        from scrappy.cli.protocols import CLIHandlerProtocol
 
         class ReinitializableHandler:
             def __init__(self, orchestrator):

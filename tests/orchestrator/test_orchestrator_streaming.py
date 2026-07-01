@@ -12,12 +12,11 @@ through AgentOrchestrator, including:
 
 import pytest
 from typing import AsyncIterator, Optional
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock
 
 from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.types import StreamChunk
 from scrappy.orchestrator.model_selection import ModelSelectionType
-from scrappy.infrastructure.exceptions import ProviderNotFoundError
 from tests.helpers import make_stream_chunk
 
 

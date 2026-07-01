@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from scrappy.agent_tools.components.sandboxed_runner import (
     SandboxedSubprocessRunner,

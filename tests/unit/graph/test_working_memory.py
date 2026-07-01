@@ -8,12 +8,9 @@ Tests:
 - think_node context augmentation
 """
 
-from pathlib import Path
 from typing import Optional
 
-import pytest
 
-from scrappy.graph.protocols import WorkingMemoryProtocol
 from scrappy.graph.nodes.execute import (
     WorkingMemoryAdapter,
     execute_node,
@@ -196,7 +193,7 @@ class TestExecuteNodeWorkingMemory:
         adapter = MockToolAdapter(results=[ToolResult(name="read_file", result="file content")])
 
         # Should not raise
-        result = execute_node(state, adapter, working_memory=memory)
+        execute_node(state, adapter, working_memory=memory)
 
         # Verify execution happened
         assert len(adapter.executed_calls) == 1

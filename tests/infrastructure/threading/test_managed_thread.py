@@ -5,11 +5,8 @@ Tests lifecycle management, graceful shutdown, and thread safety.
 """
 
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional
 
-import pytest
 
 from scrappy.infrastructure.threading import ManagedThread
 

@@ -5,11 +5,9 @@ Following CLAUDE.md: Test BEHAVIOR. Prove fallback chain works correctly.
 """
 
 import pytest
-import asyncio
 from unittest.mock import Mock
 from scrappy.infrastructure.error_recovery import (
     FallbackChain,
-    with_fallback,
     with_fallback_async,
     graceful_degrade,
 )

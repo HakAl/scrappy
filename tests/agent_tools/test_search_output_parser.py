@@ -1,6 +1,5 @@
 """Tests for search output parser."""
 
-import pytest
 from unittest.mock import Mock
 
 from scrappy.agent_tools.components.search_output_parser import SearchOutputParser

@@ -13,11 +13,9 @@ import pytest
 from scrappy.infrastructure.theme import (
     CustomTheme,
     DEFAULT_THEME,
-    GIT_COLORS,
     GitColors,
     LightTheme,
     NoColorTheme,
-    SYNTAX_COLORS,
     ScrappyTheme,
     SyntaxColors,
     THEME_COLOR_KEYS,

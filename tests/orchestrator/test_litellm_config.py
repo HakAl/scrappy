@@ -4,7 +4,6 @@ Tests for LiteLLM router configuration.
 Tests model group configuration and API key handling.
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 from scrappy.orchestrator.litellm_config import (

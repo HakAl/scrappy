@@ -6,15 +6,10 @@ silently swallowed with `except Exception: pass`.
 """
 
 import pytest
-import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock, AsyncMock
-from datetime import datetime
 
 from scrappy.orchestrator.cache import ResponseCache
-from scrappy.orchestrator.rate_limiting import RateLimitTracker
-from scrappy.orchestrator.output import CapturingOutput, NullOutput
-from scrappy.orchestrator.provider_types import LLMResponse, ProviderLimits
+from scrappy.orchestrator.output import CapturingOutput
+from scrappy.orchestrator.provider_types import LLMResponse
 
 
 class TestCacheErrorReporting:

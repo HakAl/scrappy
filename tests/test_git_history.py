@@ -6,7 +6,6 @@ that will be extracted from CodebaseContext.
 """
 import pytest
 import subprocess
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 

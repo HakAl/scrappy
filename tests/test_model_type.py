@@ -6,11 +6,10 @@ critical for automatic selection of instruction-tuned models for agent planning.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
 
 # Import will fail until implementation exists
 try:
-    from scrappy.orchestrator.provider_types import ModelType, ModelInfo, LLMProviderBase
+    from scrappy.orchestrator.provider_types import ModelType, ModelInfo
     IMPORTS_AVAILABLE = True
 except ImportError:
     IMPORTS_AVAILABLE = False

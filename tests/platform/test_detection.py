@@ -5,8 +5,7 @@ Tests prove that platform detection features work correctly,
 not just that code runs. Focus on behavior, edge cases, and error conditions.
 """
 
-import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from scrappy.platform.detection import SystemPlatformDetector
 
 
@@ -219,7 +218,7 @@ class TestSystemPlatformDetector:
             result2 = detector.has_tool('git')
             second_call_count = mock_which.call_count
 
-            assert result1 == result2 == True
+            assert result1 == result2 is True
             assert first_call_count == second_call_count
 
     def test_has_tool_rejects_empty_tool_name(self):

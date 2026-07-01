@@ -15,14 +15,15 @@ Cassettes are stored in tests/integration/cassettes/ and replayed in CI.
 import os
 import pytest
 
-# Mark all tests in this module as integration (skipped by default)
-pytestmark = pytest.mark.integration
 from dotenv import load_dotenv
 from scrappy.orchestrator.litellm_service import LiteLLMService
 from scrappy.orchestrator.litellm_config import create_litellm_router
-from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
+from scrappy.orchestrator.types import StreamChunk
 from scrappy.orchestrator.provider_types import LLMResponse, ToolCall
 from tests.helpers import MockOutputForLiteLLM, MockApiKeyService
+
+# Mark all tests in this module as integration (skipped by default)
+pytestmark = pytest.mark.integration
 
 # Load keys for recording cassettes
 load_dotenv()

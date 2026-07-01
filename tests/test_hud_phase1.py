@@ -7,12 +7,10 @@ Tests the foundation for the Heads-Up Display (HUD) system:
 - ToolContext HUD fields (task_storage, working_set, turn)
 """
 import pytest
-from pathlib import Path
 
 from scrappy.cli.protocols import (
     Task,
     TaskStatus,
-    TaskPriority,
     InMemoryTaskStorage,
 )
 from scrappy.agent_tools.tools.base import (

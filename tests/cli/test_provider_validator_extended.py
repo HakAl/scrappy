@@ -4,11 +4,9 @@ Tests the provider availability validation functionality.
 Following TDD - these tests are written first, implementation comes after.
 """
 
-import pytest
 
 from scrappy.cli.validators import (
     validate_provider,
-    ProviderValidationResult,
 )
 
 

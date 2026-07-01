@@ -2,15 +2,13 @@
 Tests for SemanticSearchManager - semantic search lifecycle management.
 """
 import pytest
-import tempfile
 from pathlib import Path
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 from scrappy.context.semantic_manager import SemanticSearchManager, NullSemanticSearchManager
 from scrappy.context.semantic.decision import ThresholdDecisionMaker
 from scrappy.context.semantic.state import LanceDBIndexStateManager
 from scrappy.infrastructure.threading import (
-    EventQueueProtocol,
     ThreadSafeEventQueue,
     BackgroundEvent,
     EventType,

@@ -5,7 +5,6 @@ Tests prove that the orchestrator correctly coordinates platform detection,
 validation, translation, and execution strategies.
 """
 
-import pytest
 from tests.helpers import (
     FakePlatformDetector,
     FakeCommandTranslator,

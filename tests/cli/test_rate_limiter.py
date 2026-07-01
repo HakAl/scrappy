@@ -9,12 +9,10 @@ Focuses on:
 - Error handling
 """
 
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
 from scrappy.cli.rate_limiter import RateLimiter
-from scrappy.infrastructure.formatters.rate_limit_formatter import extract_time_from_timestamp
 from tests.helpers import MockIO
 
 class TestRateLimiterDisplay:

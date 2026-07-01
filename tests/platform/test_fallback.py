@@ -1,10 +1,5 @@
 import pytest
-import re
-import shutil
-from pathlib import Path
-from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any
+from unittest.mock import patch
 
 # Import the class to test
 from scrappy.platform.fallback import PythonCommandFallbackImpl
@@ -40,7 +35,7 @@ class TestPythonCommandFallbackImpl:
         result = fallback.ls([], temp_dir)
 
         assert result['returncode'] == 0
-        assert result['used_fallback'] == True
+        assert result['used_fallback'] is True
         assert 'empty_file.txt' in result['output']
         assert 'test_file.txt' in result['output']
         assert 'subdir' in result['output']
@@ -509,7 +504,7 @@ class TestPythonCommandFallbackImpl:
         assert 'Hello' in result['output']
         # Should handle encoding errors gracefully
         assert 'used_fallback' in result
-        assert result['used_fallback'] == True
+        assert result['used_fallback'] is True
 
     def test_special_characters_in_filenames(self, fallback, temp_dir):
         """Test handling of special characters in filenames."""

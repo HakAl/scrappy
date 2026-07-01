@@ -11,7 +11,6 @@ Legacy provider priority tests are REMOVED - LiteLLM Router handles priority
 based on the order of models in litellm_config.py.
 """
 
-import pytest
 from unittest.mock import MagicMock, PropertyMock
 
 from scrappy.orchestrator.provider_selector import ProviderSelector

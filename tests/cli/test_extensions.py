@@ -5,7 +5,6 @@ TDD: Tests written first for the extensions.py module which centralizes
 file extension categories and file type patterns used throughout the CLI.
 """
 
-import pytest
 
 
 class TestLanguageExtensions:

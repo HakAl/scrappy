@@ -8,15 +8,12 @@ DelegationManager respects enforcement decisions (ALLOW, WARN, BLOCK, FAIL).
 """
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-from unittest.mock import Mock
 
 import pytest
 
 from scrappy.orchestrator.delegation import DelegationManager
 from scrappy.orchestrator.rate_limiting.scorer import QuotaScorer
 from scrappy.orchestrator.rate_limiting.enforcement import RateLimitEnforcementPolicy
-from scrappy.orchestrator.rate_limiting.notifier import RateLimitNotifier, NullNotifier
-from scrappy.orchestrator.rate_limiting.protocols import EnforcementAction
 from scrappy.orchestrator.provider_types import LLMResponse
 from scrappy.infrastructure.exceptions.provider_errors import AllProvidersRateLimitedError
 

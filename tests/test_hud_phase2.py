@@ -5,7 +5,6 @@ Tests that ReadFileTool and WriteFileTool properly record file access
 in the WorkingSet for HUD display.
 """
 import pytest
-from pathlib import Path
 
 from scrappy.agent_tools.tools.file_tools import ReadFileTool, WriteFileTool
 from scrappy.agent_tools.tools.base import ToolContext, WorkingSet

@@ -7,7 +7,6 @@ Console instances based on TUI/CLI mode.
 
 import pytest
 from unittest.mock import MagicMock
-from io import StringIO
 
 from rich.console import Console
 

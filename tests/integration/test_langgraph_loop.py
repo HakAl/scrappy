@@ -6,12 +6,10 @@ Run with: python -m pytest tests/integration/test_langgraph_loop.py -v -s
 
 import json
 import pytest
-from unittest.mock import Mock, MagicMock
 from langgraph.checkpoint.memory import MemorySaver
 
 from scrappy.graph.agent import build_graph
 from scrappy.graph.state import AgentState
-from scrappy.graph.tools import ToolAdapter
 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
 
 
@@ -105,7 +103,7 @@ class TracingLLMService:
 
         response = MockLLMResponse(content, tool_calls)
 
-        print(f"\nRESPONSE:")
+        print("\nRESPONSE:")
         print(f"Content: {response.content[:200] if response.content else '(empty)'}...")
         print(f"Tool calls: {len(response.tool_calls)}")
         for tc in response.tool_calls:
@@ -149,7 +147,7 @@ class TracingLLMService:
 
         response = MockLLMResponse(content, tool_calls)
 
-        print(f"\nRESPONSE:")
+        print("\nRESPONSE:")
         print(f"Content: {response.content[:200] if response.content else '(empty)'}...")
         print(f"Tool calls: {len(response.tool_calls)}")
         for tc in response.tool_calls:
@@ -295,7 +293,7 @@ def test_simple_task_completes_with_mocks():
     else:
         final_state = result
 
-    print(f"\n\n=== FINAL STATE ===")
+    print("\n\n=== FINAL STATE ===")
     print(f"Done: {final_state.done}")
     print(f"Iterations: {final_state.iteration}")
     print(f"Last error: {final_state.last_error}")

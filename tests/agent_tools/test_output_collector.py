@@ -9,7 +9,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-import pytest
 
 from scrappy.agent_tools.components.output_collector import ThreadSafeOutputCollector
 

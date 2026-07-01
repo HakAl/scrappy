@@ -3,8 +3,6 @@ Tests for CodebaseContext - project exploration and context management.
 """
 import pytest
 from pathlib import Path
-from datetime import datetime
-import json
 
 from scrappy.context import CodebaseContext
 

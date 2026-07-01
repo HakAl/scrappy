@@ -4,20 +4,16 @@ Tests for rate limit enforcement components.
 Tests QuotaScorer, RateLimitEnforcementPolicy, and RateLimitNotifier.
 """
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-from unittest.mock import Mock
 
 import pytest
 
 from scrappy.orchestrator.rate_limiting.protocols import (
     EnforcementAction,
-    EnforcementDecision,
-    QuotaScore,
 )
 from scrappy.orchestrator.rate_limiting.scorer import QuotaScorer
 from scrappy.orchestrator.rate_limiting.enforcement import RateLimitEnforcementPolicy
-from scrappy.orchestrator.rate_limiting.notifier import RateLimitNotifier, NullNotifier
+from scrappy.orchestrator.rate_limiting.notifier import RateLimitNotifier
 
 
 # --- Test Doubles ---

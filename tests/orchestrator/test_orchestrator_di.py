@@ -10,8 +10,7 @@ After LiteLLM integration (Phase 3):
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch
-from pathlib import Path
+from unittest.mock import Mock
 
 from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.cache import ResponseCache
@@ -21,7 +20,6 @@ from scrappy.orchestrator.session import SessionManager
 from scrappy.orchestrator.provider_selector import ProviderSelector
 from scrappy.cli.protocols import BaseOutputProtocol
 from scrappy.orchestrator.output import NullOutput
-from scrappy.orchestrator.manager_protocols import DelegationManagerProtocol
 
 
 class MockDelegationManager:

@@ -1,11 +1,12 @@
 import pytest
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import Mock, MagicMock, patch
 from scrappy.agent_tools.formatters.output_formatter import (
     NullFormatter,
     GitOutputFormatter,
     RichDirectoryFormatter,
     HAS_RICH
 )
+from scrappy.infrastructure.theme import GIT_COLORS, SYNTAX_COLORS
 
 
 # -----------------------------------------------------------------------------
@@ -208,8 +209,6 @@ class TestRichDirectoryFormatter:
 # -----------------------------------------------------------------------------
 # Theme Integration Tests (GIT_COLORS and SYNTAX_COLORS)
 # -----------------------------------------------------------------------------
-
-from scrappy.infrastructure.theme import GIT_COLORS, SYNTAX_COLORS
 
 
 class TestGitOutputFormatterThemeColors:

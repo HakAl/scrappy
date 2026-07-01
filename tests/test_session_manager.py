@@ -27,7 +27,7 @@ def temp_dir():
     # Cleanup
     try:
         shutil.rmtree(temp_path)
-    except:
+    except OSError:
         pass  # Ignore cleanup errors on Windows
 
 

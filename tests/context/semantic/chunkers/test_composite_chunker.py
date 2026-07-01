@@ -4,13 +4,10 @@ Tests for CompositeCodeChunker.
 Tests routing to language-specific chunkers and fallback behavior.
 """
 
-import pytest
 from typing import List, Set
-from unittest.mock import Mock
 
-from scrappy.context.protocols import CodeChunk, ChunkingStrategyProtocol
+from scrappy.context.protocols import CodeChunk
 from scrappy.context.semantic.chunkers.composite_chunker import CompositeCodeChunker
-from scrappy.context.semantic.chunkers.python_chunker import PythonASTChunker
 
 
 class MockChunkingStrategy:
@@ -84,7 +81,7 @@ class TestCompositeCodeChunkerRouting:
         mock_strategy = MockChunkingStrategy({".py", ".pyi"}, mock_chunks)
 
         chunker = CompositeCodeChunker(strategies={"python": mock_strategy})
-        result = chunker.chunk("module.pyi", "def func() -> int: ...")
+        chunker.chunk("module.pyi", "def func() -> int: ...")
 
         assert mock_strategy.chunk_called
         assert mock_strategy.last_file_path == "module.pyi"

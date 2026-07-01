@@ -5,9 +5,7 @@ These tests verify that ContextCoordinator properly coordinates codebase context
 operations with orchestrator components (logging, task execution).
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 from scrappy.orchestrator.context_coordinator import ContextCoordinator
 from scrappy.context.codebase_context import CodebaseContext

@@ -10,11 +10,9 @@ Tests tool call fragment accumulation including:
 - State management (get_completed, get_pending, reset, force_complete)
 """
 
-import pytest
 import json
-from typing import List
 
-from scrappy.orchestrator.streaming_util import ToolCallAccumulator, ToolCall
+from scrappy.orchestrator.streaming_util import ToolCallAccumulator
 from scrappy.orchestrator.types import ToolCallFragment
 
 

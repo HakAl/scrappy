@@ -4,7 +4,6 @@ Tests for delegation protocol definitions.
 Focuses on LLMRequest behavior, particularly kwargs filtering.
 """
 
-import pytest
 from scrappy.orchestrator.protocols import LLMRequest, INTERNAL_KWARGS
 
 

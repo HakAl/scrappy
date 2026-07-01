@@ -9,15 +9,12 @@ TDD: These tests define expected behavior for Rich-enhanced displays.
 
 import pytest
 from datetime import datetime
-from unittest.mock import Mock, patch
-from io import StringIO
 
 from rich.console import Console
 
 from scrappy.cli.unified_io import UnifiedIO
 from scrappy.cli.display import CLIDisplay
-from scrappy.cli.interactive import InteractiveMode
-from tests.helpers import MockIO, ConfigurableTestOrchestrator
+from tests.helpers import ConfigurableTestOrchestrator
 
 
 # =============================================================================
@@ -51,7 +48,6 @@ class TestWelcomeBannerPanel:
     def test_welcome_banner_uses_panel_component(self):
         """Welcome banner should render inside a Rich Panel."""
         io, console = make_capturing_rich_io()
-        orch = ConfigurableTestOrchestrator()
 
         # Create a function to render the enhanced welcome banner
         from scrappy.cli.interactive_banner import render_welcome_banner
@@ -78,7 +74,7 @@ class TestHelpCommandsTable:
         """Help display should use Rich Table for command listing."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        display = CLIDisplay(orch, datetime.now(), io)
+        CLIDisplay(orch, datetime.now(), io)
 
         from scrappy.cli.display_rich import show_help_table
 
@@ -179,7 +175,7 @@ class TestStatusDisplayComponents:
         """Status display should group information in panels."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        display = CLIDisplay(orch, datetime.now(), io)
+        CLIDisplay(orch, datetime.now(), io)
 
         from scrappy.cli.display_rich import show_status_rich
 
@@ -380,7 +376,7 @@ class TestUsageStatisticsRich:
         """Usage stats should display provider breakdown in a table."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        display = CLIDisplay(orch, datetime.now(), io)
+        CLIDisplay(orch, datetime.now(), io)
 
         from scrappy.cli.display_rich import show_usage_rich
 
@@ -592,7 +588,7 @@ class TestRichDisplayIntegration:
         # All protocol methods should work
         io.echo("Test message")
         io.secho("Styled message", fg="green", bold=True)
-        text = io.style("Inline style", fg="yellow")
+        io.style("Inline style", fg="yellow")
 
         output = get_captured_output(console)
 

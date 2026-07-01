@@ -15,15 +15,14 @@ Run with: pytest -m slow tests/orchestrator/test_stream_backpressure.py
 
 import pytest
 
-# Mark all tests in this module as slow (skipped by default)
-pytestmark = pytest.mark.slow
 import asyncio
 from typing import AsyncIterator, List, Optional
-import sys
 
 from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
-from scrappy.orchestrator.protocols import StreamingCompletionProtocol
 from tests.helpers import make_stream_chunk
+
+# Mark all tests in this module as slow (skipped by default)
+pytestmark = pytest.mark.slow
 
 
 # =============================================================================
@@ -370,7 +369,6 @@ async def test_stream_memory_usage_stays_bounded():
     )
 
     collected_count = 0
-    max_memory_sample = 0
 
     async for chunk in service.stream_completion(
         model="fast",

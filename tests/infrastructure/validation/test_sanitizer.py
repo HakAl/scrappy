@@ -7,13 +7,10 @@ Tests security-critical sanitization functions including:
 - String sanitization
 """
 
-import pytest
 
 from scrappy.infrastructure.validation.sanitizer import (
     ValidationResult,
     contains_dangerous_patterns,
-    strip_control_characters,
-    normalize_unicode,
     is_ascii_printable,
     sanitize_string,
 )

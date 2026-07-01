@@ -4,10 +4,8 @@ Tests the validation layer for command subarguments like 'cache clear',
 'context explore', 'session save', etc.
 """
 
-import pytest
 from scrappy.cli.validators.subcommand import (
     validate_subcommand,
-    SubcommandValidationResult,
     COMMAND_SUBCOMMANDS,
 )
 

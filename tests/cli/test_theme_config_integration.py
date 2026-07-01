@@ -6,14 +6,12 @@ verifying that user theme configuration works end-to-end.
 """
 
 import json
-import os
 import pytest
 from pathlib import Path
 
 from scrappy.cli.config_factory import get_config, reset_config, CLIConfigFactory
 from scrappy.cli.cli_config import CLIConfig
 from scrappy.infrastructure.theme import (
-    ThemeProtocol,
     ScrappyTheme,
     LightTheme,
     CustomTheme,
@@ -197,7 +195,7 @@ class TestThemeCaching:
         # Second access returns cached instance
         # Note: They should be the same type and values, caching ensures same object
         theme2 = config.theme
-        assert type(theme1) == type(theme2)
+        assert type(theme1) is type(theme2)
         assert theme1.primary == theme2.primary
 
     def test_theme_loads_lazily(self):
@@ -232,7 +230,7 @@ theme:
         # get_config() caches the config instance
         assert config1 is config2
         # Theme should be the same type
-        assert type(config1.theme) == type(config2.theme)
+        assert type(config1.theme) is type(config2.theme)
 
     def test_get_config_reload_creates_new_theme(self, tmp_path: Path, monkeypatch):
         """get_config(reload=True) creates new theme instance."""
@@ -249,7 +247,7 @@ theme:
         # Different config instances
         assert config1 is not config2
         # But themes should be equivalent
-        assert type(config1.theme) == type(config2.theme)
+        assert type(config1.theme) is type(config2.theme)
 
 
 class TestThemeWithOtherConfig:

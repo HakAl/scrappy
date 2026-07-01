@@ -6,9 +6,8 @@ Tests behavior of change detection and chunk estimation between index states.
 
 from pathlib import Path
 from datetime import datetime
-import pytest
 
-from scrappy.context.protocols import IndexState, ChangeMetrics
+from scrappy.context.protocols import IndexState
 from scrappy.context.semantic.metrics import ChangeMetricsCalculator
 from scrappy.context.semantic.config import SemanticIndexConfig
 

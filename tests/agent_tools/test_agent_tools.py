@@ -2,8 +2,7 @@
 Tests for agent tools - base classes, file tools, and tool registry.
 """
 import pytest
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 
 from scrappy.agent_tools.tools.base import (
     ToolContext,

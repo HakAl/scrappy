@@ -5,19 +5,12 @@ This module contains comprehensive tests for safe_import, require_import,
 import_with_fallback, and path setup functions.
 """
 
-import sys
-import os
-import tempfile
-import importlib
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, mock_open
+from unittest.mock import Mock, patch
 import pytest
 
 from scrappy.infrastructure.utils import (
     safe_import,
     require_import,
-    setup_src_path,
-    setup_root_path,
     import_with_fallback,
     get_aiofiles,
     get_httpx,
@@ -195,7 +188,6 @@ class TestImportWithFallback:
 
     def test_import_with_fallback_primary_fails_fallback_success(self):
         """Test fallback import when primary fails."""
-        mock_primary = Mock()
         mock_fallback = Mock()
 
         # Patch setup_src_path FIRST, before mocking __import__

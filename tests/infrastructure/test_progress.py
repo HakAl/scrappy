@@ -1,17 +1,12 @@
 import sys
 import logging
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import pytest
 
 from scrappy.infrastructure.progress import (
     RichProgressReporter,
-    LiveProgressReporter,
     LoggingProgressReporter,
-    CallbackProgressReporter,
-    NullProgressReporter,
-    UnifiedIOProgressReporter,
 )
-from scrappy.infrastructure.theme import DEFAULT_THEME, LightTheme, NoColorTheme
 
 
 # --- Fixtures ---

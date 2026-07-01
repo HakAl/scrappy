@@ -5,12 +5,11 @@ Tests LLMResponse, NullContext, AgentOrchestratorAdapter, and SimpleLLMAdapter.
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 
 from scrappy.orchestrator_adapter import (
     LLMResponse,
     NullContext,
-    ContextProvider,
     AgentOrchestratorAdapter
 )
 

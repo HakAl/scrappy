@@ -4,7 +4,6 @@ Tests the validation layer that provides input sanitization and validation
 for commands, paths, and providers.
 """
 
-import pytest
 from scrappy.cli.validators import (
     validate_command,
     validate_path,

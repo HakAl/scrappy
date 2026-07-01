@@ -4,7 +4,7 @@ Test helpers for CLI tests.
 Provides mock implementations for testing without file I/O.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 
 
 class MockApiKeyConfigService:

@@ -4,7 +4,6 @@ Tests for OutputParser component.
 Tests output parsing, truncation, and format detection following TDD principles.
 """
 
-import pytest
 from scrappy.agent_tools.components.output_parser import OutputParser
 
 

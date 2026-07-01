@@ -9,7 +9,6 @@ Tests cover:
 - Cancellation token integration
 """
 
-import pytest
 
 from scrappy.graph.run_context import (
     AgentRunContext,
@@ -99,7 +98,6 @@ class TestHandoffTriggers:
     def test_timeout_triggers_handoff_after_threshold(self):
         """Timeout should trigger handoff after N consecutive errors."""
         ctx = AgentRunContext()
-        threshold = HANDOFF_TRIGGERS.get("timeout", 2)
 
         # First timeout - should not trigger
         ctx.record_provider_error("anthropic", "timeout")

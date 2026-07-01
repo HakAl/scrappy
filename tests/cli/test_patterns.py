@@ -2,7 +2,6 @@
 Tests for CLI paths configuration module.
 """
 
-import pytest
 
 class TestSkipDirsProperties:
     """Tests for properties of skip directories."""
