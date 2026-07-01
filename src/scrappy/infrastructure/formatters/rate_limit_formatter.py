@@ -71,11 +71,11 @@ class RateLimitFormatter(StatsFormatter):
         theme: Theme instance for color values. Inherited from StatsFormatter.
     """
 
-    def __init__(self, io: "UnifiedIO"):
-        """Initialize formatter with UnifiedIO.
+    def __init__(self, io: FormatterOutputProtocol):
+        """Initialize formatter with styled output.
 
         Args:
-            io: UnifiedIO instance (contains theme and styling methods)
+            io: FormatterOutputProtocol instance (contains theme and styling methods)
         """
         super().__init__(io=io)
 

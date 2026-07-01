@@ -14,10 +14,11 @@ Usage:
 """
 
 from typing import Optional, List, Dict, Any
-import click
 
-# Import protocol from cli protocols (canonical location)
-from .protocols import CLIIOProtocol
+# Re-export the protocol from cli protocols (canonical location); many modules
+# import CLIIOProtocol from this module. The redundant alias marks the re-export
+# as intentional so lint does not strip it.
+from .protocols import CLIIOProtocol as CLIIOProtocol
 
 
 class TestIO:

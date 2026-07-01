@@ -4,7 +4,6 @@ Testing utilities for platform module.
 Provides mock implementations for testing platform-dependent code.
 """
 
-from scrappy.platform.protocols.detection import PlatformDetectorProtocol
 
 
 class MockPlatformDetector:

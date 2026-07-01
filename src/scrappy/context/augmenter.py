@@ -9,7 +9,6 @@ import logging
 from pathlib import Path
 from typing import Optional, Callable
 
-from .config_loader import get_truncation_defaults
 from .protocols import SearchResult, SemanticSearchManagerProtocol
 
 logger = logging.getLogger(__name__)
@@ -105,7 +104,7 @@ class ContextAugmenter:
                 git_info.append(f"Branch: {git_history['current_branch']}")
             if git_history.get('recent_commits'):
                 commits = git_history['recent_commits'][:5]
-                git_info.append(f"Recent commits:\n" + "\n".join(f"  {c}" for c in commits))
+                git_info.append("Recent commits:\n" + "\n".join(f"  {c}" for c in commits))
             if git_history.get('recently_changed_files'):
                 changed = git_history['recently_changed_files'][:10]
                 git_info.append(f"Recently changed: {', '.join(changed)}")
@@ -118,7 +117,7 @@ class ContextAugmenter:
             if file_index:
                 py_files = file_index.get('python', [])[:20]
                 if py_files:
-                    context_parts.append(f"Python files:\n" + "\n".join(f"  - {f}" for f in py_files))
+                    context_parts.append("Python files:\n" + "\n".join(f"  - {f}" for f in py_files))
 
         if context_parts:
             context_block = "\n\n".join(context_parts)

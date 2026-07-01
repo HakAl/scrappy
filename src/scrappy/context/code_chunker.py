@@ -5,7 +5,7 @@ Implements CodeChunkerProtocol with semantic overlap strategy.
 """
 
 from typing import List
-from .protocols import CodeChunk, CodeChunkerProtocol
+from .protocols import CodeChunk
 
 
 class SemanticCodeChunker:

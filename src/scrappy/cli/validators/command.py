@@ -7,7 +7,7 @@ length checks, and command name validation.
 from dataclasses import dataclass
 from typing import Optional, List
 
-from .base import CONTROL_CHARS_PATTERN, NEWLINE_PATTERN
+from .base import CONTROL_CHARS_PATTERN
 
 
 @dataclass

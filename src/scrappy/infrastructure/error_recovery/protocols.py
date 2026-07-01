@@ -10,11 +10,12 @@ Following SOLID principles from CLAUDE.md:
 from typing import Protocol, Callable, TypeVar, Any, Optional, runtime_checkable
 
 # Re-export enums from exceptions.enums for backward compatibility
-# (Enums moved to break circular dependency)
+# (Enums moved to break circular dependency). The redundant aliases mark the
+# re-exports as intentional so lint does not strip them.
 from ..exceptions.enums import (
-    RecoveryAction,
-    ErrorSeverity,
-    ErrorCategory,
+    RecoveryAction as RecoveryAction,
+    ErrorSeverity as ErrorSeverity,
+    ErrorCategory as ErrorCategory,
 )
 
 T = TypeVar('T')

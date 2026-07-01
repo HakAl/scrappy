@@ -20,7 +20,7 @@ import logging
 import random
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, Optional, Set
 
 from .protocols import StalenessReport, TimeProviderProtocol, FingerprintScannerProtocol
 from .semantic.config import SemanticIndexConfig

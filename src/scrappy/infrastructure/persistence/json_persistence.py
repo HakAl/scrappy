@@ -6,7 +6,10 @@ Provides synchronous and asynchronous JSON file persistence with error handling.
 
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...cli.protocols import BaseOutputProtocol
 
 try:
     import aiofiles
@@ -48,7 +51,7 @@ class JSONPersistence:
     def __init__(
         self,
         file_path: str,
-        output: Optional['OutputInterface'] = None,
+        output: Optional['BaseOutputProtocol'] = None,
         indent: int = 2,
         encoding: str = 'utf-8'
     ):
@@ -71,7 +74,7 @@ class JSONPersistence:
         self.indent = indent
         self.encoding = encoding
 
-    def _create_null_output(self) -> 'OutputInterface':
+    def _create_null_output(self) -> 'BaseOutputProtocol':
         """Create a null output that discards messages."""
         from ...orchestrator.output import NullOutput
         return NullOutput()

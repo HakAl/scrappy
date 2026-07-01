@@ -7,7 +7,6 @@ compatibility before execution.
 
 from typing import List, Tuple
 
-from scrappy.platform.protocols.validation import CommandValidatorProtocol
 from scrappy.platform.protocols.detection import PlatformDetectorProtocol
 
 

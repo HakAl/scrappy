@@ -7,7 +7,6 @@ for categorization, severity levels, suggestions, and recovery strategies.
 
 import json
 import logging
-import traceback
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional

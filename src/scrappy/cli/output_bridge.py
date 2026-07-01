@@ -17,12 +17,11 @@ Following SOLID principles:
 
 from typing import Optional, TYPE_CHECKING
 
-from .protocols import BaseOutputProtocol, RichRenderableProtocol
+from .protocols import BaseOutputProtocol
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
     from .protocols import OutputSink
-    from rich.console import RenderableType
 
 
 class OutputBridge:

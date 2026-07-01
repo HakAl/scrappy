@@ -16,7 +16,7 @@ Threat Model:
 import re
 from typing import Set
 
-from .sanitizer import ValidationResult, sanitize_string, is_ascii_printable
+from .sanitizer import ValidationResult, sanitize_string
 
 
 # Minimum and maximum key lengths

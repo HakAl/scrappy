@@ -8,7 +8,6 @@ like logging and task execution.
 from typing import Dict, Any, Optional, Callable
 
 try:
-    from ..context import CodebaseContext
     from ..context.protocols import CodebaseContextProtocol
 except ImportError:
     from context.protocols import CodebaseContextProtocol

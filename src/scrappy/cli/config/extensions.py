@@ -5,7 +5,7 @@ Centralizes file extension categories and file type patterns used
 throughout the CLI for file classification and filtering.
 """
 
-from typing import List, Set
+from typing import List
 
 # Programming language extensions
 PYTHON_EXTENSIONS: List[str] = ['.py', '.pyw', '.pyi']

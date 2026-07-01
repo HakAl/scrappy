@@ -5,11 +5,10 @@ Provides both synchronous and asynchronous retry with exponential backoff.
 Consolidates the three different retry implementations that previously existed.
 """
 
-from typing import Callable, TypeVar, Any, Optional, Union
+from typing import Callable, TypeVar, Any, Optional
 import time
 import asyncio
 import logging
-from .protocols import RetryStrategyProtocol
 from .config import RetryConfig, DEFAULT_RETRY_CONFIG
 from ..exceptions import BaseError
 

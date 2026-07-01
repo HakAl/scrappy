@@ -128,17 +128,3 @@ class OrchestratorConfig(BaseConfig):
         for task, providers in self.task_preferences.items():
             if not providers:
                 raise ValueError(f"task_preferences['{task}'] cannot be empty")
-
-def get_provider_reason(provider_name: str) -> str:
-    """
-    Get human-readable reason for provider selection.
-
-    DEPRECATED: Use OrchestratorConfig.get_provider_reason() instead.
-
-    Args:
-        provider_name: Name of the provider
-
-    Returns:
-        Description string explaining why this provider was selected
-    """
-    return _default_config.get_provider_reason(provider_name)

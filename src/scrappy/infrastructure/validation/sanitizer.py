@@ -126,12 +126,12 @@ def contains_dangerous_patterns(value: str) -> Tuple[bool, str]:
     # Check for path traversal
     for pattern in PATH_TRAVERSAL_PATTERNS:
         if re.search(pattern, value, re.IGNORECASE):
-            return True, f"Contains path traversal pattern"
+            return True, "Contains path traversal pattern"
 
     # Check for shell metacharacters
     for char in SHELL_METACHARACTERS:
         if char in value:
-            return True, f"Contains shell metacharacter"
+            return True, "Contains shell metacharacter"
 
     # Check for unicode confusables
     for confusable in UNICODE_CONFUSABLES:

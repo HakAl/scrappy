@@ -9,7 +9,7 @@ import platform
 import shutil
 from typing import Dict, Optional
 
-from scrappy.platform.protocols.detection import PlatformDetectorProtocol, PlatformType
+from scrappy.platform.protocols.detection import PlatformType
 
 
 class SystemPlatformDetector:

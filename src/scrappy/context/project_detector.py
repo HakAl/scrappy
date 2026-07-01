@@ -6,7 +6,6 @@ project types, programming languages, and sub-project structure.
 """
 
 from pathlib import Path
-from typing import Optional
 
 
 class ProjectDetector:

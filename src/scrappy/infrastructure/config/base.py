@@ -9,7 +9,7 @@ from dataclasses import dataclass, asdict, fields
 from typing import Any, Dict, Optional, TypeVar
 from copy import deepcopy
 
-from .protocols import ConfigProtocol, ConfigValidatorProtocol, Environment
+from .protocols import ConfigProtocol, Environment
 
 
 T = TypeVar('T', bound='BaseConfig')

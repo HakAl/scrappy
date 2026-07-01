@@ -14,8 +14,6 @@ from pathlib import Path
 
 from ..infrastructure.logging import StructuredLogger
 
-logger = logging.getLogger(__name__)
-
 from .provider_types import ProviderRegistry
 from ..context import CodebaseContext
 from ..infrastructure.config.api_keys import create_api_key_service
@@ -70,6 +68,8 @@ from .protocols import (
 )
 from ..infrastructure.protocols import PathProviderProtocol
 from ..infrastructure.paths import ScrappyPathProvider
+
+logger = logging.getLogger(__name__)
 
 
 class OrchestratorComponents:

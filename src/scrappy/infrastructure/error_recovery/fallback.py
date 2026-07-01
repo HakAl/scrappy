@@ -4,11 +4,9 @@ Fallback strategy implementation.
 Provides sequential fallback chain for when primary operations fail.
 """
 
-from typing import Callable, TypeVar, Any, Optional, Union
-import asyncio
+from typing import Callable, TypeVar, Any, Optional
 import logging
-from .protocols import FallbackStrategyProtocol
-from ..exceptions import BaseError, RetryExhaustedError
+from ..exceptions import RetryExhaustedError
 
 T = TypeVar('T')
 
