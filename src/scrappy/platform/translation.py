@@ -9,7 +9,6 @@ import re
 from typing import Tuple, Dict, List, Any, Optional
 from urllib.parse import quote_plus
 
-from scrappy.platform.protocols.translation import CommandTranslatorProtocol
 from scrappy.platform.protocols.detection import PlatformDetectorProtocol
 
 
@@ -441,7 +440,6 @@ class SmartCommandTranslator:
         Returns:
             Dict with intercept info or None if not a Spring Initializr command
         """
-        from typing import Dict, Any, Optional
 
         if 'start.spring.io' not in command:
             return None
@@ -499,7 +497,6 @@ class SmartCommandTranslator:
         Returns:
             Dict mapping file paths to file contents
         """
-        from typing import Dict, List
 
         if dependencies is None:
             dependencies = ['web', 'data-jpa', 'h2', 'validation', 'security']

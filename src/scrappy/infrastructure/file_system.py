@@ -77,7 +77,6 @@ class RealFileSystem:
         # Determine base path and pattern
         if "/" in pattern or "\\" in pattern:
             # Pattern includes path components
-            base = Path(pattern).parts[0] if pattern.startswith(("/", "\\")) else Path.cwd()
             search_path = Path(pattern).parent if not pattern.startswith(("**", "*")) else Path.cwd()
         else:
             # Simple pattern, search from current directory

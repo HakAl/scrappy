@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from scrappy.platform.protocols.execution import CommandExecutorProtocol, ExecutionResult
+from scrappy.platform.protocols.execution import ExecutionResult
 from scrappy.platform.protocols.detection import PlatformDetectorProtocol
 from scrappy.platform.protocols.translation import CommandTranslatorProtocol
 from scrappy.platform.protocols.fallback import PythonCommandFallbackProtocol

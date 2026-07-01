@@ -34,7 +34,12 @@ from .protocols import (
 if TYPE_CHECKING:
     from ..cli.protocols import CLIIOProtocol
     from .semantic.config import SemanticIndexConfig
-    from .protocols import IndexStateProtocol, IndexingDecisionProtocol
+    from .protocols import (
+        IndexStateProtocol,
+        IndexingDecisionProtocol,
+        SemanticSearchProtocol,
+        SearchResult,
+    )
 
 logger = logging.getLogger(__name__)
 

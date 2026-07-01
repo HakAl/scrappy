@@ -4,8 +4,8 @@ Delegation and orchestration exceptions.
 Errors related to request delegation, caching, and batch processing.
 """
 
-from typing import Optional, Dict, Any
-from .base import BaseError, NonRetryableError, RetryableError
+from typing import Optional, Any
+from .base import BaseError, NonRetryableError
 from .enums import (
     ErrorCategory,
     ErrorSeverity,

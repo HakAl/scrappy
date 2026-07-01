@@ -5,7 +5,7 @@ Defines abstract interfaces for external dependencies and infrastructure concern
 These protocols enable dependency injection and testing without real I/O operations.
 """
 
-from typing import TYPE_CHECKING, Protocol, Dict, Any, Optional, List, BinaryIO, Tuple
+from typing import TYPE_CHECKING, Protocol, Dict, Any, Optional, List, Tuple
 from pathlib import Path
 from io import StringIO
 

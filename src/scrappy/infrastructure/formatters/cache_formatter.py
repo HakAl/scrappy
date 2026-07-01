@@ -16,14 +16,14 @@ class CacheFormatter(StatsFormatter):
     entry counts, and cache status.
 
     Args:
-        io: UnifiedIO instance for styled output. Inherited from StatsFormatter.
+        io: FormatterOutputProtocol instance for styled output. Inherited from StatsFormatter.
     """
 
-    def __init__(self, io: "UnifiedIO"):
-        """Initialize formatter with UnifiedIO.
+    def __init__(self, io: FormatterOutputProtocol):
+        """Initialize formatter with styled output.
 
         Args:
-            io: UnifiedIO instance (contains theme and styling methods)
+            io: FormatterOutputProtocol instance (contains theme and styling methods)
         """
         super().__init__(io=io)
 

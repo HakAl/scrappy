@@ -9,13 +9,12 @@ from pathlib import Path
 import json
 
 from ..infrastructure.utils import safe_import
-
-aiofiles, AIOFILES_AVAILABLE = safe_import('aiofiles')
-
 from .memory import WorkingMemory
 from .protocols import WorkingMemoryProtocol  # For type hints (Dependency Inversion)
 from ..infrastructure.protocols import PathProviderProtocol
 from ..infrastructure.paths import ScrappyPathProvider
+
+aiofiles, AIOFILES_AVAILABLE = safe_import('aiofiles')
 
 
 class SessionManager:

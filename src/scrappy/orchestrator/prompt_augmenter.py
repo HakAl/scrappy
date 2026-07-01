@@ -10,7 +10,6 @@ Follows SOLID principles:
 from typing import Optional
 
 from .protocols import (
-    PromptAugmenterProtocol,
     ContextProvider as ContextProviderProtocol,
     WorkingMemoryProtocol,
 )

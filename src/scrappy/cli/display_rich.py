@@ -6,13 +6,9 @@ using Tables, Panels, Progress bars, and Tree structures.
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
-from rich.table import Table
-from rich.panel import Panel
-from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn
 from rich.tree import Tree
-from rich.text import Text
 
 from .unified_io import UnifiedIO
 
@@ -123,7 +119,6 @@ def show_status_rich(
     mode_str = current_tier.upper()
 
     # Model groups info (LiteLLM)
-    model_groups = status.get('model_groups', [])
     configured_models = status.get('configured_models', [])
     provider_health = status.get('provider_health', {})
 
@@ -333,7 +328,6 @@ def show_plan_tree(
 
     # Add tasks as branches
     for task in tasks:
-        task_id = task.get('id', '?')
         description = task.get('description', 'Unknown task')
         status = task.get('status', 'pending')
 

@@ -7,19 +7,17 @@ Prevents cascading failures by stopping calls to failing services.
 
 from typing import Callable, TypeVar, Any, Optional
 import time
-import asyncio
 import logging
 from enum import Enum
 from dataclasses import dataclass, asdict
 import json
 from pathlib import Path
 
-from .protocols import CircuitBreakerProtocol
 from .config import (
     CircuitBreakerConfig,
     DEFAULT_CIRCUIT_BREAKER_CONFIG
 )
-from ..exceptions import CircuitBreakerOpenError, BaseError
+from ..exceptions import CircuitBreakerOpenError
 
 T = TypeVar('T')
 

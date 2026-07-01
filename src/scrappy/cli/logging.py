@@ -13,10 +13,6 @@ from scrappy.infrastructure.logging import (
     StructuredLogger,
     LoggerRegistry as InfraLoggerRegistry,
     SafeJSONEncoder,
-    safe_json_dumps as _safe_json_dumps,
-    get_logger as infra_get_logger,
-    configure_logging as infra_configure_logging,
-    reset_logging as infra_reset_logging,
 )
 
 # Backward compatibility aliases

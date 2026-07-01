@@ -15,7 +15,6 @@ import asyncio
 from typing import Any
 
 from .protocols import (
-    BatchSchedulerProtocol,
     LLMRequest,
     LLMServiceProtocol,
 )
@@ -23,7 +22,6 @@ from ..cli.protocols import BaseOutputProtocol as OutputInterfaceProtocol
 from .model_selection import MODEL_GROUPS
 from .constants import (
     DEFAULT_MAX_CONCURRENT,
-    DEFAULT_MAX_RETRIES,
 )
 
 

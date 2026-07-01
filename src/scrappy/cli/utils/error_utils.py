@@ -11,8 +11,6 @@ from typing import Any, Callable, Optional, TypeVar
 from ..exceptions import (
     CLIError,
     ProviderError,
-    ValidationError,
-    FileOperationError,
     UserInputError,
 )
 from ..error_recovery import (

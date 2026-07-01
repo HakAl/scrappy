@@ -5,8 +5,7 @@ Defines abstract interfaces for persisting structured data (JSON, etc.) with
 error handling and async support. Built on top of FileSystemProtocol.
 """
 
-from typing import Protocol, Dict, Any, Optional, TypeVar, Generic
-from pathlib import Path
+from typing import Protocol, Optional, TypeVar, Generic
 
 
 T = TypeVar('T')

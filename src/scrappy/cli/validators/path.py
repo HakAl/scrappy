@@ -4,7 +4,6 @@ Provides validation for file and directory paths including length checks,
 character validation, and security checks.
 """
 
-import os
 import re
 from dataclasses import dataclass
 from typing import Optional, List
