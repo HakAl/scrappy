@@ -1,7 +1,9 @@
-# Normalize line endings: store LF in the repo, convert per-platform on checkout.
-# Fixes the CRLF churn from Windows-synced checkouts without forcing a
-# working-tree EOL on any platform.
-* text=auto
+# Normalize line endings: store LF in the repo AND check out LF on every
+# platform. eol=lf (not bare text=auto) is deliberate: text=auto alone checks
+# out native CRLF on Windows, which the Windows-synced checkout then drags back
+# as a phantom 600-file diff. Forcing LF in the working tree kills that churn at
+# the root. Genuinely-CRLF files opt back in below (*.ps1).
+* text=auto eol=lf
 
 # Windows-native scripts must stay CRLF.
 *.ps1 text eol=crlf
