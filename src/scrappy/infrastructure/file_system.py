@@ -167,7 +167,7 @@ class InMemoryFileSystem:
             normalized = normalized.rstrip("/")
 
         # Resolve . and .. components
-        parts = []
+        parts: list[str] = []
         for part in normalized.split("/"):
             if part == "." or part == "":
                 continue

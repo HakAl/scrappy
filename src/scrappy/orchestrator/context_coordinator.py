@@ -7,10 +7,7 @@ like logging and task execution.
 
 from typing import Dict, Any, Optional, Callable
 
-try:
-    from ..context.protocols import CodebaseContextProtocol
-except ImportError:
-    from context.protocols import CodebaseContextProtocol
+from ..context.protocols import CodebaseContextProtocol
 
 from .output import BaseOutputProtocol, ConsoleOutput
 

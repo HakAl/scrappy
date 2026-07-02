@@ -54,7 +54,7 @@ class FileScanner:
             skip_dirs = get_paths_config()
 
         # Initialize result with all categories
-        files = {k: [] for k in extensions_by_category}
+        files: dict[str, list[str]] = {k: [] for k in extensions_by_category}
 
         # Handle nonexistent path
         if not project_path.exists():
