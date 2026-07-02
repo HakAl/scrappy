@@ -52,7 +52,7 @@ dev = [
     "vcrpy>=8.0.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
-    "mypy>=1.0.0",
+    "mypy==2.1.0",
     "towncrier>=23.0.0",
 ]
 # Optional embedding backends (base install uses BGE-small via fastembed)
@@ -119,23 +119,22 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
+# The single source of mypy config (scrappy-21x0 PR-M0; mypy.ini is deleted).
+# Carries the previously effective mypy.ini semantics, except follow_imports:
+# a whole-src gate must not skip imports. Toolchain is pinned (mypy==2.1.0 in
+# dev extras and CI) so a mypy release cannot move the gate; bump deliberately.
+# python_version is the requires-python floor; CI runs 3.11, dev venvs 3.13.
+python_version = "3.11"
+follow_imports = "normal"
 ignore_missing_imports = true
-check_untyped_defs = true
-disallow_any_explicit = true
-disallow_any_generics = false
-warn_redundant_casts = true
-warn_unused_ignores = true
-no_implicit_optional = true
-strict_equality = true
+strict_optional = true
 show_error_codes = true
+# Deliberately off for the scrappy-21x0 arc; enabling it is scrappy-wco6.
+check_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = "tests.*"
-disallow_any_explicit = false
-check_untyped_defs = false
+ignore_errors = true
 
 [tool.pyright]
 pythonVersion = "3.10"
