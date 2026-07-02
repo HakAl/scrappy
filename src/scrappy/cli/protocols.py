@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol, Dict, Any, List, Optional, Callable, runtime_checkable, Generator
 from contextlib import contextmanager
+from ..infrastructure.theme import ThemeProtocol
 from ..orchestrator.protocols import Orchestrator
 
 if TYPE_CHECKING:
@@ -179,6 +180,11 @@ class CLIIOProtocol(Protocol):
         border_style: str = "blue"
     ) -> None:
         """Display content in a panel with optional title."""
+        ...
+
+    @property
+    def theme(self) -> ThemeProtocol:
+        """Current theme used for styled output."""
         ...
 
 

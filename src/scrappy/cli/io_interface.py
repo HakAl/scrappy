@@ -15,6 +15,8 @@ Usage:
 
 from typing import Optional, List, Dict, Any
 
+from ..infrastructure.theme import ThemeProtocol, DEFAULT_THEME
+
 # Re-export the protocol from cli protocols (canonical location); many modules
 # import CLIIOProtocol from this module. The redundant alias marks the re-export
 # as intentional so lint does not strip it.
@@ -43,13 +45,15 @@ class TestIO:
     def __init__(
         self,
         inputs: Optional[List[str]] = None,
-        confirmations: Optional[List[bool]] = None
+        confirmations: Optional[List[bool]] = None,
+        theme: Optional[ThemeProtocol] = None
     ):
         """Initialize TestIO with preset inputs and confirmations.
 
         Args:
             inputs: List of input strings to return from prompt/input_line
             confirmations: List of boolean values to return from confirm
+            theme: Optional theme for styling. Defaults to DEFAULT_THEME.
         """
         self._inputs: List[str] = list(inputs) if inputs else []
         self._confirmations: List[bool] = list(confirmations) if confirmations else []
@@ -57,6 +61,9 @@ class TestIO:
         self._styled_outputs: List[Dict[str, Any]] = []
         self._input_index = 0
         self._confirm_index = 0
+        # Plain attribute (not a property) so tests can swap themes freely;
+        # an attribute satisfies the protocol's read-only theme property.
+        self.theme: ThemeProtocol = theme or DEFAULT_THEME
 
     def echo(self, message: str = "", nl: bool = True) -> None:
         """Capture output to internal buffer."""
