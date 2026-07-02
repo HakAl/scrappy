@@ -5,6 +5,7 @@ Provides ephemeral storage for file reads, searches, and discoveries during a se
 """
 
 from datetime import datetime
+from typing import Any
 
 
 class WorkingMemory:
@@ -186,7 +187,7 @@ class WorkingMemory:
         Returns:
             Dict with all memory data (timestamps as ISO strings)
         """
-        data = {
+        data: dict[str, Any] = {
             'file_reads': {},
             'search_results': [],
             'git_operations': [],

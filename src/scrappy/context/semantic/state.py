@@ -17,7 +17,7 @@ except ImportError:
     lancedb = None
     LanceModel = object
 
-    def Field(**kwargs):  # noqa: N802 - matching pydantic's Field API
+    def Field(**kwargs):  # type: ignore[no-redef]  # noqa: N802 - runtime fallback matching pydantic's Field API
         return None
 
 from ..protocols import IndexState

@@ -12,10 +12,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 import json
 
-try:
-    from .protocols import CacheProtocol
-except ImportError:
-    from orchestrator.protocols import CacheProtocol
+from .protocols import CacheProtocol
 
 
 class UsageReporter:

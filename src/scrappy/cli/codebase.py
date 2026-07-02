@@ -202,7 +202,7 @@ class CLICodebaseAnalysis:
             dict: Mapping of category names to lists of relative file paths.
                 Categories include: python, javascript, config, docs, other.
         """
-        files = {k: [] for k in EXTENSIONS_BY_CATEGORY}
+        files: dict[str, list[str]] = {k: [] for k in EXTENSIONS_BY_CATEGORY}
 
         for root, dirs, filenames in os.walk(path):
             # Skip common non-source directories

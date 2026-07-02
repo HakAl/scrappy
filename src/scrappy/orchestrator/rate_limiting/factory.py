@@ -133,7 +133,7 @@ def create_rate_limit_components(
         storage=storage,
         policy=policy,
         calculator=calculator,
-        recommender=None,  # type: ignore - will be set next
+        recommender=None,  # type: ignore[arg-type]  # circular wiring: recommender is set right after creation
         auto_load=False,  # Load after all wiring is complete
         config=config,
     )

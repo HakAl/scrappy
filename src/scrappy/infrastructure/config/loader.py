@@ -224,21 +224,10 @@ class ConfigLoader:
             Configuration dictionary
 
         Raises:
-            ImportError: If tomli/tomllib is not available
             ValueError: If TOML is invalid
         """
-        try:
-            # Python 3.11+ has tomllib in stdlib
-            import tomllib
-        except ImportError:
-            try:
-                # Fallback to tomli for older Python versions
-                import tomli as tomllib
-            except ImportError:
-                raise ImportError(
-                    "tomli is required to load TOML configuration files on Python < 3.11.\n"
-                    "Install it with: pip install tomli"
-                )
+        # tomllib is stdlib on the supported floor (requires-python >= 3.11)
+        import tomllib
 
         try:
             with open(path, 'rb') as f:

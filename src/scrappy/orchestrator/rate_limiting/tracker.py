@@ -213,7 +213,7 @@ class RateLimitTracker:
 
         # Get our tracked usage for fields headers don't provide
         usage = self._usage.get("providers", {}).get(provider, {})
-        first_model = next(iter(usage.values()), {}) if usage else {}
+        first_model: Dict[str, Any] = next(iter(usage.values()), {}) if usage else {}
 
         return {
             "requests_remaining_today": requests_remaining,
