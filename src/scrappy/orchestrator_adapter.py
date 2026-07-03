@@ -40,6 +40,9 @@ class NullContext:
     def get_summary(self) -> str:
         return ""
 
+    def augment_prompt(self, user_prompt: str, include_files: bool = False) -> str:
+        return user_prompt
+
 
 class AgentOrchestratorAdapter:
     """
