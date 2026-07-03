@@ -31,7 +31,7 @@ _installed: bool = False
 _lock = threading.Lock()
 
 
-def _extract_provider_from_url(url: str) -> Optional[str]:
+def _extract_provider_from_url(url: str | httpx.URL) -> Optional[str]:
     """Extract provider name from request URL.
 
     Args:
