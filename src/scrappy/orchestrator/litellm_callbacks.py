@@ -294,8 +294,14 @@ class RateTrackingCallbackBase:
         """Called for streaming events. No-op for now."""
         pass
 
-    def log_success_fallback_event(self, original_model_group: str, kwargs: dict, original_exception: Exception) -> None:
-        """Called when fallback succeeds. Useful for monitoring fallback frequency."""
+    async def log_success_fallback_event(self, original_model_group: str, kwargs: dict, original_exception: Exception) -> None:
+        """Called when fallback succeeds. Useful for monitoring fallback frequency.
+
+        Must be async: litellm's CustomLogger declares this method async and
+        the router awaits it on every successful fallback. A sync override
+        would make litellm await None, raising a TypeError that litellm
+        swallows, so the event would be silently dropped.
+        """
         pass
 
     async def async_log_success_event(
