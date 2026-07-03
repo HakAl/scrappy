@@ -12,10 +12,12 @@ This is the canonical location for all orchestrator-related protocols including:
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol, Optional, Dict, Any, List, runtime_checkable, AsyncIterator, Iterator, Type, TypeVar
 
 from pydantic import BaseModel
 
+from .model_selection import ModelSelectionType
 from .provider_types import LLMResponse, LLMProviderBase, ProviderLimits
 from .types import StreamChunk
 
@@ -454,6 +456,71 @@ class RateLimitTrackerProtocol(Protocol):
         """
         ...
 
+    def is_rate_limited(self, provider_name: str, registry: Any) -> bool:
+        """
+        Check if provider is currently rate limited.
+
+        Args:
+            provider_name: Provider name
+            registry: Provider registry for limit lookup
+
+        Returns:
+            True if provider is rate limited, False otherwise
+        """
+        ...
+
+    def reset_rate_tracking(self, provider_name: Optional[str] = None) -> None:
+        """
+        Reset rate limit tracking.
+
+        Args:
+            provider_name: Provider to reset (None for all providers)
+        """
+        ...
+
+    def get_rate_limit_status_extended(self, registry: Any) -> dict[str, Any]:
+        """
+        Get extended rate limit status for all providers.
+
+        Args:
+            registry: Provider registry for limit lookup
+
+        Returns:
+            Dictionary mapping provider names to extended status info
+        """
+        ...
+
+    def check_all_warnings(self, registry: Any) -> List[str]:
+        """
+        Check all providers for rate limit warnings.
+
+        Args:
+            registry: Provider registry for limit lookup
+
+        Returns:
+            List of warning messages
+        """
+        ...
+
+    def get_remaining_quota_for_provider(
+        self,
+        provider_name: str,
+        registry: Any,
+        model: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """
+        Get remaining quota for a provider.
+
+        Args:
+            provider_name: Provider name
+            registry: Provider registry for limit lookup
+            model: Specific model (optional)
+
+        Returns:
+            Dictionary with remaining quota details
+        """
+        ...
+
 
 @runtime_checkable
 class SessionManagerProtocol(Protocol):
@@ -537,6 +604,36 @@ class SessionManagerProtocol(Protocol):
         """
         ...
 
+    def save_session(
+        self,
+        working_memory: "WorkingMemoryProtocol",
+        task_history: list,
+        session_start: datetime,
+        conversation_history: Optional[list] = None,
+    ) -> str:
+        """
+        Save current session to disk.
+
+        Args:
+            working_memory: Working memory to persist
+            task_history: Task history entries
+            session_start: When the session started
+            conversation_history: Optional conversation history entries
+
+        Returns:
+            Path or identifier of the saved session
+        """
+        ...
+
+    def load_session(self) -> dict:
+        """
+        Load previous session from disk.
+
+        Returns:
+            Dictionary with 'status' and restored session state
+        """
+        ...
+
 
 @runtime_checkable
 class ProviderSelectorProtocol(Protocol):
@@ -607,6 +704,42 @@ class ProviderSelectorProtocol(Protocol):
         Args:
             provider: Provider name
             duration_seconds: How long to mark unavailable
+        """
+        ...
+
+    def setup_brain(self, preferred_provider: Optional[str] = None) -> tuple[str, None]:
+        """
+        Set up the brain provider for orchestration.
+
+        Args:
+            preferred_provider: Preferred provider name (used if available)
+
+        Returns:
+            Tuple of (provider name, None placeholder)
+        """
+        ...
+
+    def get_model(self, selection_type: ModelSelectionType) -> tuple[str, None]:
+        """
+        Get provider for a model selection type.
+
+        Args:
+            selection_type: Model selection type (fast, balanced, etc.)
+
+        Returns:
+            Tuple of (provider name, None placeholder)
+        """
+        ...
+
+    def recommend(self, requirements: dict) -> str:
+        """
+        Recommend a provider for the given requirements.
+
+        Args:
+            requirements: Requirement hints (task type, context size, etc.)
+
+        Returns:
+            Recommended provider name
         """
         ...
 
@@ -691,6 +824,24 @@ class ProviderRegistryProtocol(Protocol):
     def clear(self) -> None:
         """
         Clear all registered providers.
+        """
+        ...
+
+    def list_available(self) -> list[str]:
+        """
+        List names of providers that are currently available.
+
+        Returns:
+            List of available provider names
+        """
+        ...
+
+    def get_provider_info(self) -> dict[str, dict]:
+        """
+        Get detailed information for all registered providers.
+
+        Returns:
+            Dictionary mapping provider names to info dictionaries
         """
         ...
 
