@@ -7,7 +7,12 @@ progress display strategies (Rich, logging, callbacks, silent).
 
 import logging
 import time
-from typing import Optional, Callable
+from typing import Optional, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rich.console import Console
+    from rich.live import Live
+    from rich.status import Status
 
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
@@ -51,8 +56,8 @@ class RichProgressReporter:
                 "Use UnifiedIOProgressReporter or create_progress_reporter() factory instead."
             )
         self._theme = theme or DEFAULT_THEME
-        self._status = None
-        self._console = None
+        self._status: Optional["Status"] = None
+        self._console: Optional["Console"] = None
 
     def start(self, description: str, total: Optional[int] = None) -> None:
         """
@@ -149,8 +154,8 @@ class LiveProgressReporter:
                 "Use UnifiedIOProgressReporter or create_progress_reporter() factory instead."
             )
         self._theme = theme or DEFAULT_THEME
-        self._live = None
-        self._console = None
+        self._live: Optional["Live"] = None
+        self._console: Optional["Console"] = None
 
     def start(self, description: str, total: Optional[int] = None) -> None:
         """
@@ -254,7 +259,7 @@ class LoggingProgressReporter:
             logger_name: Logger name (defaults to module logger)
         """
         self._logger = logging.getLogger(logger_name or __name__)
-        self._total = None
+        self._total: Optional[int] = None
 
     def start(self, description: str, total: Optional[int] = None) -> None:
         """
@@ -321,7 +326,7 @@ class CallbackProgressReporter:
             callback: Function to call with progress messages
         """
         self._callback = callback
-        self._total = None
+        self._total: Optional[int] = None
 
     def start(self, description: str, total: Optional[int] = None) -> None:
         """

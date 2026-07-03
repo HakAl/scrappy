@@ -66,6 +66,7 @@ class ResponseCache:
         self.output = output or self._create_default_output()
 
         # Create persistence layer if file path provided
+        self.persistence: Optional['JSONPersistence']
         if persistence:
             self.persistence = persistence
         elif cache_file:

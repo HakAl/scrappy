@@ -16,7 +16,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Any, Optional, Protocol
 
 # Import docker at module level for testability (can be mocked)
 try:
@@ -181,7 +181,7 @@ class DockerExecutor:
         self._project_dir = str(Path(project_dir).resolve())
         self._network_enabled = network_enabled
         self._image = image or self.IMAGE_NAME
-        self._container = None
+        self._container: Optional[Any] = None  # docker container (docker lib is untyped)
         self._docker_client = None
         self._available: Optional[bool] = None
 
@@ -274,6 +274,9 @@ class DockerExecutor:
             CommandResult with output and exit code
         """
         self._ensure_container()
+        container = self._container
+        if container is None:
+            raise RuntimeError("Docker container not initialized")
 
         # Build execution command
         workdir = self.CONTAINER_WORKDIR
@@ -282,7 +285,7 @@ class DockerExecutor:
 
         # Execute with timeout
         try:
-            exec_result = self._container.exec_run(
+            exec_result = container.exec_run(
                 cmd=["sh", "-c", command],
                 workdir=workdir,
                 demux=True,  # Separate stdout/stderr

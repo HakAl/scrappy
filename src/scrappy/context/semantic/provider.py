@@ -11,7 +11,7 @@ import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from contextlib import contextmanager
 
 # Use simple imports to avoid circular dependency messes
@@ -32,6 +32,9 @@ from ..protocols import (
 )
 from ...infrastructure.protocols import ProgressReporterProtocol
 from .config import SemanticIndexConfig
+
+if TYPE_CHECKING:
+    from .registry import EmbeddingModelInfo
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +181,7 @@ class LanceDBSearchProvider:
 
         # Model ID and info are resolved lazily when embedding function is created
         self._model_id: Optional[str] = None
-        self._model_info = None  # EmbeddingModelInfo with indexing profile
+        self._model_info: Optional["EmbeddingModelInfo"] = None  # indexing profile
 
         # DB path is determined lazily based on model selection
         # (each model gets its own subdirectory to avoid dimension conflicts)
@@ -186,7 +189,7 @@ class LanceDBSearchProvider:
         self._lock_path: Optional[Path] = None
 
         # Lazy initialization (embedding_func can be injected for testing)
-        self._db = None
+        self._db: Optional[Any] = None  # lancedb connection (lancedb is untyped)
         self._embedding_func = embedding_func  # None means lazy-load default
         self._code_schema = None
         self._is_writing = False  # Write protection flag for graceful shutdown
@@ -260,6 +263,19 @@ class LanceDBSearchProvider:
             self._resolve_model_and_paths()
             self._db_path.mkdir(parents=True, exist_ok=True)
             self._db = lancedb.connect(self._db_path)
+
+    @property
+    def _connected_db(self) -> Any:
+        """LanceDB connection after lazy initialization.
+
+        _ensure_db() establishes it; requesting it earlier is a
+        programming error.
+        """
+        if self._db is None:
+            raise RuntimeError(
+                "LanceDB connection not initialized; call _ensure_db() first"
+            )
+        return self._db
 
     @property
     def _active_embedding_func(self) -> EmbeddingFunctionProtocol:
@@ -478,7 +494,7 @@ class LanceDBSearchProvider:
         self._ensure_schema()  # Lazy-initialize embedding function and schema
 
         with self._safe_db_context():
-            table_exists = TABLE_NAME in self._db.table_names()
+            table_exists = TABLE_NAME in self._connected_db.table_names()
             logger.debug(f"Table exists: {table_exists}")
 
             if not table_exists:
@@ -486,7 +502,7 @@ class LanceDBSearchProvider:
                 self._create_and_populate(valid_files)
                 return
 
-            table = self._db.open_table(TABLE_NAME)
+            table = self._connected_db.open_table(TABLE_NAME)
 
             # Check for dimension mismatch (e.g., user switched embedding models)
             if not self._check_table_dimensions(table):
@@ -565,9 +581,9 @@ class LanceDBSearchProvider:
         logger.info(f"Creating new index from {len(valid_files)} files")
 
         # Drop if exists
-        if TABLE_NAME in self._db.table_names():
+        if TABLE_NAME in self._connected_db.table_names():
             logger.debug("Dropping existing table")
-            self._db.drop_table(TABLE_NAME)
+            self._connected_db.drop_table(TABLE_NAME)
 
         # Don't create table if no files
         if not valid_files:
@@ -576,7 +592,7 @@ class LanceDBSearchProvider:
 
         # Create table and index files (paths already validated by caller)
         logger.info(f"Creating table and indexing {len(valid_files)} files")
-        table = self._db.create_table(TABLE_NAME, schema=self._code_schema)
+        table = self._connected_db.create_table(TABLE_NAME, schema=self._code_schema)
 
         metrics = self._add_files_in_batches(table, valid_files)
 
@@ -833,7 +849,7 @@ class LanceDBSearchProvider:
 
         self._ensure_schema()  # Ensure model is loaded
 
-        table = self._db.open_table(TABLE_NAME)
+        table = self._connected_db.open_table(TABLE_NAME)
         # 1. Embed the query manually
         # Note: embed_query returns a generator, use list() + next() or standard methods
         query_vector = self._active_embedding_func.generate_embeddings([query])[0]
@@ -1005,7 +1021,7 @@ class LanceDBSearchProvider:
         """
         try:
             self._ensure_db()
-            return TABLE_NAME in self._db.table_names()
+            return TABLE_NAME in self._connected_db.table_names()
         except Exception:
             return False
 
@@ -1017,8 +1033,8 @@ class LanceDBSearchProvider:
         """
         self._ensure_db()
         with self._safe_db_context():
-            if TABLE_NAME in self._db.table_names():
-                self._db.drop_table(TABLE_NAME)
+            if TABLE_NAME in self._connected_db.table_names():
+                self._connected_db.drop_table(TABLE_NAME)
 
     def cleanup_deleted_files(self, current_files: set) -> int:
         """
@@ -1042,7 +1058,7 @@ class LanceDBSearchProvider:
         self._ensure_db()
 
         with self._safe_db_context():
-            table = self._db.open_table(TABLE_NAME)
+            table = self._connected_db.open_table(TABLE_NAME)
 
             # Get all indexed file paths (unique)
             indexed_paths = set()
@@ -1111,7 +1127,7 @@ class LanceDBSearchProvider:
         self._ensure_db()
 
         with self._safe_db_context():
-            table = self._db.open_table(TABLE_NAME)
+            table = self._connected_db.open_table(TABLE_NAME)
 
             # Delete in batches to avoid huge SQL statements
             BATCH_SIZE = 100
@@ -1159,7 +1175,7 @@ class LanceDBSearchProvider:
             # Build file_hashes from current index
             file_hashes = {}
             self._ensure_db()
-            table = self._db.open_table(TABLE_NAME)
+            table = self._connected_db.open_table(TABLE_NAME)
 
             try:
                 for batch in table.search().select(["file_path", "content_hash"]).to_batches():
@@ -1196,7 +1212,7 @@ class LanceDBSearchProvider:
 
         try:
             self._ensure_db()
-            table = self._db.open_table(TABLE_NAME)
+            table = self._connected_db.open_table(TABLE_NAME)
 
             # Count total chunks
             total_chunks = table.count_rows()
