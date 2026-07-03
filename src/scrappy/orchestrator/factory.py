@@ -423,7 +423,7 @@ class OrchestratorFactory:
         self,
         codebase_context: ContextProvider,
         output: BaseOutputProtocol,
-        task_executor: TaskExecutor
+        task_executor: TaskExecutorProtocol
     ) -> ContextCoordinator:
         """Create default context coordinator."""
         return ContextCoordinator(

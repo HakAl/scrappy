@@ -18,7 +18,7 @@ from typing import Protocol, Optional, Dict, Any, List, runtime_checkable, Async
 from pydantic import BaseModel
 
 from .model_selection import ModelSelectionType
-from .provider_types import LLMResponse, LLMProviderBase, ProviderLimits
+from .provider_types import LLMResponse, LLMProviderProtocol, ProviderLimits
 from .types import StreamChunk
 
 # Type variable for generic structured output responses
@@ -366,28 +366,11 @@ class RateLimitTrackerProtocol(Protocol):
 
     Implementations:
     - RateLimitTracker: File-based tracking with time windows
-    - InMemoryRateLimitTracker: In-memory tracking for testing
-    - UnlimitedRateLimiter: No rate limits (for testing)
 
     Example:
-        def make_request(tracker: RateLimitTrackerProtocol, provider: str) -> bool:
-            if not tracker.can_make_request(provider):
-                return False
-            tracker.record_request(provider)
-            return True
+        def track(tracker: RateLimitTrackerProtocol, provider: str, model: str) -> None:
+            tracker.record_request(provider, model, input_tokens=10, output_tokens=5)
     """
-
-    def can_make_request(self, provider: str) -> bool:
-        """
-        Check if request can be made without exceeding rate limits.
-
-        Args:
-            provider: Provider name
-
-        Returns:
-            True if request can be made, False if rate limited
-        """
-        ...
 
     def record_request(
         self,
@@ -411,48 +394,22 @@ class RateLimitTrackerProtocol(Protocol):
         """
         ...
 
-    def get_remaining(self, provider: str) -> Dict[str, int]:
+    def get_remaining_quota(
+        self,
+        provider: str,
+        model: str,
+        limits: ProviderLimits,
+    ) -> dict[str, Any]:
         """
-        Get remaining capacity before rate limits.
+        Get remaining quota for provider/model.
 
         Args:
             provider: Provider name
+            model: Model name
+            limits: Provider limits configuration
 
         Returns:
-            Dictionary containing:
-            - requests_remaining: Requests remaining in current window
-            - tokens_remaining: Tokens remaining in current window
-            - window_reset: Seconds until window resets
-        """
-        ...
-
-    def get_limits(self, provider: str) -> Optional[ProviderLimits]:
-        """
-        Get configured rate limits for provider.
-
-        Args:
-            provider: Provider name
-
-        Returns:
-            ProviderLimits if configured, None otherwise
-        """
-        ...
-
-    def reset(self, provider: Optional[str] = None) -> None:
-        """
-        Reset rate limit tracking.
-
-        Args:
-            provider: Provider to reset (None for all providers)
-        """
-        ...
-
-    def get_status(self) -> Dict[str, Any]:
-        """
-        Get rate limit status for all providers.
-
-        Returns:
-            Dictionary mapping provider names to status info
+            Dictionary with remaining quota details
         """
         ...
 
@@ -532,77 +489,11 @@ class SessionManagerProtocol(Protocol):
 
     Implementations:
     - SessionManager: File-based session persistence
-    - InMemorySessionManager: In-memory sessions for testing
-    - NullSessionManager: No session persistence
 
     Example:
-        def save_work(session: SessionManagerProtocol, data: Dict[str, Any]) -> None:
-            session.save("my_session", data)
+        def restore(session: SessionManagerProtocol) -> dict:
+            return session.load_session()
     """
-
-    def save(self, session_id: str, data: Dict[str, Any]) -> None:
-        """
-        Save session data.
-
-        Args:
-            session_id: Unique session identifier
-            data: Session data to persist
-        """
-        ...
-
-    def load(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Load session data.
-
-        Args:
-            session_id: Unique session identifier
-
-        Returns:
-            Session data if found, None otherwise
-        """
-        ...
-
-    def list_sessions(self) -> List[str]:
-        """
-        List all session IDs.
-
-        Returns:
-            List of session IDs
-        """
-        ...
-
-    def delete(self, session_id: str) -> bool:
-        """
-        Delete session.
-
-        Args:
-            session_id: Unique session identifier
-
-        Returns:
-            True if session was deleted, False if not found
-        """
-        ...
-
-    def exists(self, session_id: str) -> bool:
-        """
-        Check if session exists.
-
-        Args:
-            session_id: Unique session identifier
-
-        Returns:
-            True if session exists, False otherwise
-        """
-        ...
-
-    def clear_all(self) -> int:
-        """
-        Clear all sessions.
-
-        Returns:
-            Number of sessions deleted
-        """
-        ...
 
     def save_session(
         self,
@@ -645,67 +536,11 @@ class ProviderSelectorProtocol(Protocol):
 
     Implementations:
     - ProviderSelector: Smart selection based on availability and limits
-    - RandomSelector: Random provider selection (for testing)
-    - FixedSelector: Always returns specific provider (for testing)
-    - RoundRobinSelector: Round-robin selection across providers
 
     Example:
-        def get_provider(selector: ProviderSelectorProtocol) -> str:
-            return selector.select_provider()
+        def pick(selector: ProviderSelectorProtocol, requirements: dict) -> str:
+            return selector.recommend(requirements)
     """
-
-    def select_provider(
-        self,
-        task_type: Optional[str] = None,
-        preferred: Optional[str] = None,
-        exclude: Optional[List[str]] = None,
-    ) -> str:
-        """
-        Select appropriate provider for task.
-
-        Args:
-            task_type: Type of task (affects selection)
-            preferred: Preferred provider name (used if available)
-            exclude: Providers to exclude from selection
-
-        Returns:
-            Selected provider name
-
-        Raises:
-            ValueError: If no suitable provider available
-        """
-        ...
-
-    def get_available_providers(self) -> List[str]:
-        """
-        Get list of currently available providers.
-
-        Returns:
-            List of provider names that are available
-        """
-        ...
-
-    def is_available(self, provider: str) -> bool:
-        """
-        Check if specific provider is available.
-
-        Args:
-            provider: Provider name
-
-        Returns:
-            True if provider is available, False otherwise
-        """
-        ...
-
-    def mark_unavailable(self, provider: str, duration_seconds: int = 60) -> None:
-        """
-        Temporarily mark provider as unavailable.
-
-        Args:
-            provider: Provider name
-            duration_seconds: How long to mark unavailable
-        """
-        ...
 
     def setup_brain(self, preferred_provider: Optional[str] = None) -> tuple[str, None]:
         """
@@ -754,26 +589,25 @@ class ProviderRegistryProtocol(Protocol):
 
     Implementations:
     - ProviderRegistry: Standard provider registry
-    - TestProviderRegistry: Registry with mock providers for testing
 
     Example:
-        def get_model(registry: ProviderRegistryProtocol, name: str) -> LLMProviderBase:
+        def get_model(registry: ProviderRegistryProtocol, name: str) -> LLMProviderProtocol:
             return registry.get(name)
     """
 
-    def register(self, provider: LLMProviderBase) -> None:
+    def register(self, provider: LLMProviderProtocol) -> None:
         """
         Register a provider.
 
         Args:
-            provider: LLMProviderBase instance to register
+            provider: LLMProviderProtocol instance to register
 
         Raises:
             ValueError: If provider with same name already registered
         """
         ...
 
-    def get(self, name: str) -> LLMProviderBase:
+    def get(self, name: str) -> LLMProviderProtocol:
         """
         Get provider by name.
 
@@ -781,7 +615,7 @@ class ProviderRegistryProtocol(Protocol):
             name: Provider name
 
         Returns:
-            LLMProviderBase instance
+            LLMProviderProtocol instance
 
         Raises:
             KeyError: If provider not found
@@ -794,36 +628,6 @@ class ProviderRegistryProtocol(Protocol):
 
         Returns:
             List of provider names
-        """
-        ...
-
-    def unregister(self, name: str) -> bool:
-        """
-        Unregister a provider.
-
-        Args:
-            name: Provider name
-
-        Returns:
-            True if provider was unregistered, False if not found
-        """
-        ...
-
-    def exists(self, name: str) -> bool:
-        """
-        Check if provider is registered.
-
-        Args:
-            name: Provider name
-
-        Returns:
-            True if provider is registered, False otherwise
-        """
-        ...
-
-    def clear(self) -> None:
-        """
-        Clear all registered providers.
         """
         ...
 
@@ -856,51 +660,11 @@ class WorkingMemoryProtocol(Protocol):
 
     Implementations:
     - WorkingMemory: Standard working memory with history
-    - InMemoryWorkingMemory: In-memory only (for testing)
-    - NullMemory: No memory retention (for testing)
 
     Example:
-        def remember(memory: WorkingMemoryProtocol, item: str) -> None:
-            memory.add(item)
-
-        def recall(memory: WorkingMemoryProtocol, n: int) -> List[str]:
-            return memory.get_recent(n)
+        def persist(memory: WorkingMemoryProtocol) -> dict:
+            return memory.to_dict()
     """
-
-    def add(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        """
-        Add item to working memory.
-
-        Args:
-            content: Content to remember
-            metadata: Optional metadata about the content
-        """
-        ...
-
-    def get_recent(self, n: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get recent items from memory.
-
-        Args:
-            n: Number of recent items to retrieve
-
-        Returns:
-            List of recent items with metadata
-        """
-        ...
-
-    def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """
-        Search memory for relevant items.
-
-        Args:
-            query: Search query
-            limit: Maximum items to return
-
-        Returns:
-            List of relevant items with metadata
-        """
-        ...
 
     def clear(self) -> None:
         """
@@ -908,21 +672,12 @@ class WorkingMemoryProtocol(Protocol):
         """
         ...
 
-    def summarize(self) -> str:
+    def to_dict(self) -> dict:
         """
-        Get summary of current memory state.
+        Serialize working memory to a dictionary for persistence.
 
         Returns:
-            Summary string
-        """
-        ...
-
-    def size(self) -> int:
-        """
-        Get number of items in memory.
-
-        Returns:
-            Number of items
+            Dictionary representation of memory state
         """
         ...
 
@@ -1194,7 +949,7 @@ class ProviderStatusTrackerProtocol(Protocol):
     - ProviderStatusTracker: Production implementation
     """
 
-    def on_success(self, provider: str, model: str, latency_ms: float) -> None:
+    def on_success(self, provider: str, model: str, latency_ms: float, tokens: int = 0) -> None:
         """
         Record a successful request.
 
@@ -1202,16 +957,18 @@ class ProviderStatusTrackerProtocol(Protocol):
             provider: Provider name (e.g., "groq")
             model: Full model ID (e.g., "groq/llama-3.1-8b-instant")
             latency_ms: Request latency in milliseconds
+            tokens: Total tokens used (input + output)
         """
         ...
 
-    def on_failure(self, provider: str, error: str) -> None:
+    def on_failure(self, provider: str, error: str, latency_ms: float = 0.0) -> None:
         """
         Record a failed request.
 
         Args:
             provider: Provider name (e.g., "groq")
             error: Error message
+            latency_ms: Request latency in milliseconds
         """
         ...
 

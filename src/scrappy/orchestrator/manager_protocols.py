@@ -5,10 +5,11 @@ Defines abstract interfaces for orchestrator manager components that handle
 specific concerns like delegation, task execution, background tasks, and reporting.
 """
 
-from typing import AsyncIterator, Protocol, Dict, Any, List, Optional, Coroutine, runtime_checkable
+from typing import AsyncIterator, Protocol, Dict, Any, Optional, Coroutine, runtime_checkable
 
 from .constants import (
     DEFAULT_MAX_CONCURRENT,
+    DEFAULT_MAX_RETRIES,
     DEFAULT_MAX_TOKENS,
     DEFAULT_PROVIDER,
     DEFAULT_TEMPERATURE,
@@ -28,35 +29,48 @@ class DelegationManagerProtocol(Protocol):
 
     Implementations:
     - DelegationManager: Full delegation with retry/fallback logic
-    - MockDelegator: Returns preset responses for testing
-    - RecordingDelegator: Records delegation calls for verification
 
     Example:
         def query_llm(delegator: DelegationManagerProtocol, prompt: str) -> LLMResponse:
-            return delegator.delegate(prompt=prompt)
+            response, _ = delegator.delegate(provider_name="groq", prompt=prompt)
+            return response
     """
 
     def delegate(
         self,
-        provider_name: Optional[str] = None,
-        prompt: str = "",
+        provider_name: str,
+        prompt: str,
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        max_tokens: int = 1000,
-        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        temperature: float = DEFAULT_TEMPERATURE,
+        use_context: Optional[bool] = None,
+        use_cache: Optional[bool] = None,
+        intent_classification: Optional[dict] = None,
+        auto_fallback: bool = True,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        selection_type: Optional[str] = None,
+        min_context: int = 0,
         messages: Optional[list[dict]] = None,
         **kwargs: Any,
-    ) -> tuple[LLMResponse, dict[str, Any]]:
+    ) -> tuple[LLMResponse, dict]:
         """
         Delegate task to LLM provider with retry/fallback.
 
         Args:
-            provider_name: Target provider (None for auto-selection)
+            provider_name: Target provider or group hint
             prompt: The prompt to send
             model: Specific model to use
             system_prompt: System prompt for context
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
+            use_context: Override context augmentation setting
+            use_cache: Override cache setting
+            intent_classification: Intent data for semantic caching
+            auto_fallback: Deprecated compatibility parameter
+            max_retries: Maximum retry attempts per provider
+            selection_type: ModelSelectionType value for fallback filtering
+            min_context: Minimum context length for fallback filtering
             messages: Pre-built messages array (bypasses prompt/system_prompt)
             **kwargs: Additional provider-specific parameters
 
@@ -97,12 +111,15 @@ class DelegationManagerProtocol(Protocol):
 
     def stream_delegate(
         self,
-        provider_name: Optional[str] = None,
-        prompt: str = "",
+        provider_name: str,
+        prompt: str,
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        max_tokens: int = 1000,
-        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        temperature: float = DEFAULT_TEMPERATURE,
+        use_context: Optional[bool] = None,
+        use_cache: Optional[bool] = None,
+        min_context: int = 0,
         **kwargs: Any,
     ) -> AsyncIterator[StreamChunk]:
         """
@@ -115,32 +132,13 @@ class DelegationManagerProtocol(Protocol):
             system_prompt: System prompt for context
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
+            use_context: Override context augmentation setting
+            use_cache: Override cache setting
+            min_context: Minimum context length for fallback filtering
             **kwargs: Additional provider-specific parameters
 
         Yields:
             StreamChunk objects as they arrive
-        """
-        ...
-
-    def delegate_with_retry(
-        self,
-        prompt: str,
-        max_retries: int = 3,
-        **kwargs: Any,
-    ) -> LLMResponse:
-        """
-        Delegate with automatic retry on failure.
-
-        Args:
-            prompt: The prompt to send
-            max_retries: Maximum retry attempts
-            **kwargs: Additional delegation parameters
-
-        Returns:
-            LLMResponse with provider's response
-
-        Raises:
-            Exception: If all retries exhausted
         """
         ...
 
@@ -253,47 +251,21 @@ class TaskExecutorProtocol(Protocol):
 
     Implementations:
     - TaskExecutor: Standard task execution
-    - SyncTaskExecutor: Synchronous execution for testing
-    - MockTaskExecutor: Returns preset results
 
     Example:
-        def run_task(executor: TaskExecutorProtocol, task: Dict[str, Any]) -> Any:
-            return executor.execute(task)
+        def plan_task(executor: TaskExecutorProtocol, task: str) -> list[dict]:
+            return executor.plan(task)
     """
 
-    def execute(self, task: Dict[str, Any]) -> Any:
+    def generate_context_summary(self, context_data: str) -> str:
         """
-        Execute a task.
+        Generate a summary of codebase context.
 
         Args:
-            task: Task specification dictionary
+            context_data: Raw context data to summarize
 
         Returns:
-            Task execution result
-        """
-        ...
-
-    def execute_parallel(self, tasks: List[Dict[str, Any]]) -> List[Any]:
-        """
-        Execute multiple tasks in parallel.
-
-        Args:
-            tasks: List of task specifications
-
-        Returns:
-            List of task results in same order
-        """
-        ...
-
-    def execute_sequential(self, tasks: List[Dict[str, Any]]) -> List[Any]:
-        """
-        Execute multiple tasks sequentially.
-
-        Args:
-            tasks: List of task specifications
-
-        Returns:
-            List of task results in same order
+            Summary string
         """
         ...
 

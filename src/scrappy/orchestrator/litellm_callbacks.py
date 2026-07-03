@@ -29,8 +29,10 @@ from typing import Optional, Any, Dict, TYPE_CHECKING
 # to avoid slow litellm import at module load time.
 
 if TYPE_CHECKING:
-    from ..orchestrator.protocols import RateLimitTrackerProtocol
-    from ..orchestrator.provider_status import ProviderStatusTracker
+    from ..orchestrator.protocols import (
+        ProviderStatusTrackerProtocol,
+        RateLimitTrackerProtocol,
+    )
 
 
 def parse_gemini_rate_limit_error(error_message: str) -> Optional[Dict[str, Any]]:
@@ -139,7 +141,7 @@ class RateTrackingCallbackBase:
     def __init__(
         self,
         rate_tracker: Optional["RateLimitTrackerProtocol"] = None,
-        status_tracker: Optional["ProviderStatusTracker"] = None,
+        status_tracker: Optional["ProviderStatusTrackerProtocol"] = None,
         escalation_metrics: Optional[EscalationMetrics] = None,
     ):
         """
@@ -374,7 +376,7 @@ _RateTrackingCallback = None
 
 def create_rate_tracking_callback(
     rate_tracker: Optional["RateLimitTrackerProtocol"] = None,
-    status_tracker: Optional["ProviderStatusTracker"] = None,
+    status_tracker: Optional["ProviderStatusTrackerProtocol"] = None,
     escalation_metrics: Optional[EscalationMetrics] = None,
 ) -> "RateTrackingCallbackBase":
     """
