@@ -614,46 +614,54 @@ class TestSubprocessMissingTerminalIsolation:
             assert call_kwargs['stdin'] == subprocess.DEVNULL, \
                 f"BUG: stdin should be DEVNULL but is {call_kwargs.get('stdin')}"
 
-    def test_create_undo_point_subprocess_isolation(self):
+    def test_create_undo_point_subprocess_isolation(self, tmp_path, monkeypatch):
         """
-        FAIL: create_undo_point's subprocess calls lack terminal isolation.
+        create_undo_point's subprocess calls must all isolate stdin.
 
-        The git commands in create_undo_point() run via _run() which
-        doesn't isolate stdin, allowing terminal corruption.
+        The git commands in create_undo_point() run via _run(); without
+        stdin=DEVNULL a subprocess can interact with the terminal and
+        corrupt mouse tracking state (scrappy-8ebm).
+
+        Runs in tmp_path with a real .git directory because undo's lock,
+        precondition, and state paths are cwd-relative and require .git to
+        be a directory. Running against the ambient repo breaks under a git
+        worktree checkout, where .git is a file and undo_lock() raises
+        before any subprocess call is made.
         """
         import subprocess
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
 
         from scrappy import undo
 
-        # Track all subprocess.run calls
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        # Fake only the subprocess boundary; every undo helper runs for real.
         subprocess_calls = []
 
-        def track_subprocess(*args, **kwargs):
+        def fake_git(cmd, **kwargs):
             subprocess_calls.append(kwargs)
-            return MagicMock(returncode=0, stdout="main\n", stderr="")
+            stdout = "main\n" if "symbolic-ref" in cmd else ""
+            return subprocess.CompletedProcess(
+                args=cmd, returncode=0, stdout=stdout, stderr=""
+            )
 
-        with patch.object(subprocess, 'run', side_effect=track_subprocess):
-            with patch.object(undo, 'is_dirty', return_value=False):
-                with patch.object(undo, 'has_untracked', return_value=False):
-                    with patch.object(undo, 'is_shallow_clone', return_value=False):
-                        with patch.object(undo, 'persist_undo_state'):
-                            with patch.object(undo, 'prune_old_undo_states'):
-                                with patch('os.getcwd', return_value='/test'):
-                                    try:
-                                        undo.create_undo_point()
-                                    except Exception:
-                                        pass  # May fail due to mocking, that's OK
+        with patch.object(subprocess, 'run', side_effect=fake_git):
+            state = undo.create_undo_point()
 
-        # Should have made at least one subprocess call
-        assert len(subprocess_calls) > 0, "Expected subprocess.run calls"
+        # Clean-tree path: branch lookup, two diff checks, untracked check,
+        # and update-ref all cross the subprocess boundary.
+        assert len(subprocess_calls) >= 4, "Expected subprocess.run calls"
+
+        # The boundary data flowed through: branch came from symbolic-ref.
+        assert state.branch == "main"
 
         # Check that ALL calls have stdin=DEVNULL
         for i, call in enumerate(subprocess_calls):
-            assert 'stdin' in call, \
-                f"BUG: subprocess call #{i+1} missing stdin parameter"
-            assert call['stdin'] == subprocess.DEVNULL, \
-                f"BUG: subprocess call #{i+1} stdin should be DEVNULL"
+            assert call.get('stdin') == subprocess.DEVNULL, (
+                f"BUG: subprocess call #{i+1} stdin should be DEVNULL, "
+                f"got {call.get('stdin')!r}"
+            )
 
 
 class TestUndoLockMouseEvents:
