@@ -114,14 +114,29 @@ SELECTION_TYPE_TO_GROUP: dict[ModelSelectionType, str] = _selection_type_to_grou
 MODEL_GROUPS: set[str] = set(_CATALOG.router_groups())
 
 
+def _model_priorities() -> dict[ModelSelectionType, list[str]]:
+    """Derive per-selection-type priority lists from the catalog.
+
+    A selection type with no priority models is a catalog integrity
+    error; fail at import rather than silently selecting nothing.
+    """
+    priorities: dict[ModelSelectionType, list[str]] = {}
+    for selection_type in ModelSelectionType:
+        model_ids = _CATALOG.priority_model_ids(selection_type.value)
+        if not model_ids:
+            raise RuntimeError(
+                f"Provider catalog has no priority models for selection type "
+                f"{selection_type.value!r}"
+            )
+        priorities[selection_type] = list(model_ids)
+    return priorities
+
+
 # Priority order for each selection type.
 # First model is highest priority, tried first.
 # Ordering rationale (JSON compliance, context, RPD) lives with the
 # facts in provider_catalog.build_default_catalog.
-MODEL_PRIORITIES: dict[ModelSelectionType, list[str]] = {
-    selection_type: list(_CATALOG.priority_model_ids(selection_type.value))
-    for selection_type in ModelSelectionType
-}
+MODEL_PRIORITIES: dict[ModelSelectionType, list[str]] = _model_priorities()
 
 
 @dataclass(frozen=True)
