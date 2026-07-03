@@ -7,10 +7,11 @@ litellm_config.MODEL_METADATA, litellm_config.build_model_list,
 the context fallback chains in create_litellm_router, the provider
 env-var maps, and the CLI validator/wizard copies.
 
-PR-1a status: intentionally UNWIRED. No production code imports this
-module yet; drift tests (tests/orchestrator/test_provider_catalog_drift.py)
-pin every existing copy to the catalog until follow-up PRs derive the
-copies from it and delete them.
+PR-1b status: model_selection.py and litellm_config.py now derive their
+routing-facing surfaces from this catalog (literals deleted). The CLI/
+setup/env-var copies still hold their own literals until PR-1c; drift
+tests (tests/orchestrator/test_provider_catalog_drift.py) pin every
+copy, live or derived, to the catalog.
 
 Facts are transcribed from what routing actually does on main today.
 Known divergence between the copies is represented explicitly through
@@ -395,6 +396,14 @@ def build_default_catalog() -> ProviderCatalog:
         ),
     )
 
+    # Priority order per selection type: first is highest, tried first.
+    # Based on JSON compliance testing (2025-12):
+    # - Cerebras & Groq: 110/100 (perfect JSON)
+    # - Gemini: 80/100 (adds markdown code fences - causes parse failures)
+    # Provider priority: Cerebras (highest RPD 14,400) > Groq (fast 0.4s)
+    # > SambaNova (low RPD). Instruct tier: gpt-oss-120b stable default,
+    # kimi-k2 fast fallback, zai-glm preview fallback, gemini huge-context
+    # last resort, qwen-235b final preview fallback.
     priorities: Dict[str, Tuple[str, ...]] = {
         "fast": (
             "groq/llama-3.1-8b-instant",
@@ -425,6 +434,11 @@ def build_default_catalog() -> ProviderCatalog:
         "embed": "fast",
     }
 
+    # Router entry order IS build_model_list output order (intra-group
+    # priority). Chat group must use models with native tool calling -
+    # Llama hallucinates fake XML syntax; lower volume than agent loops,
+    # so quality models carry no rate-limit risk. SambaNova fast entry
+    # rpm=1 reflects its ~40 RPD quota.
     router_entries = (
         RouterEntry(group="fast", model_id="groq/llama-3.1-8b-instant", tpm=20000, rpm=30),
         RouterEntry(group="fast", model_id="cerebras/llama3.1-8b", tpm=60000, rpm=30),
