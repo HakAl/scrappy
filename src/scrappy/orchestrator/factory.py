@@ -66,6 +66,7 @@ from .protocols import (
     LLMServiceProtocol,
     ProviderStatusTrackerProtocol,
 )
+from ..context import CodebaseContextProtocol
 from ..infrastructure.protocols import PathProviderProtocol
 from ..infrastructure.paths import ScrappyPathProvider
 
@@ -292,7 +293,7 @@ class OrchestratorFactory:
         """Create default background task manager."""
         return BackgroundTaskManager()
 
-    def create_codebase_context(self) -> ContextProvider:
+    def create_codebase_context(self) -> CodebaseContextProtocol:
         """Create default codebase context with semantic search if enabled."""
         context = CodebaseContext(self.project_path)
 
@@ -329,7 +330,7 @@ class OrchestratorFactory:
 
         return context
 
-    def create_cache(self, codebase_context: ContextProvider) -> CacheProtocol:
+    def create_cache(self, codebase_context: CodebaseContextProtocol) -> CacheProtocol:
         """Create default response cache."""
         if self._path_provider:
             cache_path = self._path_provider.response_cache_file()
@@ -341,7 +342,7 @@ class OrchestratorFactory:
             default_ttl_hours=self.cache_ttl_hours
         )
 
-    def create_rate_tracker(self, codebase_context: ContextProvider) -> RateLimitTrackerProtocol:
+    def create_rate_tracker(self, codebase_context: CodebaseContextProtocol) -> RateLimitTrackerProtocol:
         """Create default rate limit tracker with HTTP header capture."""
         if self._path_provider:
             # Ensure user dir exists and migrate any project-level rate limits
@@ -368,7 +369,7 @@ class OrchestratorFactory:
         """Create default working memory."""
         return WorkingMemory()
 
-    def create_session_manager(self, codebase_context: ContextProvider) -> SessionManagerProtocol:
+    def create_session_manager(self, codebase_context: CodebaseContextProtocol) -> SessionManagerProtocol:
         """Create default session manager."""
         return SessionManager(codebase_context.project_path, self._path_provider)
 
@@ -421,7 +422,7 @@ class OrchestratorFactory:
 
     def create_context_manager(
         self,
-        codebase_context: ContextProvider,
+        codebase_context: CodebaseContextProtocol,
         output: BaseOutputProtocol,
         task_executor: TaskExecutorProtocol
     ) -> ContextCoordinator:

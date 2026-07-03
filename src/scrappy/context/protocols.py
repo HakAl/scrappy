@@ -5,7 +5,7 @@ Defines abstract interfaces for codebase context awareness, project detection,
 file scanning, and git history operations.
 """
 
-from typing import Protocol, Dict, Any, List, Optional, Set, runtime_checkable
+from typing import Callable, Protocol, Dict, Any, List, Optional, Set, runtime_checkable
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
@@ -67,86 +67,83 @@ class CodebaseContextProtocol(Protocol):
 
     Implementations:
     - CodebaseContext: Full codebase exploration and context
-    - MockContext: Preset context for testing
-    - NullContext: No context awareness
 
     Example:
-        def get_context(ctx: CodebaseContextProtocol) -> str:
-            ctx.explore()
-            return ctx.get_context()
+        def summarize(ctx: CodebaseContextProtocol) -> str:
+            if not ctx.is_explored():
+                ctx.explore()
+            return ctx.get_summary()
     """
 
-    def explore(
-        self,
-        max_files: int = 100,
-        include_patterns: Optional[List[str]] = None,
-        exclude_patterns: Optional[List[str]] = None,
-    ) -> None:
+    project_path: Path
+
+    def explore(self, force: bool = False) -> dict:
         """
         Explore codebase and build context.
 
         Args:
-            max_files: Maximum files to include
-            include_patterns: File patterns to include
-            exclude_patterns: File patterns to exclude
-        """
-        ...
-
-    def get_context(self, max_length: Optional[int] = None) -> str:
-        """
-        Get codebase context as formatted string.
-
-        Args:
-            max_length: Maximum context length in characters
+            force: Re-explore even if already explored
 
         Returns:
-            Formatted context string
+            Dictionary with exploration results
         """
         ...
 
-    def add_files(self, files: List[str]) -> None:
+    def is_explored(self) -> bool:
         """
-        Add specific files to context.
-
-        Args:
-            files: List of file paths to add
-        """
-        ...
-
-    def clear(self) -> None:
-        """
-        Clear all context.
-        """
-        ...
-
-    def get_file_count(self) -> int:
-        """
-        Get number of files in context.
+        Check if the codebase has been explored.
 
         Returns:
-            Number of files
+            True if codebase has been explored, False otherwise
         """
         ...
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_status(self) -> dict:
         """
-        Get context summary.
+        Get context status information.
 
         Returns:
-            Dictionary containing:
-            - file_count: Number of files
-            - total_size: Total size in bytes
-            - languages: Languages detected
-            - structure: Project structure
+            Dictionary with context status details
         """
         ...
 
-    def set_max_file_size(self, size: int) -> None:
+    def get_summary(self) -> str:
         """
-        Set maximum file size to include.
+        Get the project summary text.
+
+        Returns:
+            Summary string
+        """
+        ...
+
+    def generate_summary(self, llm_func: Callable[[str], str]) -> str:
+        """
+        Generate a project summary using the provided LLM function.
 
         Args:
-            size: Maximum size in bytes
+            llm_func: Function that takes a prompt and returns a summary
+
+        Returns:
+            Generated summary string
+        """
+        ...
+
+    def clear_cache(self) -> None:
+        """
+        Clear cached exploration state.
+        """
+        ...
+
+    def augment_prompt(self, user_prompt: str, include_files: bool = False) -> str:
+        """
+        Augment a user prompt with relevant codebase context.
+
+        Args:
+            user_prompt: Prompt to augment
+            include_files: Whether to include file contents
+
+        Returns:
+            Augmented prompt string
         """
         ...
 

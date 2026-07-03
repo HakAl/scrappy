@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from .model_selection import ModelSelectionType
 from .provider_types import LLMResponse, LLMProviderProtocol, ProviderLimits
+from ..context import CodebaseContextProtocol
 from .types import StreamChunk
 
 # Type variable for generic structured output responses
@@ -225,6 +226,16 @@ class Orchestrator(Protocol):
             - total_tasks: Total tasks delegated
             - by_provider: Per-provider breakdown
             - cache_stats: Cache hit/miss statistics
+        """
+        ...
+
+    @property
+    def context(self) -> "CodebaseContextProtocol":
+        """
+        Access the underlying codebase context.
+
+        Returns:
+            CodebaseContext instance
         """
         ...
 
@@ -697,8 +708,7 @@ class ContextProvider(Protocol):
 
     Implementations:
     - CodebaseContext: Full codebase exploration and analysis
-    - MockContext: Preset context for testing
-    - NullContext: No context provided
+    - NullContext: No context provided (orchestrator_adapter.py)
 
     Example:
         def check_context(ctx: ContextProvider) -> bool:
@@ -723,6 +733,19 @@ class ContextProvider(Protocol):
 
         Returns:
             Context summary string
+        """
+        ...
+
+    def augment_prompt(self, user_prompt: str, include_files: bool = False) -> str:
+        """
+        Augment a user prompt with relevant codebase context.
+
+        Args:
+            user_prompt: Prompt to augment
+            include_files: Whether to include file contents
+
+        Returns:
+            Augmented prompt string
         """
         ...
 

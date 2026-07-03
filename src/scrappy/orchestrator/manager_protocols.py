@@ -520,22 +520,11 @@ class StatusReporterProtocol(Protocol):
 
     Implementations:
     - ProviderStatusReporter: Full status reporting
-    - NullStatusReporter: No-op reporter for testing
-    - LoggingStatusReporter: Logs status instead of printing
 
     Example:
         def show_status(reporter: StatusReporterProtocol) -> None:
             reporter.print_status()
     """
-
-    def get_status(self) -> Dict[str, Any]:
-        """
-        Get current status information.
-
-        Returns:
-            Dictionary containing system status
-        """
-        ...
 
     def print_status(self) -> None:
         """
@@ -549,15 +538,6 @@ class StatusReporterProtocol(Protocol):
 
         Args:
             quality_mode: Whether quality mode is enabled
-        """
-        ...
-
-    def get_health(self) -> Dict[str, bool]:
-        """
-        Get health check results.
-
-        Returns:
-            Dictionary mapping component names to health status
         """
         ...
 
