@@ -78,26 +78,48 @@ class OrchestratorComponents:
 
     Holds all created components to avoid parameter explosion.
     Uses protocol type hints following Dependency Inversion Principle.
+
+    Fields are non-Optional: create_all_components always populates every
+    component, and this container exists to carry that fully-built set.
     """
 
-    def __init__(self):
-        self.output: Optional[BaseOutputProtocol] = None
-        self.registry: Optional[ProviderRegistryProtocol] = None
-        self.background_manager: Optional[BackgroundTaskManagerProtocol] = None
-        self.codebase_context: Optional[ContextProvider] = None
-        self.cache: Optional[CacheProtocol] = None
-        self.rate_tracker: Optional[RateLimitTrackerProtocol] = None
-        self.working_memory: Optional[WorkingMemoryProtocol] = None
-        self.session_manager: Optional[SessionManagerProtocol] = None
-        self.provider_selector: Optional[ProviderSelectorProtocol] = None
-        self.usage_reporter: Optional[UsageReporterProtocol] = None
-        self.status_reporter: Optional[StatusReporterProtocol] = None
-        self.task_executor: Optional[TaskExecutorProtocol] = None
-        self.context_manager: Optional[ContextManagerProtocol] = None
-        self.delegation_manager: Optional[DelegationManagerProtocol] = None
-        self.llm_service: Optional[LLMServiceProtocol] = None
-        self.provider_status_tracker: Optional[ProviderStatusTrackerProtocol] = None
-        self.model_selector: Optional[ModelSelectionServiceProtocol] = None
+    def __init__(
+        self,
+        output: BaseOutputProtocol,
+        registry: ProviderRegistryProtocol,
+        background_manager: BackgroundTaskManagerProtocol,
+        codebase_context: ContextProvider,
+        cache: CacheProtocol,
+        rate_tracker: RateLimitTrackerProtocol,
+        working_memory: WorkingMemoryProtocol,
+        session_manager: SessionManagerProtocol,
+        provider_selector: ProviderSelectorProtocol,
+        usage_reporter: UsageReporterProtocol,
+        status_reporter: StatusReporterProtocol,
+        task_executor: TaskExecutorProtocol,
+        context_manager: ContextManagerProtocol,
+        delegation_manager: DelegationManagerProtocol,
+        llm_service: LLMServiceProtocol,
+        provider_status_tracker: ProviderStatusTrackerProtocol,
+        model_selector: ModelSelectionServiceProtocol,
+    ):
+        self.output = output
+        self.registry = registry
+        self.background_manager = background_manager
+        self.codebase_context = codebase_context
+        self.cache = cache
+        self.rate_tracker = rate_tracker
+        self.working_memory = working_memory
+        self.session_manager = session_manager
+        self.provider_selector = provider_selector
+        self.usage_reporter = usage_reporter
+        self.status_reporter = status_reporter
+        self.task_executor = task_executor
+        self.context_manager = context_manager
+        self.delegation_manager = delegation_manager
+        self.llm_service = llm_service
+        self.provider_status_tracker = provider_status_tracker
+        self.model_selector = model_selector
 
 
 class OrchestratorFactory:
@@ -166,81 +188,97 @@ class OrchestratorFactory:
         Returns:
             OrchestratorComponents with all components initialized
         """
-        components = OrchestratorComponents()
-
         # Core components (no dependencies)
-        components.output = self.create_output()
-        components.registry = self.create_registry()
-        components.background_manager = self.create_background_manager()
-        components.working_memory = self.create_working_memory()
+        output = self.create_output()
+        registry = self.create_registry()
+        background_manager = self.create_background_manager()
+        working_memory = self.create_working_memory()
 
         # Codebase context (needs project path)
-        components.codebase_context = self.create_codebase_context()
+        codebase_context = self.create_codebase_context()
 
         # Components that depend on codebase context
-        components.cache = self.create_cache(components.codebase_context)
-        components.rate_tracker = self.create_rate_tracker(components.codebase_context)
-        components.session_manager = self.create_session_manager(components.codebase_context)
+        cache = self.create_cache(codebase_context)
+        rate_tracker = self.create_rate_tracker(codebase_context)
+        session_manager = self.create_session_manager(codebase_context)
 
         # Provider selector (needs config)
-        components.provider_selector = self.create_provider_selector(
-            components.registry,
-            components.output,
+        provider_selector = self.create_provider_selector(
+            registry,
+            output,
             self.config
         )
 
         # Model selector (deterministic model selection)
-        components.model_selector = self.create_model_selector()
+        model_selector = self.create_model_selector()
 
         # Provider status tracker for LiteLLM callbacks
-        components.provider_status_tracker = self.create_provider_status_tracker()
+        provider_status_tracker = self.create_provider_status_tracker()
 
         # LLM Service (uses LiteLLM Router)
         # Always created - configures itself when API keys are available
-        components.llm_service = self.create_llm_service(
-            components.output,
-            components.rate_tracker,
-            components.provider_status_tracker
+        llm_service = self.create_llm_service(
+            output,
+            rate_tracker,
+            provider_status_tracker
         )
 
         # Usage reporter
-        components.usage_reporter = self.create_usage_reporter(components.cache)
+        usage_reporter = self.create_usage_reporter(cache)
 
         # Task executor (needs llm_service for LLM calls)
-        components.task_executor = self.create_task_executor(
-            components.llm_service,
+        task_executor = self.create_task_executor(
+            llm_service,
             task_history_recorder
         )
 
         # Context manager (needs task executor for summary generation)
-        components.context_manager = self.create_context_manager(
-            components.codebase_context,
-            components.output,
-            components.task_executor
+        context_manager = self.create_context_manager(
+            codebase_context,
+            output,
+            task_executor
         )
 
         # Delegation manager (needs many dependencies)
         # Always created - llm_service handles NotConfiguredError if no keys
-        components.delegation_manager = self.create_delegation_manager(
-            components.llm_service,
-            components.cache,
-            components.output,
-            components.working_memory,
-            components.context_manager,
-            components.rate_tracker,
-            components.registry,
+        delegation_manager = self.create_delegation_manager(
+            llm_service,
+            cache,
+            output,
+            working_memory,
+            context_manager,
+            rate_tracker,
+            registry,
         )
 
         # Status reporter (will need to be updated after brain is set)
-        components.status_reporter = self.create_status_reporter(
-            components.registry,
-            components.provider_selector,
-            components.output,
+        status_reporter = self.create_status_reporter(
+            registry,
+            provider_selector,
+            output,
             brain_name=None,  # Will be updated after brain setup
             quality_mode=self.config.quality_mode
         )
 
-        return components
+        return OrchestratorComponents(
+            output=output,
+            registry=registry,
+            background_manager=background_manager,
+            codebase_context=codebase_context,
+            cache=cache,
+            rate_tracker=rate_tracker,
+            working_memory=working_memory,
+            session_manager=session_manager,
+            provider_selector=provider_selector,
+            usage_reporter=usage_reporter,
+            status_reporter=status_reporter,
+            task_executor=task_executor,
+            context_manager=context_manager,
+            delegation_manager=delegation_manager,
+            llm_service=llm_service,
+            provider_status_tracker=provider_status_tracker,
+            model_selector=model_selector,
+        )
 
     def create_output(self) -> BaseOutputProtocol:
         """Create default output interface."""

@@ -10,7 +10,7 @@ from typing import Awaitable, Callable, Optional, Iterator, AsyncIterator, TypeV
 from datetime import datetime
 from uuid import uuid4
 
-from .provider_types import ProviderRegistry, LLMResponse
+from .provider_types import ProviderRegistry, LLMResponse, LLMProviderBase
 from ..infrastructure.exceptions import (
     ProviderNotFoundError,
     FailureKind,
@@ -127,8 +127,8 @@ class AgentOrchestrator:
         # Core state
         self.task_history: list[dict] = []
         self.created_at = datetime.now()
-        self._brain = None
-        self._brain_name = None
+        self._brain: Optional[LLMProviderBase] = None
+        self._brain_name: Optional[str] = None
         self.context_aware = context_aware
         self.caching_enabled = enable_cache
         self.verbose_selection = verbose_selection
@@ -143,12 +143,15 @@ class AgentOrchestrator:
         self._fallback_preferred_models: dict[ModelSelectionType, str] = {}
         self._preferred_models_lock = threading.Lock()
 
-        # Use injected components or create defaults via factory
-        if all([
-            output, registry, cache, rate_tracker, working_memory,
-            session_manager, provider_selector, usage_reporter, status_reporter,
-            task_executor, context_manager, delegation_manager, background_manager
-        ]):
+        # Use injected components or create defaults via factory.
+        # Explicit truthiness chain (identical semantics to all([...]))
+        # so mypy narrows each component to non-None in this branch.
+        if (
+            output and registry and cache and rate_tracker and working_memory
+            and session_manager and provider_selector and usage_reporter
+            and status_reporter and task_executor and context_manager
+            and delegation_manager and background_manager
+        ):
             # All components provided - use them directly
             self.output = output
             self.registry = registry
@@ -990,7 +993,7 @@ class AgentOrchestrator:
 
     # Session Management (delegates to SessionManager)
 
-    def save_session(self, conversation_history: list = None) -> str:
+    def save_session(self, conversation_history: Optional[list] = None) -> str:
         """Save current session to disk."""
         return self.session_manager.save_session(
             self.working_memory,
