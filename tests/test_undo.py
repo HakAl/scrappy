@@ -12,7 +12,6 @@ import os
 import pytest
 from dataclasses import asdict
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from scrappy.undo import (
@@ -25,6 +24,7 @@ from scrappy.undo import (
     get_undo_limit,
     has_untracked,
     is_dirty,
+    is_shallow_clone,
     load_undo_states,
     undo,
     undo_lock,
@@ -133,68 +133,39 @@ class TestCheckPreconditions:
         """
         git_dir = temp_git_dir / ".git"
 
-        # Ensure no problem indicators exist
-        assert not (git_dir / "MERGE_HEAD").exists()
-        assert not (git_dir / "REBASE_HEAD").exists()
-        assert not (git_dir / "CHERRY_PICK_HEAD").exists()
-        assert not (git_dir / "rebase-merge").exists()
-        assert not (git_dir / "rebase-apply").exists()
-
-        # Should not raise
-        with patch("scrappy.undo.Path") as mock_path:
-            mock_path.return_value.exists.return_value = False
-            check_undo_preconditions()
+        with patch("scrappy.undo._git_dir", return_value=git_dir):
+            check_undo_preconditions()  # Should not raise
 
     @pytest.mark.unit
     def test_check_preconditions_merge(self, temp_git_dir):
         """
         Precondition check should raise during active merge.
 
-        When MERGE_HEAD exists, creating an undo point is unsafe.
+        When MERGE_HEAD exists in the git dir, creating an undo point
+        is unsafe.
         """
         git_dir = temp_git_dir / ".git"
-        merge_head = git_dir / "MERGE_HEAD"
-        merge_head.write_text("abc123\n")
+        (git_dir / "MERGE_HEAD").write_text("abc123\n")
 
-        with patch("scrappy.undo.Path") as mock_path:
+        with patch("scrappy.undo._git_dir", return_value=git_dir):
+            with pytest.raises(UndoError) as exc_info:
+                check_undo_preconditions()
 
-            def path_exists(p):
-                return ".git/MERGE_HEAD" in str(p)
-
-            mock_path.return_value.exists.side_effect = lambda: path_exists(
-                mock_path.call_args[0][0] if mock_path.call_args else ""
-            )
-
-            # Direct test - create actual file structure
-            with patch.object(Path, "exists", return_value=True):
-                with pytest.raises(UndoError) as exc_info:
-                    # Create a path object that will return True for exists()
-                    with patch("scrappy.undo.Path") as mock_p:
-                        mock_instance = MagicMock()
-                        mock_instance.exists.return_value = True
-                        mock_p.return_value = mock_instance
-                        check_undo_preconditions()
-
-                assert "merge" in str(exc_info.value).lower()
+        assert "merge" in str(exc_info.value).lower()
 
     @pytest.mark.unit
     def test_check_preconditions_rebase(self, temp_git_dir):
         """
         Precondition check should raise during active rebase.
         """
-        with patch("scrappy.undo.Path") as mock_path:
-            # First call returns False (MERGE_HEAD), second returns True (REBASE_HEAD)
-            mock_instance = MagicMock()
-            exists_returns = [False, True]  # Skip MERGE_HEAD, catch REBASE_HEAD
-            mock_instance.exists.side_effect = lambda: exists_returns.pop(
-                0
-            ) if exists_returns else False
-            mock_path.return_value = mock_instance
+        git_dir = temp_git_dir / ".git"
+        (git_dir / "REBASE_HEAD").write_text("abc123\n")
 
+        with patch("scrappy.undo._git_dir", return_value=git_dir):
             with pytest.raises(UndoError) as exc_info:
                 check_undo_preconditions()
 
-            assert "rebase" in str(exc_info.value).lower()
+        assert "rebase" in str(exc_info.value).lower()
 
 
 # =============================================================================
@@ -306,21 +277,16 @@ class TestHelperFunctions:
     @pytest.mark.unit
     def test_is_shallow_clone_false(self, temp_git_dir):
         """is_shallow_clone returns False for normal clones."""
-        with patch("scrappy.undo.Path") as mock_path:
-            mock_path.return_value.exists.return_value = False
-            # Actually test against temp dir
-            assert not (temp_git_dir / ".git" / "shallow").exists()
+        with patch("scrappy.undo._git_common_dir", return_value=temp_git_dir / ".git"):
+            assert not is_shallow_clone()
 
     @pytest.mark.unit
     def test_is_shallow_clone_true(self, temp_git_dir):
         """is_shallow_clone returns True for shallow clones."""
-        shallow_file = temp_git_dir / ".git" / "shallow"
-        shallow_file.write_text("abc123\n")
+        (temp_git_dir / ".git" / "shallow").write_text("abc123\n")
 
-        with patch("scrappy.undo.Path") as mock_path:
-            mock_path.return_value.exists.return_value = True
-            # Actually test against temp dir
-            assert shallow_file.exists()
+        with patch("scrappy.undo._git_common_dir", return_value=temp_git_dir / ".git"):
+            assert is_shallow_clone()
 
 
 # =============================================================================
@@ -365,7 +331,7 @@ class TestUndoStatePersistence:
     @pytest.mark.unit
     def test_load_undo_states_empty(self, temp_git_dir):
         """load_undo_states returns empty list when file doesn't exist."""
-        with patch("scrappy.undo.UNDO_STATE_PATH", temp_git_dir / ".git" / "scrappy" / "undo-states.json"):
+        with patch("scrappy.undo._undo_state_path", return_value=temp_git_dir / ".git" / "scrappy" / "undo-states.json"):
             result = load_undo_states()
             assert result == []
 
@@ -397,7 +363,7 @@ class TestUndoLock:
         """Lock should create lock file during context."""
         lock_path = temp_git_dir / ".git" / "scrappy.lock"
 
-        with patch("scrappy.undo.LOCK_PATH", lock_path):
+        with patch("scrappy.undo._lock_path", return_value=lock_path):
             with patch("scrappy.undo.LOCK_TIMEOUT", 1):
                 with undo_lock():
                     assert lock_path.exists()
@@ -410,7 +376,7 @@ class TestUndoLock:
         """Lock file should be removed even on exception."""
         lock_path = temp_git_dir / ".git" / "scrappy.lock"
 
-        with patch("scrappy.undo.LOCK_PATH", lock_path):
+        with patch("scrappy.undo._lock_path", return_value=lock_path):
             try:
                 with undo_lock():
                     assert lock_path.exists()
@@ -436,7 +402,7 @@ class TestUndoEdgeCases:
         state_file.parent.mkdir(parents=True, exist_ok=True)
         state_file.write_text('{"states": []}')
 
-        with patch("scrappy.undo.UNDO_STATE_PATH", state_file):
+        with patch("scrappy.undo._undo_state_path", return_value=state_file):
             with pytest.raises(UndoError) as exc_info:
                 undo()
             assert "No undo points" in str(exc_info.value)
@@ -452,7 +418,7 @@ class TestUndoEdgeCases:
         data = {"states": [state_dict]}  # Only 1 state
         state_file.write_text(json.dumps(data))
 
-        with patch("scrappy.undo.UNDO_STATE_PATH", state_file):
+        with patch("scrappy.undo._undo_state_path", return_value=state_file):
             with pytest.raises(UndoError) as exc_info:
                 undo(n=5)  # Request 5th point but only 1 exists
             assert "Only 1 undo points available" in str(exc_info.value)
@@ -470,7 +436,7 @@ class TestUndoEdgeCases:
 
         wrong_path = "/some/other/path"
 
-        with patch("scrappy.undo.UNDO_STATE_PATH", state_file):
+        with patch("scrappy.undo._undo_state_path", return_value=state_file):
             with patch("os.getcwd", return_value=wrong_path):
                 with pytest.raises(UndoError) as exc_info:
                     undo()
@@ -501,8 +467,8 @@ class TestCreateUndoPointBehavior:
             "update-ref": (0, ""),
         }
 
-        with patch("scrappy.undo.LOCK_PATH", lock_path):
-            with patch("scrappy.undo.UNDO_STATE_PATH", state_path):
+        with patch("scrappy.undo._lock_path", return_value=lock_path):
+            with patch("scrappy.undo._undo_state_path", return_value=state_path):
                 with patch("scrappy.undo.check_undo_preconditions"):
                     with patch("scrappy.undo.is_shallow_clone", return_value=False):
                         with patch("scrappy.undo.subprocess.run", side_effect=mock_git_run(command_results)):
@@ -528,8 +494,8 @@ class TestCreateUndoPointBehavior:
             "update-ref": (0, ""),
         }
 
-        with patch("scrappy.undo.LOCK_PATH", lock_path):
-            with patch("scrappy.undo.UNDO_STATE_PATH", state_path):
+        with patch("scrappy.undo._lock_path", return_value=lock_path):
+            with patch("scrappy.undo._undo_state_path", return_value=state_path):
                 with patch("scrappy.undo.check_undo_preconditions"):
                     with patch("scrappy.undo.is_shallow_clone", return_value=False):
                         with patch("scrappy.undo.subprocess.run", side_effect=mock_git_run(command_results)):
@@ -572,8 +538,8 @@ class TestCreateUndoPointBehavior:
                 result.stdout = ""
             return result
 
-        with patch("scrappy.undo.LOCK_PATH", lock_path):
-            with patch("scrappy.undo.UNDO_STATE_PATH", state_path):
+        with patch("scrappy.undo._lock_path", return_value=lock_path):
+            with patch("scrappy.undo._undo_state_path", return_value=state_path):
                 with patch("scrappy.undo.check_undo_preconditions"):
                     with patch("scrappy.undo.is_shallow_clone", return_value=False):
                         with patch("scrappy.undo.subprocess.run", side_effect=tracking_side_effect):
@@ -618,8 +584,8 @@ class TestCreateUndoPointBehavior:
                 result.stdout = ""
             return result
 
-        with patch("scrappy.undo.LOCK_PATH", lock_path):
-            with patch("scrappy.undo.UNDO_STATE_PATH", state_path):
+        with patch("scrappy.undo._lock_path", return_value=lock_path):
+            with patch("scrappy.undo._undo_state_path", return_value=state_path):
                 with patch("scrappy.undo.check_undo_preconditions"):
                     with patch("scrappy.undo.is_shallow_clone", return_value=False):
                         with patch("scrappy.undo.subprocess.run", side_effect=tracking_side_effect):
@@ -648,7 +614,7 @@ class TestUndoNValidation:
         data = {"states": [state_dict]}
         state_file.write_text(json.dumps(data))
 
-        with patch("scrappy.undo.UNDO_STATE_PATH", state_file):
+        with patch("scrappy.undo._undo_state_path", return_value=state_file):
             with pytest.raises(UndoError) as exc_info:
                 undo(n=0)
             assert "n must be >= 1" in str(exc_info.value)
@@ -664,7 +630,7 @@ class TestUndoNValidation:
         data = {"states": [state_dict]}
         state_file.write_text(json.dumps(data))
 
-        with patch("scrappy.undo.UNDO_STATE_PATH", state_file):
+        with patch("scrappy.undo._undo_state_path", return_value=state_file):
             with pytest.raises(UndoError) as exc_info:
                 undo(n=-1)
             assert "n must be >= 1" in str(exc_info.value)
@@ -708,8 +674,8 @@ class TestUndoWipUnwrap:
 
             return result
 
-        with patch("scrappy.undo.UNDO_STATE_PATH", state_file):
-            with patch("scrappy.undo.LOCK_PATH", lock_path):
+        with patch("scrappy.undo._undo_state_path", return_value=state_file):
+            with patch("scrappy.undo._lock_path", return_value=lock_path):
                 with patch("os.getcwd", return_value=str(temp_git_dir)):
                     with patch("scrappy.undo.subprocess.run", side_effect=tracking_side_effect):
                         undo()

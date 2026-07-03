@@ -60,11 +60,7 @@ class UndoState:
 
 
 # Lock configuration
-LOCK_PATH = Path(".git/scrappy.lock")
 LOCK_TIMEOUT = 30  # seconds
-
-# Persistence configuration
-UNDO_STATE_PATH = Path(".git/scrappy/undo-states.json")
 
 
 def _run(cmd: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -89,6 +85,64 @@ def _run(cmd: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         stdin=subprocess.DEVNULL,  # Prevent terminal interaction in TUI worker threads
     )
     return result
+
+
+# =============================================================================
+# Git Metadata Path Resolution
+# =============================================================================
+#
+# Never build git metadata paths from a literal ".git/" prefix: in a linked
+# git worktree, <worktree>/.git is a FILE containing a "gitdir:" pointer, and
+# the real metadata lives elsewhere. Resolution rules used here:
+#
+# Per-worktree git dir (git rev-parse --git-dir):
+#   MERGE_HEAD, REBASE_HEAD, CHERRY_PICK_HEAD, rebase-merge, rebase-apply
+#   (in-progress operation state is tracked per worktree), plus scrappy's
+#   own lock and undo-state files (an undo point captures per-worktree
+#   state: HEAD, branch, and working tree).
+#
+# Common git dir shared by all worktrees (git rev-parse --git-common-dir):
+#   shallow (a clone-wide property).
+#
+# In a normal clone both resolve to ".git", so behavior there is unchanged.
+
+
+def _resolve_git_dir(flag: str) -> Path:
+    """Resolve a git metadata directory via git rev-parse.
+
+    Args:
+        flag: Either "--git-dir" or "--git-common-dir".
+
+    Raises:
+        UndoError: If the current directory is not inside a git repository.
+    """
+    result = _run(f"git rev-parse {flag}", check=False)
+    if result.returncode != 0:
+        raise UndoError(
+            f"Cannot resolve git directory ({flag}): "
+            f"not inside a git repository?"
+        )
+    return Path(result.stdout.strip())
+
+
+def _git_dir() -> Path:
+    """Per-worktree git dir (".git" in a normal clone)."""
+    return _resolve_git_dir("--git-dir")
+
+
+def _git_common_dir() -> Path:
+    """Git dir shared across worktrees (same as _git_dir in a normal clone)."""
+    return _resolve_git_dir("--git-common-dir")
+
+
+def _lock_path() -> Path:
+    """Location of the scrappy undo lock file."""
+    return _git_dir() / "scrappy.lock"
+
+
+def _undo_state_path() -> Path:
+    """Location of the persisted undo states file."""
+    return _git_dir() / "scrappy" / "undo-states.json"
 
 
 # =============================================================================
@@ -132,7 +186,7 @@ def has_staged_changes() -> bool:
 
 def is_shallow_clone() -> bool:
     """Check if this is a shallow clone."""
-    return Path(".git/shallow").exists()
+    return (_git_common_dir() / "shallow").exists()
 
 
 # =============================================================================
@@ -150,12 +204,13 @@ def undo_lock() -> Iterator[None]:
     Raises:
         UndoError: If lock cannot be acquired within LOCK_TIMEOUT seconds
     """
+    lock_path = _lock_path()
     start = time.time()
 
     while True:
         try:
             # Atomic file creation - fails if file exists (no TOCTOU race)
-            fd = os.open(str(LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             os.write(fd, str(os.getpid()).encode())
             os.close(fd)
             break  # Lock acquired
@@ -163,14 +218,14 @@ def undo_lock() -> Iterator[None]:
             if time.time() - start > LOCK_TIMEOUT:
                 raise UndoError(
                     f"Another scrappy process holds the lock. "
-                    f"If this is stale, remove {LOCK_PATH}"
+                    f"If this is stale, remove {lock_path}"
                 )
             time.sleep(0.1)
 
     try:
         yield
     finally:
-        LOCK_PATH.unlink(missing_ok=True)
+        lock_path.unlink(missing_ok=True)
 
 
 # =============================================================================
@@ -184,17 +239,19 @@ def check_undo_preconditions() -> None:
     Raises:
         UndoError: If in the middle of a merge, rebase, or cherry-pick
     """
-    # Cannot create undo during merge/rebase/cherry-pick
+    # Cannot create undo during merge/rebase/cherry-pick.
+    # These all live in the per-worktree git dir.
+    git_dir = _git_dir()
     problem_indicators = [
-        (".git/MERGE_HEAD", "merge"),
-        (".git/REBASE_HEAD", "rebase"),
-        (".git/CHERRY_PICK_HEAD", "cherry-pick"),
-        (".git/rebase-merge", "interactive rebase"),
-        (".git/rebase-apply", "rebase/am"),
+        ("MERGE_HEAD", "merge"),
+        ("REBASE_HEAD", "rebase"),
+        ("CHERRY_PICK_HEAD", "cherry-pick"),
+        ("rebase-merge", "interactive rebase"),
+        ("rebase-apply", "rebase/am"),
     ]
 
-    for path, operation in problem_indicators:
-        if Path(path).exists():
+    for name, operation in problem_indicators:
+        if (git_dir / name).exists():
             raise UndoError(
                 f"Cannot create undo point during active {operation}. "
                 f"Complete or abort the {operation} first."
@@ -372,21 +429,23 @@ def undo(n: int = 1, force: bool = False) -> None:
 
 def persist_undo_state(state: UndoState) -> None:
     """Add state to persistent storage."""
-    UNDO_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    state_path = _undo_state_path()
+    state_path.parent.mkdir(parents=True, exist_ok=True)
 
     states = load_undo_states()
     states.append(state)
 
     data = {"states": [asdict(s) for s in states]}
-    UNDO_STATE_PATH.write_text(json.dumps(data, indent=2, default=str))
+    state_path.write_text(json.dumps(data, indent=2, default=str))
 
 
 def load_undo_states() -> list[UndoState]:
     """Load all undo states from storage."""
-    if not UNDO_STATE_PATH.exists():
+    state_path = _undo_state_path()
+    if not state_path.exists():
         return []
 
-    data = json.loads(UNDO_STATE_PATH.read_text())
+    data = json.loads(state_path.read_text())
     states = []
     for s in data.get("states", []):
         # Convert datetime string back to datetime object
@@ -402,7 +461,7 @@ def remove_undo_state(state: UndoState) -> None:
     states = [s for s in states if s.ref != state.ref]
 
     data = {"states": [asdict(s) for s in states]}
-    UNDO_STATE_PATH.write_text(json.dumps(data, indent=2, default=str))
+    _undo_state_path().write_text(json.dumps(data, indent=2, default=str))
 
 
 def get_undo_limit() -> int:
@@ -432,4 +491,4 @@ def prune_old_undo_states(keep: Optional[int] = None) -> None:
     # Keep only newest
     states = states[-keep:]
     data = {"states": [asdict(s) for s in states]}
-    UNDO_STATE_PATH.write_text(json.dumps(data, indent=2, default=str))
+    _undo_state_path().write_text(json.dumps(data, indent=2, default=str))
