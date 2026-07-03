@@ -20,6 +20,7 @@ Model Groups:
 from dataclasses import dataclass
 from typing import Optional
 
+from .provider_catalog import build_default_catalog
 from .provider_types import SpeedRank, QualityRank
 from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 
@@ -47,143 +48,40 @@ class ModelMetadata:
     tpm: int  # Tokens per minute
 
 
+_CATALOG = build_default_catalog()
+
+
+def _model_metadata_from_catalog() -> dict[str, ModelMetadata]:
+    """Derive display metadata from the catalog, preserving catalog order.
+
+    A model id the catalog cannot resolve is a catalog integrity error;
+    fail at import rather than leaking None into display metadata.
+    """
+    metadata: dict[str, ModelMetadata] = {}
+    for model_id in _CATALOG.model_ids():
+        facts = _CATALOG.model_facts(model_id)
+        if facts is None:
+            raise RuntimeError(
+                f"Provider catalog has no model facts for {model_id!r}"
+            )
+        metadata[model_id] = ModelMetadata(
+            model_id=facts.model_id,
+            provider=facts.provider,
+            group=facts.group,
+            context_length=facts.context_length,
+            speed=facts.speed,
+            quality=facts.quality,
+            rpd=facts.rpd,
+            tpm=facts.tpm,
+        )
+    return metadata
+
+
 # Static metadata for display purposes
 # Keys are LiteLLM model format: "provider/model"
-#
-# JSON Compliance Testing (2025-12):
-# - Cerebras & Groq: 110/100 (perfect JSON)
-# - Gemini: 80/100 (adds markdown code fences - causes parse failures)
-#
-# Priority: Cerebras (highest RPD 14,400) > Groq (fast 0.4s) > SambaNova (low RPD)
-MODEL_METADATA: dict[str, ModelMetadata] = {
-    # --- Fast tier (8B class, speed priority) ---
-    "groq/llama-3.1-8b-instant": ModelMetadata(
-        model_id="groq/llama-3.1-8b-instant",
-        provider="groq",
-        group="fast",
-        context_length=131072,
-        speed=SpeedRank.VERY_FAST,
-        quality=QualityRank.GOOD,
-        rpd=7000,
-        tpm=20000,
-    ),
-    "cerebras/llama3.1-8b": ModelMetadata(
-        model_id="cerebras/llama3.1-8b",
-        provider="cerebras",
-        group="fast",
-        context_length=8192,
-        speed=SpeedRank.ULTRA_FAST,
-        quality=QualityRank.GOOD,
-        rpd=14400,
-        tpm=60000,
-    ),
-
-    # --- Chat tier (70B class, conversation) ---
-
-    # Cerebras
-    "cerebras/llama-3.3-70b": ModelMetadata(
-        model_id="cerebras/llama-3.3-70b",
-        provider="cerebras",
-        group="chat",
-        context_length=8192,
-        speed=SpeedRank.ULTRA_FAST,  # 2100 tok/s
-        quality=QualityRank.EXCELLENT,
-        rpd=14400,
-        tpm=60000,
-    ),
-
-    # Groq
-    "groq/llama-3.3-70b-versatile": ModelMetadata(
-        model_id="groq/llama-3.3-70b-versatile",
-        provider="groq",
-        group="chat",
-        context_length=32768,
-        speed=SpeedRank.FAST,  # 1.0s
-        quality=QualityRank.EXCELLENT,
-        rpd=1000,
-        tpm=12000,
-    ),
-
-    # SambaNova
-    "sambanova/Meta-Llama-3.1-8B-Instruct": ModelMetadata(
-        model_id="sambanova/Meta-Llama-3.1-8B-Instruct",
-        provider="sambanova",
-        group="fast",
-        context_length=16384,
-        speed=SpeedRank.FAST,
-        quality=QualityRank.GOOD,
-        rpd=40,
-        tpm=100000,
-    ),
-    "sambanova/Meta-Llama-3.3-70B-Instruct": ModelMetadata(
-        model_id="sambanova/Meta-Llama-3.3-70B-Instruct",
-        provider="sambanova",
-        group="chat",
-        context_length=131072,  # 128k
-        speed=SpeedRank.ULTRA_FAST,  # 0.26s latency
-        quality=QualityRank.EXCELLENT,
-        rpd=40,
-        tpm=100000,
-    ),
-
-    # --- Instruct tier (instruction-tuned, agent/tools) ---
-
-    # Cerebras
-    "cerebras/qwen-3-235b-a22b-instruct-2507": ModelMetadata(
-        model_id="cerebras/qwen-3-235b-a22b-instruct-2507",
-        provider="cerebras",
-        group="instruct",
-        context_length=8192,
-        speed=SpeedRank.FAST,  # 1.3s latency (235B size)
-        quality=QualityRank.EXCELLENT,  # Instruction-tuned
-        rpd=14400,
-        tpm=60000,
-    ),
-    "cerebras/gpt-oss-120b": ModelMetadata(
-        model_id="cerebras/gpt-oss-120b",
-        provider="cerebras",
-        group="instruct",
-        context_length=131072,  # 128k context
-        speed=SpeedRank.FAST,
-        quality=QualityRank.VERY_GOOD,
-        rpd=14400,
-        tpm=60000,
-    ),
-    "cerebras/zai-glm-4.7": ModelMetadata(
-        model_id="cerebras/zai-glm-4.7",
-        provider="cerebras",
-        group="instruct",
-        context_length=131072,  # 128k context
-        speed=SpeedRank.FAST,
-        quality=QualityRank.VERY_GOOD,
-        rpd=14400,
-        tpm=60000,
-    ),
-
-    # Groq
-    "groq/moonshotai/kimi-k2-instruct": ModelMetadata(
-        model_id="groq/moonshotai/kimi-k2-instruct",
-        provider="groq",
-        group="instruct",
-        context_length=131072,  # 128k
-        speed=SpeedRank.ULTRA_FAST,  # 0.4s
-        quality=QualityRank.VERY_GOOD,
-        rpd=7000,
-        tpm=20000,
-    ),
-
-    # Gemini
-    "gemini/gemini-2.5-flash": ModelMetadata(
-        model_id="gemini/gemini-2.5-flash",
-        provider="gemini",
-        group="instruct",
-        context_length=1000000,  # 1M context
-        speed=SpeedRank.MODERATE,
-        quality=QualityRank.VERY_GOOD,
-        rpd=250,
-        tpm=250000,
-    ),
-}
+# Fact rationale (JSON compliance, priority reasoning) lives with the
+# facts in provider_catalog.build_default_catalog.
+MODEL_METADATA: dict[str, ModelMetadata] = _model_metadata_from_catalog()
 
 
 def get_models_for_group(group: str) -> list[ModelMetadata]:
@@ -247,14 +145,10 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
     """
     Build model list from configured API keys.
 
-    Model Groups:
-    - "fast": 8B models, speed priority
-    - "quality": Large models, quality priority, perfect JSON compliance
-
-    Priority within groups determined by order (first = primary).
-    Based on JSON compliance testing (2025-12):
-    - Cerebras/Groq: 110/100 (perfect)
-    - Gemini: 80/100 (JSON issues - deprioritized)
+    Entries derive from the catalog's router entries: group membership,
+    intra-group priority (entry order), and tpm/rpm all come from
+    provider_catalog.build_default_catalog. Entries whose provider has
+    no configured API key are omitted.
 
     Args:
         api_key_service: Service for getting API keys
@@ -265,140 +159,25 @@ def build_model_list(api_key_service: ApiKeyConfigServiceProtocol) -> list[dict]
     """
     model_list = []
 
-    groq_key = api_key_service.get_key("GROQ_API_KEY")
-    cerebras_key = api_key_service.get_key("CEREBRAS_API_KEY")
-    gemini_key = api_key_service.get_key("GEMINI_API_KEY")
-    sambanova_key = api_key_service.get_key("SAMBANOVA_API_KEY")
-
-    # --- Fast Models (8B class, speed priority) ---
-    # Priority: Groq (128k) > Cerebras (8k) > SambaNova (low RPD)
-
-    if groq_key:
+    for entry in _CATALOG.router_entries():
+        provider = entry.model_id.split("/")[0]
+        env_var = _CATALOG.env_var_for(provider)
+        if env_var is None:
+            raise ConfigurationError(
+                f"Provider catalog has no env var for provider {provider!r} "
+                f"(router entry {entry.model_id!r})"
+            )
+        api_key = api_key_service.get_key(env_var)
+        if not api_key:
+            continue
         model_list.append({
-            "model_name": "fast",
+            "model_name": entry.group,
             "litellm_params": {
-                "model": "groq/llama-3.1-8b-instant",
-                "api_key": groq_key,
+                "model": entry.model_id,
+                "api_key": api_key,
             },
-            "tpm": 20000,
-            "rpm": 30,
-        })
-
-    if cerebras_key:
-        model_list.append({
-            "model_name": "fast",
-            "litellm_params": {
-                "model": "cerebras/llama3.1-8b",
-                "api_key": cerebras_key,
-            },
-            "tpm": 60000,
-            "rpm": 30,
-        })
-
-    if sambanova_key:
-        model_list.append({
-            "model_name": "fast",
-            "litellm_params": {
-                "model": "sambanova/Meta-Llama-3.1-8B-Instruct",
-                "api_key": sambanova_key,
-            },
-            "tpm": 100000,
-            "rpm": 1,  # ~40 RPD = very low RPM
-        })
-
-    # --- Chat Models (tool-capable, LLM decides when to use tools) ---
-    # Must use models with native tool calling - Llama hallucinates fake XML syntax.
-    # Lower volume than agent loops, so we can use quality models without rate limit risk.
-    # Priority: Gemini (tool support + 1M context) > Kimi K2 (fast, tool support)
-
-    if gemini_key:
-        model_list.append({
-            "model_name": "chat",
-            "litellm_params": {
-                "model": "gemini/gemini-2.5-flash",
-                "api_key": gemini_key,
-            },
-            "tpm": 250000,
-            "rpm": 10,
-        })
-
-    if groq_key:
-        model_list.append({
-            "model_name": "chat",
-            "litellm_params": {
-                "model": "groq/moonshotai/kimi-k2-instruct",
-                "api_key": groq_key,
-            },
-            "tpm": 20000,
-            "rpm": 30,
-        })
-
-    # --- Instruct Models (tool-use + instruction-following priority) ---
-    # Priority:
-    # 1. Cerebras GPT-OSS 120B - stable default for agent work
-    # 2. Groq Kimi K2 - fast fallback
-    # 3. Cerebras ZAI GLM 4.7 - preview fallback if account exposes it
-    # 4. Gemini - last resort (tool-weaker but generous free tier)
-    # 5. Cerebras Qwen 235B - keep only as a final preview fallback
-
-    # Cerebras - high RPD (14,400/day), use stable model first
-    if cerebras_key:
-        model_list.append({
-            "model_name": "instruct",
-            "litellm_params": {
-                "model": "cerebras/gpt-oss-120b",
-                "api_key": cerebras_key,
-            },
-            "tpm": 60000,
-            "rpm": 30,
-        })
-
-    # Groq - fast inference, good tool use
-    if groq_key:
-        model_list.append({
-            "model_name": "instruct",
-            "litellm_params": {
-                "model": "groq/moonshotai/kimi-k2-instruct",
-                "api_key": groq_key,
-            },
-            "tpm": 20000,
-            "rpm": 30,
-        })
-
-    # Cerebras preview fallback that appears on some accounts
-    if cerebras_key:
-        model_list.append({
-            "model_name": "instruct",
-            "litellm_params": {
-                "model": "cerebras/zai-glm-4.7",
-                "api_key": cerebras_key,
-            },
-            "tpm": 60000,
-            "rpm": 10,
-        })
-
-    # Gemini - deprioritized but useful for huge context and overflow
-    if gemini_key:
-        model_list.append({
-            "model_name": "instruct",
-            "litellm_params": {
-                "model": "gemini/gemini-2.5-flash",
-                "api_key": gemini_key,
-            },
-            "tpm": 250000,
-            "rpm": 10,
-        })
-
-    # Keep preview Qwen only as a final fallback for accounts that still expose it
-    if cerebras_key:
-        model_list.append({
-            "model_name": "instruct",
-            "litellm_params": {
-                "model": "cerebras/qwen-3-235b-a22b-instruct-2507",
-                "api_key": cerebras_key,
-            },
-            "tpm": 60000,
-            "rpm": 30,
+            "tpm": entry.tpm,
+            "rpm": entry.rpm,
         })
 
     return model_list
@@ -460,13 +239,8 @@ def create_litellm_router(callbacks: Optional[list] = None):
     # Context window fallbacks: when a model hits context limit, try larger models
     # Order: small context -> medium -> large (Gemini has 1M context)
     context_fallbacks = [
-        {"cerebras/qwen-3-235b-a22b-instruct-2507": ["cerebras/gpt-oss-120b", "groq/moonshotai/kimi-k2-instruct", "cerebras/zai-glm-4.7", "gemini/gemini-2.5-flash"]},
-        {"cerebras/gpt-oss-120b": ["gemini/gemini-2.5-flash"]},
-        {"cerebras/zai-glm-4.7": ["gemini/gemini-2.5-flash"]},
-        {"cerebras/llama-3.3-70b": ["groq/moonshotai/kimi-k2-instruct", "gemini/gemini-2.5-flash"]},
-        {"cerebras/llama3.1-8b": ["groq/llama-3.1-8b-instant", "gemini/gemini-2.5-flash"]},
-        {"groq/moonshotai/kimi-k2-instruct": ["gemini/gemini-2.5-flash"]},
-        {"groq/llama-3.3-70b-versatile": ["gemini/gemini-2.5-flash"]},
+        {fallback.primary: list(fallback.fallbacks)}
+        for fallback in _CATALOG.context_fallbacks()
     ]
 
     # NOTE: Model fallbacks for rate limiting are NOT configured here.

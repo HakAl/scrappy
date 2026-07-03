@@ -14,6 +14,7 @@ from typing import Callable, Optional, Protocol
 from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
 
 from .failure_policy import FailureRecord, HealthScope, get_failure_policy
+from .provider_catalog import build_default_catalog
 
 
 logger = logging.getLogger(__name__)
@@ -84,45 +85,42 @@ class ModelSelectionType(Enum):
     EMBED = "embed"      # Embeddings
 
 
+_CATALOG = build_default_catalog()
+
+
+def _selection_type_to_group() -> dict[ModelSelectionType, str]:
+    """Derive the selection-type -> router-group mapping from the catalog.
+
+    A selection type the catalog cannot map is a catalog integrity error;
+    fail at import rather than leaking None into routing.
+    """
+    mapping: dict[ModelSelectionType, str] = {}
+    for selection_type in ModelSelectionType:
+        group = _CATALOG.group_for_selection_type(selection_type.value)
+        if group is None:
+            raise RuntimeError(
+                f"Provider catalog has no router group for selection type "
+                f"{selection_type.value!r}"
+            )
+        mapping[selection_type] = group
+    return mapping
+
+
 # Canonical mapping from ModelSelectionType to LiteLLM model groups.
 # Single source of truth - import this instead of defining your own.
-SELECTION_TYPE_TO_GROUP: dict[ModelSelectionType, str] = {
-    ModelSelectionType.FAST: "fast",
-    ModelSelectionType.CHAT: "chat",
-    ModelSelectionType.INSTRUCT: "instruct",
-    ModelSelectionType.EMBED: "fast",
-}
+SELECTION_TYPE_TO_GROUP: dict[ModelSelectionType, str] = _selection_type_to_group()
 
 # Valid model groups for the LiteLLM router
-MODEL_GROUPS: set[str] = {"fast", "chat", "instruct"}
+MODEL_GROUPS: set[str] = set(_CATALOG.router_groups())
 
 
 # Priority order for each selection type.
 # First model is highest priority, tried first.
-# Based on JSON compliance testing (2025-12):
-# - Cerebras & Groq: 110/100 (perfect JSON)
-# - Gemini: 80/100 (adds markdown code fences - causes parse failures)
+# Ordering rationale (JSON compliance, context, RPD) lives with the
+# facts in provider_catalog.build_default_catalog.
 MODEL_PRIORITIES: dict[ModelSelectionType, list[str]] = {
-    ModelSelectionType.FAST: [
-        "groq/llama-3.1-8b-instant",           # Fast, 128k context
-        "cerebras/llama3.1-8b",                # Ultra-fast, 8k context
-        "sambanova/Meta-Llama-3.1-8B-Instruct",  # Low RPD fallback
-    ],
-    ModelSelectionType.CHAT: [
-        "cerebras/llama-3.3-70b",              # Ultra-fast 70B
-        "groq/llama-3.3-70b-versatile",        # Fast 70B, 32k context
-    ],
-    ModelSelectionType.INSTRUCT: [
-        "cerebras/gpt-oss-120b",               # Stable Cerebras instruct model
-        "groq/moonshotai/kimi-k2-instruct",    # Fast, 128k context
-        "cerebras/zai-glm-4.7",                # Preview, but viable coding fallback
-        "gemini/gemini-2.5-flash",             # Huge context fallback
-        "cerebras/qwen-3-235b-a22b-instruct-2507",  # Preview model; keep as last resort
-    ],
-    ModelSelectionType.EMBED: [
-        "groq/llama-3.1-8b-instant",
-        "cerebras/llama3.1-8b",
-    ],
+    selection_type: list(_CATALOG.priority_model_ids(selection_type.value))
+    for selection_type in ModelSelectionType
 }
 
 
