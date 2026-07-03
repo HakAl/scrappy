@@ -30,7 +30,7 @@ import logging
 import re
 import time
 import threading
-from typing import Callable, Iterator, Optional, TYPE_CHECKING, AsyncIterator, Type, TypeVar
+from typing import Callable, Iterator, Optional, TYPE_CHECKING, AsyncIterator, Type, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -59,6 +59,9 @@ from .model_selection import MODEL_GROUPS
 if TYPE_CHECKING:
     import instructor
     import litellm
+    from litellm.types.llms.openai import AllMessageValues
+    from litellm.types.utils import Choices, ModelResponse
+    from openai.types.chat import ChatCompletionMessageParam
     from .litellm_callbacks import RateTrackingCallback
 
 logger = logging.getLogger(__name__)
@@ -915,17 +918,22 @@ class LiteLLMService:
         await _get_throttle().wait_async(model)
 
         try:
-            response = await self._router.acompletion(
-                model=model,
-                messages=messages,
-                num_retries=0,  # Don't retry - let Orchestrator handle model fallback
-                **kwargs
+            # Non-streaming call: Router's return type is a union with
+            # CustomStreamWrapper, but without stream=True it is a ModelResponse.
+            response = cast(
+                "ModelResponse",
+                await self._router.acompletion(
+                    model=model,
+                    messages=cast("list[AllMessageValues]", messages),
+                    num_retries=0,  # Don't retry - let Orchestrator handle model fallback
+                    **kwargs
+                ),
             )
             elapsed = time.time() - start
 
             # Log response tool calls (key for debugging missing params)
             if self._logger and response and response.choices:
-                msg = response.choices[0].message
+                msg = cast("Choices", response.choices[0]).message
                 tc = getattr(msg, "tool_calls", None)
                 if tc:
                     for t in tc:
@@ -1022,17 +1030,22 @@ class LiteLLMService:
         _get_throttle().wait_sync(model)
 
         try:
-            response = self._router.completion(
-                model=model,
-                messages=messages,
-                num_retries=0,  # Don't retry - let Orchestrator handle model fallback
-                **kwargs
+            # Non-streaming call: Router's return type is a union with
+            # CustomStreamWrapper, but without stream=True it is a ModelResponse.
+            response = cast(
+                "ModelResponse",
+                self._router.completion(
+                    model=model,
+                    messages=messages,
+                    num_retries=0,  # Don't retry - let Orchestrator handle model fallback
+                    **kwargs
+                ),
             )
             elapsed = time.time() - start
 
             # Log response tool calls (key for debugging missing params)
             if self._logger and response and response.choices:
-                msg = response.choices[0].message
+                msg = cast("Choices", response.choices[0]).message
                 tc = getattr(msg, "tool_calls", None)
                 if tc:
                     for t in tc:
@@ -1451,7 +1464,7 @@ class LiteLLMService:
             # Enable stream_options to get usage data in final chunk
             stream = await self._router.acompletion(
                 model=model,
-                messages=messages,
+                messages=cast("list[AllMessageValues]", messages),
                 stream=True,
                 stream_options={"include_usage": True},
                 num_retries=0,  # Don't retry - let Orchestrator handle model fallback
@@ -2082,7 +2095,7 @@ class LiteLLMService:
         client = self._instructor_clients_sync[mode]
         return client.chat.completions.create(
             model=model,
-            messages=messages,
+            messages=cast("list[ChatCompletionMessageParam]", messages),
             response_model=response_model,
             max_retries=retries,
             **kwargs,
