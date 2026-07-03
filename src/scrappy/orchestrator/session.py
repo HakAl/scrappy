@@ -6,6 +6,7 @@ Handles saving and loading of session data including working memory and conversa
 
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 import json
 
 from ..infrastructure.utils import safe_import
@@ -54,7 +55,7 @@ class SessionManager:
         working_memory: WorkingMemoryProtocol,
         task_history: list,
         session_start: datetime,
-        conversation_history: list = None
+        conversation_history: Optional[list] = None
     ) -> str:
         """
         Save current session to disk.
