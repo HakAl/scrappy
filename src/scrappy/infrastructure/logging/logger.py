@@ -79,8 +79,8 @@ class StructuredLogger:
         self._bound_context: Dict[str, Any] = {}
 
         # File handler setup
-        self._file_handler = None
-        self._log_file = None
+        self._file_handler: Optional[RotatingFileHandler] = None
+        self._log_file: Optional[Path] = None
         if log_file:
             self._setup_file_handler(log_file, max_bytes, backup_count)
 
@@ -186,8 +186,11 @@ class StructuredLogger:
                 msg=msg, args=(), exc_info=None
             )):
                 self._file_handler.doRollover()
-            self._file_handler.stream.write(msg)
-            self._file_handler.stream.flush()
+            stream = self._file_handler.stream
+            if stream is None:
+                raise RuntimeError("Log file handler stream is not open")
+            stream.write(msg)
+            stream.flush()
 
         # Output to IO
         if self._io:

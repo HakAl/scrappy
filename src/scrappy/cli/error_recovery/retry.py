@@ -38,7 +38,7 @@ def retry_operation(
     if retry_on is None:
         retry_on = (ConnectionError, TimeoutError)
 
-    last_exception = None
+    last_exception: Optional[Exception] = None
     attempts = 0
 
     for attempt in range(max_retries):
