@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import TYPE_CHECKING, Optional, Protocol
 
 from .tracker import RateLimitTracker
 from .storage import RateLimitStorage, FileSystemAdapter
@@ -18,6 +18,9 @@ from .protocols import (
     UserNotifierProtocol,
 )
 from ..config import OrchestratorConfig
+
+if TYPE_CHECKING:
+    from ..protocols import RateLimitTrackerProtocol
 
 
 class OutputProtocol(Protocol):
@@ -185,7 +188,7 @@ def create_rate_limit_components(
 
 
 def create_enforcement_components(
-    tracker: RateLimitTracker,
+    tracker: RateLimitTrackerProtocol,
     config: Optional[OrchestratorConfig] = None,
     output: Optional[OutputProtocol] = None,
     quiet_mode: bool = False,

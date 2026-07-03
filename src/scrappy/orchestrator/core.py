@@ -10,7 +10,7 @@ from typing import Awaitable, Callable, Optional, Iterator, AsyncIterator, TypeV
 from datetime import datetime
 from uuid import uuid4
 
-from .provider_types import ProviderRegistry, LLMResponse, LLMProviderBase
+from .provider_types import LLMResponse, LLMProviderProtocol
 from ..infrastructure.exceptions import (
     ProviderNotFoundError,
     FailureKind,
@@ -127,7 +127,7 @@ class AgentOrchestrator:
         # Core state
         self.task_history: list[dict] = []
         self.created_at = datetime.now()
-        self._brain: Optional[LLMProviderBase] = None
+        self._brain: Optional[LLMProviderProtocol] = None
         self._brain_name: Optional[str] = None
         self.context_aware = context_aware
         self.caching_enabled = enable_cache
@@ -875,7 +875,7 @@ class AgentOrchestrator:
         return self.context_manager.context
 
     @property
-    def providers(self) -> ProviderRegistry:
+    def providers(self) -> ProviderRegistryProtocol:
         """Access the provider registry."""
         return self.registry
 
