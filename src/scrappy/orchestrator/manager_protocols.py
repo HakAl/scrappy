@@ -7,6 +7,12 @@ specific concerns like delegation, task execution, background tasks, and reporti
 
 from typing import AsyncIterator, Protocol, Dict, Any, List, Optional, Coroutine, runtime_checkable
 
+from .constants import (
+    DEFAULT_MAX_CONCURRENT,
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_PROVIDER,
+    DEFAULT_TEMPERATURE,
+)
 from .provider_types import LLMResponse
 from .types import StreamChunk
 from ..context import CodebaseContextProtocol
@@ -165,6 +171,77 @@ class DelegationManagerProtocol(Protocol):
         """
         ...
 
+    def delegate_batch(
+        self,
+        tasks: list[dict],
+        provider_name: str = DEFAULT_PROVIDER,
+        **kwargs: Any,
+    ) -> list[LLMResponse]:
+        """
+        Process multiple tasks with same provider (synchronous).
+
+        Args:
+            tasks: List of task dicts with 'prompt' and optional 'system_prompt', 'kwargs'
+            provider_name: Provider to use for all tasks
+            **kwargs: Additional arguments passed to delegate
+
+        Returns:
+            List of LLMResponse objects in the same order as input tasks
+        """
+        ...
+
+    async def batch_delegate_async(
+        self,
+        tasks: list[dict],
+        provider_name: str = DEFAULT_PROVIDER,
+        max_concurrent: int = DEFAULT_MAX_CONCURRENT,
+        **kwargs: Any,
+    ) -> list[LLMResponse]:
+        """
+        Process multiple tasks in parallel using async.
+
+        Args:
+            tasks: List of task dicts with 'prompt' and optional 'system_prompt', 'kwargs'
+            provider_name: Provider to use for all tasks
+            max_concurrent: Maximum number of concurrent requests
+            **kwargs: Additional arguments passed to all tasks
+
+        Returns:
+            List of LLMResponse objects in the same order as input tasks
+        """
+        ...
+
+    async def multi_provider_query_async(
+        self,
+        prompt: str,
+        providers: list[str],
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        temperature: float = DEFAULT_TEMPERATURE,
+        **kwargs: Any,
+    ) -> dict[str, tuple]:
+        """
+        Query multiple providers in parallel for the same prompt.
+
+        Args:
+            prompt: The prompt to send to all providers
+            providers: List of provider names to query
+            model: Specific model (optional)
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            **kwargs: Additional arguments passed to requests
+
+        Returns:
+            Dict mapping provider name to (LLMResponse, task_record) tuple.
+            Failed providers are excluded from results.
+
+        Raises:
+            ValueError: If providers list is empty
+        """
+        ...
+
 
 @runtime_checkable
 class TaskExecutorProtocol(Protocol):
@@ -217,6 +294,63 @@ class TaskExecutorProtocol(Protocol):
 
         Returns:
             List of task results in same order
+        """
+        ...
+
+    def plan(
+        self,
+        task: str,
+        context: Optional[str] = None,
+        max_steps: int = 10,
+        complexity_score: Optional[int] = None,
+    ) -> list[dict]:
+        """
+        Break down a complex task into steps.
+
+        Args:
+            task: The complex task to plan
+            context: Optional context about the codebase/project
+            max_steps: Maximum number of steps to generate
+            complexity_score: Optional complexity score (1-10). If <= 3, planning is skipped.
+
+        Returns:
+            List of step dicts with 'step', 'description', 'provider_type' keys
+        """
+        ...
+
+    def reason(
+        self,
+        question: str,
+        context: Optional[str] = None,
+        evidence: Optional[list[str]] = None,
+    ) -> dict:
+        """
+        Perform complex reasoning on a question or problem.
+
+        Args:
+            question: The question or problem to reason about
+            context: Optional context information
+            evidence: Optional list of evidence/facts to consider
+
+        Returns:
+            Dict with 'question', 'analysis', 'conclusion', 'confidence' keys
+        """
+        ...
+
+    def synthesize(
+        self,
+        results: list[LLMResponse],
+        synthesis_prompt: str = "Synthesize these results into a coherent summary:",
+    ) -> str:
+        """
+        Synthesize multiple agent results into a coherent summary.
+
+        Args:
+            results: List of LLMResponse objects from various agents
+            synthesis_prompt: Prompt for how to synthesize
+
+        Returns:
+            Synthesized summary string
         """
         ...
 
@@ -385,6 +519,24 @@ class UsageReporterProtocol(Protocol):
         """
         ...
 
+    def get_usage_report(self) -> Dict[str, Any]:
+        """
+        Get usage report across all providers.
+
+        Returns:
+            Dictionary with per-provider usage statistics
+        """
+        ...
+
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        Get cache statistics.
+
+        Returns:
+            Dictionary with cache hit/miss statistics
+        """
+        ...
+
 
 @runtime_checkable
 class StatusReporterProtocol(Protocol):
@@ -434,6 +586,15 @@ class StatusReporterProtocol(Protocol):
 
         Returns:
             Dictionary mapping component names to health status
+        """
+        ...
+
+    def get_selection_info(self) -> dict:
+        """
+        Get model selection information.
+
+        Returns:
+            Dictionary describing current model selection state
         """
         ...
 
