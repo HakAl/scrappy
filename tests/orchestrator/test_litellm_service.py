@@ -765,3 +765,102 @@ class TestStructuredOutput:
         """Verify DEFAULT_INSTRUCTOR_RETRIES is set to 1."""
         from scrappy.orchestrator.litellm_service import DEFAULT_INSTRUCTOR_RETRIES
         assert DEFAULT_INSTRUCTOR_RETRIES == 1
+
+
+class FakeAsyncHTTPClient:
+    """Stands in for the httpx AsyncClient litellm keeps as aclient_session."""
+
+    def __init__(self):
+        self.closed = False
+
+    async def aclose(self):
+        self.closed = True
+
+
+class FakeAiohttpSession:
+    """Stands in for the aiohttp ClientSession litellm keeps as _client_session."""
+
+    def __init__(self):
+        self.closed = False
+
+    async def close(self):
+        self.closed = True
+
+
+class TestClose:
+    """Behavior tests for close(): async HTTP sessions must actually close.
+
+    Regression for scrappy-odbo: close() called helper methods that did not
+    exist, the resulting AttributeError was swallowed by the app-level
+    except, and async session cleanup silently never ran.
+    """
+
+    @pytest.fixture
+    def litellm_module(self):
+        """Expose the litellm module with session attributes saved/restored."""
+        import litellm
+
+        saved = {
+            attr: getattr(litellm, attr, None)
+            for attr in ("client_session", "aclient_session", "_client_session")
+        }
+        yield litellm
+        for attr, value in saved.items():
+            setattr(litellm, attr, value)
+
+    @pytest.fixture
+    def owned_event_loop(self):
+        """Provide a fresh event loop installed as the current one."""
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        yield loop
+        if not loop.is_closed():
+            loop.close()
+        asyncio.set_event_loop(None)
+
+    def test_close_awaits_async_session_closes(self, litellm_module, owned_event_loop):
+        """With a usable loop, close() must await both async session closes."""
+        litellm_module.client_session = None
+        async_client = FakeAsyncHTTPClient()
+        aiohttp_session = FakeAiohttpSession()
+        litellm_module.aclient_session = async_client
+        litellm_module._client_session = aiohttp_session
+
+        service = make_configured_service(
+            router=MockLiteLLMRouter(), output=MockOutputForLiteLLM()
+        )
+        service.close()
+
+        assert async_client.closed is True
+        assert aiohttp_session.closed is True
+        assert litellm_module.aclient_session is None
+        assert litellm_module._client_session is None
+
+    def test_close_with_closed_loop_clears_references_without_error(
+        self, litellm_module, owned_event_loop
+    ):
+        """With no usable loop, close() clears references and lets GC clean up.
+
+        It must not raise and must not create coroutines it cannot await
+        (those trigger 'coroutine was never awaited' warnings).
+        """
+        import warnings
+
+        litellm_module.client_session = None
+        async_client = FakeAsyncHTTPClient()
+        litellm_module.aclient_session = async_client
+        litellm_module._client_session = None
+
+        owned_event_loop.close()
+
+        service = make_configured_service(
+            router=MockLiteLLMRouter(), output=MockOutputForLiteLLM()
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            service.close()
+
+        assert litellm_module.aclient_session is None
+        assert async_client.closed is False
