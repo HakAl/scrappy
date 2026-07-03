@@ -4,6 +4,7 @@ Tests for agent tools - base classes, file tools, and tool registry.
 import pytest
 from unittest.mock import Mock
 
+from scrappy.agent_config import AgentConfig
 from scrappy.agent_tools.tools.base import (
     ToolContext,
     ToolParameter,
@@ -27,7 +28,9 @@ class TestToolContext:
         context = ToolContext(project_root=temp_project_dir)
         assert context.project_root == temp_project_dir
         assert context.dry_run is False
-        assert context.config is None
+        # Omitted config falls back to defaults instead of None so tools
+        # can dereference limits without crashing.
+        assert context.config == AgentConfig()
         assert context.orchestrator is None
 
     @pytest.mark.unit

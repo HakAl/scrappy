@@ -39,6 +39,34 @@ class ValidationResult:
     sanitized_value: Optional[str] = None
     warnings: Tuple[str, ...] = ()
 
+    @property
+    def sanitized(self) -> str:
+        """Sanitized value of a valid result.
+
+        Valid results always carry a sanitized value; calling this on an
+        invalid result is a programming error and raises instead of
+        letting None leak into string handling.
+        """
+        if self.sanitized_value is None:
+            raise ValueError(
+                "sanitized value requested from an invalid ValidationResult"
+            )
+        return self.sanitized_value
+
+    @property
+    def error_message(self) -> str:
+        """Error message of an invalid result.
+
+        Invalid results always carry an error; calling this on a valid
+        result is a programming error and raises instead of letting None
+        leak into user-facing output.
+        """
+        if self.error is None:
+            raise ValueError(
+                "error message requested from a valid ValidationResult"
+            )
+        return self.error
+
     @staticmethod
     def valid(value: str, warnings: Optional[List[str]] = None) -> "ValidationResult":
         """Create a valid result with sanitized value."""

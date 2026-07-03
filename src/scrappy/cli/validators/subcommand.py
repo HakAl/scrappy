@@ -33,6 +33,20 @@ class SubcommandValidationResult:
     args: str = ""
     error: Optional[str] = None
 
+    @property
+    def error_message(self) -> str:
+        """Error message of an invalid result.
+
+        Invalid results always carry an error; calling this on a valid
+        result is a programming error and raises instead of letting None
+        leak into user-facing output.
+        """
+        if self.error is None:
+            raise ValueError(
+                "error message requested from a valid SubcommandValidationResult"
+            )
+        return self.error
+
 
 # Registry of valid subcommands per command
 # Empty string is implicitly allowed for all commands (show status)

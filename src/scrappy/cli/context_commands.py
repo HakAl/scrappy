@@ -63,7 +63,7 @@ class CLIContextCommands:
         # Validate subcommand
         validation = validate_subcommand("context", args)
         if not validation.is_valid:
-            self.io.secho(validation.error, fg=self._theme.error)
+            self.io.secho(validation.error_message, fg=self._theme.error)
             self.io.echo("Usage: /context [refresh|clear|clearmem|toggle|add]")
             self.io.echo("  (no args)  - Show context status and working memory")
             self.io.echo("  refresh    - Force re-exploration")

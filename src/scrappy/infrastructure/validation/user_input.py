@@ -118,7 +118,7 @@ def _validate_command_input(value: str, max_length: int) -> ValidationResult:
     if not result.is_valid:
         return result
 
-    cleaned = result.sanitized_value
+    cleaned = result.sanitized
 
     # Commands must start with /
     if not cleaned.startswith("/"):
@@ -241,7 +241,7 @@ def validate_numeric_choice(
     if not result.is_valid:
         return result
 
-    cleaned = result.sanitized_value
+    cleaned = result.sanitized
 
     # Check if it's a number
     if not cleaned.isdigit():

@@ -521,10 +521,11 @@ class CodebaseContext:
         Returns:
             Dict with exploration results
         """
-        if self.is_explored() and not force:
+        explored_at = self.explored_at
+        if explored_at is not None and not force:
             return {
                 'status': 'cached',
-                'explored_at': self.explored_at.isoformat(),
+                'explored_at': explored_at.isoformat(),
                 'summary': self.summary
             }
 

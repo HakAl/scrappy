@@ -261,6 +261,19 @@ class LanceDBSearchProvider:
             self._db_path.mkdir(parents=True, exist_ok=True)
             self._db = lancedb.connect(self._db_path)
 
+    @property
+    def _active_embedding_func(self) -> EmbeddingFunctionProtocol:
+        """Embedding function after lazy initialization.
+
+        _ensure_schema() establishes it; requesting it earlier is a
+        programming error.
+        """
+        if self._embedding_func is None:
+            raise IndexingError(
+                "Embedding function not initialized; call _ensure_schema() first"
+            )
+        return self._embedding_func
+
     def _ensure_schema(self):
         """
         Lazy schema initialization (creates embedding func and schema).
@@ -319,7 +332,7 @@ class LanceDBSearchProvider:
         Returns:
             True if dimensions match (or can't be determined), False if mismatch
         """
-        expected_dims = self._embedding_func.ndims()
+        expected_dims = self._active_embedding_func.ndims()
 
         try:
             # Get the schema from the table
@@ -691,7 +704,7 @@ class LanceDBSearchProvider:
         texts = [c["content"] for c in chunks]
 
         t0 = time.time()
-        embeddings = list(self._embedding_func.generate_embeddings(texts))
+        embeddings = list(self._active_embedding_func.generate_embeddings(texts))
         t1 = time.time()
         result["embed_time"] = t1 - t0
 
@@ -823,7 +836,7 @@ class LanceDBSearchProvider:
         table = self._db.open_table(TABLE_NAME)
         # 1. Embed the query manually
         # Note: embed_query returns a generator, use list() + next() or standard methods
-        query_vector = self._embedding_func.generate_embeddings([query])[0]
+        query_vector = self._active_embedding_func.generate_embeddings([query])[0]
 
         # Hybrid Search: Vector (semantic) + FTS (keyword)
         try:

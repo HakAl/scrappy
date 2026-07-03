@@ -281,6 +281,12 @@ class ApiKeyConfigService:
         self._persistence.save(config.to_dict())
         self._config = config
 
+    def _loaded_config(self) -> ApiKeyConfig:
+        """Return the config, lazy-loading it on first access."""
+        if self._config is None:
+            return self.load()
+        return self._config
+
     def get_key(self, env_var: str) -> Optional[str]:
         """
         Get API key by env var name.
@@ -293,9 +299,7 @@ class ApiKeyConfigService:
         Returns:
             API key value or None if not found
         """
-        if self._config is None:
-            self.load()
-        return self._config.get_key(env_var)
+        return self._loaded_config().get_key(env_var)
 
     def set_key(self, env_var: str, key: str) -> None:
         """
@@ -321,11 +325,10 @@ class ApiKeyConfigService:
         if not key_result.is_valid:
             raise ApiKeyValidationError(f"Invalid API key: {key_result.error}")
 
-        if self._config is None:
-            self.load()
+        config = self._loaded_config()
         # Use sanitized values
-        self._config.set_key(env_result.sanitized_value, key_result.sanitized_value)
-        self.save(self._config)
+        config.set_key(env_result.sanitized, key_result.sanitized)
+        self.save(config)
 
     def has_any_key(self, env_vars: list[str]) -> bool:
         """
@@ -339,9 +342,8 @@ class ApiKeyConfigService:
         Returns:
             True if any of the variables have configured keys
         """
-        if self._config is None:
-            self.load()
-        return any(self._config.has_key(ev) for ev in env_vars)
+        config = self._loaded_config()
+        return any(config.has_key(ev) for ev in env_vars)
 
     def is_disclaimer_acknowledged(self) -> bool:
         """
@@ -352,18 +354,15 @@ class ApiKeyConfigService:
         Returns:
             True if disclaimer was acknowledged
         """
-        if self._config is None:
-            self.load()
-        return self._config.disclaimer_acknowledged
+        return self._loaded_config().disclaimer_acknowledged
 
     def acknowledge_disclaimer(self) -> None:
         """
         Mark disclaimer as acknowledged and save immediately.
         """
-        if self._config is None:
-            self.load()
-        self._config.disclaimer_acknowledged = True
-        self.save(self._config)
+        config = self._loaded_config()
+        config.disclaimer_acknowledged = True
+        self.save(config)
 
     def _migrate_from_env(self, env_vars: Optional[List[str]] = None) -> int:
         """
@@ -404,7 +403,7 @@ class ApiKeyConfigService:
             if not self._config.has_key(env_var):
                 try:
                     # Set key directly on config (skip re-validation in set_key)
-                    self._config.set_key(env_var, validation_result.sanitized_value)
+                    self._config.set_key(env_var, validation_result.sanitized)
                     migrated.append(env_var)
                 except Exception as e:
                     logger.warning(f"Failed to migrate {env_var}: {e}")
