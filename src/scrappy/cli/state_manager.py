@@ -128,7 +128,8 @@ class PlanStateManager:
 
         task = self.active_plan[self.current_task_index]
         if isinstance(task, dict):
-            io.secho(task.get('step', task.get('description', 'Task')), bold=True)
+            label = task.get('step') or task.get('description') or 'Task'
+            io.secho(label, bold=True)
             if 'description' in task and 'step' in task:
                 io.echo(f"    {task['description']}")
         else:

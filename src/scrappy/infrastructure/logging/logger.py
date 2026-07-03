@@ -194,10 +194,10 @@ class StructuredLogger:
             if self._structured_only:
                 self._io.echo(safe_json_dumps(record))
             else:
-                self._output_formatted(level_name, message)
+                self._output_formatted(self._io, level_name, message)
 
-    def _output_formatted(self, level: str, message: str):
-        """Output formatted message to IO."""
+    def _output_formatted(self, io: Any, level: str, message: str):
+        """Output formatted message to the given (non-None) IO."""
         # Determine color and style
         if level == "CRITICAL":
             fg = "red"
@@ -219,9 +219,9 @@ class StructuredLogger:
             output = message
 
         if fg:
-            self._io.secho(output, fg=fg, bold=bold)
+            io.secho(output, fg=fg, bold=bold)
         else:
-            self._io.echo(output)
+            io.echo(output)
 
     def debug(self, message: str, *args, extra: Optional[Dict[str, Any]] = None):
         """

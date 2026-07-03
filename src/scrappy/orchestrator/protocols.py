@@ -683,6 +683,15 @@ class WorkingMemoryProtocol(Protocol):
         """
         ...
 
+    def get_context(self) -> str:
+        """
+        Get working memory context string for prompt augmentation.
+
+        Returns:
+            Context string summarizing recent interactions
+        """
+        ...
+
     def to_dict(self) -> dict:
         """
         Serialize working memory to a dictionary for persistence.

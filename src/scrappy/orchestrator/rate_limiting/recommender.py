@@ -60,13 +60,16 @@ class RateLimitRecommender:
 
         # If scorer available, use score-based selection
         if self._scorer is not None:
-            return self._recommended_by_score(available, preferences, registry)
+            return self._recommended_by_score(
+                self._scorer, available, preferences, registry
+            )
 
         # Otherwise use legacy is_rate_limited approach
         return self._recommended_by_availability(available, preferences, registry)
 
     def _recommended_by_score(
         self,
+        scorer: QuotaScorerProtocol,
         available: list[str],
         preferences: list[str],
         registry: Any,
@@ -77,7 +80,7 @@ class RateLimitRecommender:
         Prioritizes preferred providers, but within each tier ranks by score.
         """
         # Rank all available providers by quota score
-        ranked = self._scorer.rank_providers(available, registry)
+        ranked = scorer.rank_providers(available, registry)
         if not ranked:
             return available[0] if available else None
 

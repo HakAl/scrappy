@@ -94,7 +94,7 @@ class RateLimiter:
         # Validate subcommand
         validation = validate_subcommand("limits", args)
         if not validation.is_valid:
-            self.io.secho(validation.error, fg=self.io.theme.error)
+            self.io.secho(validation.error_message, fg=self.io.theme.error)
             self.io.echo("Usage: /limits [reset [provider]|<provider>]")
             self.io.echo("  (no args)     - Show all providers' usage")
             self.io.echo("  reset         - Reset all tracking data")

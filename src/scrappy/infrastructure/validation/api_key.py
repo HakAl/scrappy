@@ -180,7 +180,7 @@ def validate_api_key(value: str) -> ValidationResult:
     if not result.is_valid:
         return result
 
-    cleaned = result.sanitized_value
+    cleaned = result.sanitized
 
     # Additional length check for minimum
     if len(cleaned) < MIN_KEY_LENGTH:

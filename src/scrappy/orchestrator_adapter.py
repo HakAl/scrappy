@@ -159,7 +159,7 @@ class AgentOrchestratorAdapter:
         self,
         provider_name: Optional[str] = None,
         prompt: str = "",
-        tools: List[dict] = None,
+        tools: Optional[List[dict]] = None,
         system_prompt: Optional[str] = None,
         max_tokens: int = 1500,
         temperature: float = 0.3,

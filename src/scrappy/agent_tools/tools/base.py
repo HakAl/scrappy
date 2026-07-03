@@ -159,6 +159,12 @@ class MemoryProvider(Protocol):
         ...
 
 
+def _default_agent_config() -> "AgentConfig":
+    """Default-config factory; deferred import avoids a circular dependency."""
+    from ...agent_config import AgentConfig
+    return AgentConfig()
+
+
 @dataclass
 class ToolContext:
     """
@@ -173,7 +179,7 @@ class ToolContext:
 
     project_root: Path
     dry_run: bool = False
-    config: Optional["AgentConfig"] = None
+    config: "AgentConfig" = field(default_factory=_default_agent_config)
     orchestrator: Optional[MemoryProvider] = None
     semantic_search: Optional["SemanticSearchProtocol"] = None
 
