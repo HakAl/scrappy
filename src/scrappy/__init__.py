@@ -18,13 +18,9 @@ def __getattr__(name: str):
     """Lazy load heavy imports to avoid startup delay."""
     if name in ('OrchestratorAdapter', 'AgentOrchestratorAdapter',
                 'LLMResponse', 'ContextProvider', 'NullContext'):
-        from .orchestrator_adapter import (
-            OrchestratorAdapter,
-            AgentOrchestratorAdapter,
-            LLMResponse,
-            ContextProvider,
-            NullContext
-        )
+        from .orchestrator.protocols import ContextProvider, OrchestratorAdapter
+        from .orchestrator.provider_types import LLMResponse
+        from .orchestrator_adapter import AgentOrchestratorAdapter, NullContext
         # Cache in module globals for subsequent access
         globals().update({
             'OrchestratorAdapter': OrchestratorAdapter,
