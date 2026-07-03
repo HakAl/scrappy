@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from scrappy.orchestrator.litellm_callbacks import (
     RateTrackingCallback,
     EscalationMetrics,
+    create_rate_tracking_callback,
     parse_gemini_rate_limit_error,
 )
 
@@ -336,6 +337,58 @@ class TestAsyncCallbackMethods:
         )
 
         assert len(tracker.recorded_requests) == 1
+
+
+class TestFallbackEventContract:
+    """Tests for the litellm router fallback event contract.
+
+    litellm's router awaits fallback event methods on CustomLogger
+    instances (router_utils/fallback_event_handlers.py). A sync override
+    makes litellm await None, raising a TypeError that litellm swallows,
+    so the event is silently dropped.
+    """
+
+    @pytest.mark.asyncio
+    async def test_log_success_fallback_event_awaitable_via_router_contract(self):
+        """Verify the real registered callback can be awaited as litellm does.
+
+        Uses create_rate_tracking_callback so the test goes through the
+        combined RateTrackingCallbackBase + CustomLogger class, where the
+        base class override wins the MRO.
+        """
+        callback = create_rate_tracking_callback(
+            rate_tracker=MockRateLimitTracker()
+        )
+
+        # Exact calling convention of litellm's log_success_fallback_event
+        await callback.log_success_fallback_event(
+            original_model_group="fast",
+            kwargs={},
+            original_exception=Exception("rate limited"),
+        )
+
+    def test_no_sync_overrides_of_async_custom_logger_methods(self):
+        """Verify no callback method shadows an async CustomLogger method with a sync one.
+
+        Guards the whole failure mode, not just log_success_fallback_event:
+        any future sync override of an awaited litellm method would silently
+        drop events the same way.
+        """
+        import inspect
+
+        from litellm.integrations.custom_logger import CustomLogger
+
+        for name, member in vars(RateTrackingCallback).items():
+            if name.startswith("_") or not callable(member):
+                continue
+            litellm_method = getattr(CustomLogger, name, None)
+            if litellm_method is None:
+                continue
+            if inspect.iscoroutinefunction(litellm_method):
+                assert inspect.iscoroutinefunction(member), (
+                    f"{name} must be async: litellm CustomLogger declares it "
+                    f"async and awaits it, so a sync override is silently broken"
+                )
 
 
 class TestExtractProvider:
