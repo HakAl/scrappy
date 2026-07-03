@@ -719,25 +719,31 @@ class LiteLLMService:
         if async_closes:
             self._run_async_closes_with_loop(async_closes, loop)
 
-    def _run_async_closes(self, closes: list) -> None:
-        """Run async close operations, waiting for completion.
+    def _get_usable_loop(self) -> Optional[asyncio.AbstractEventLoop]:
+        """Return an event loop that can run coroutines, or None.
 
-        Uses defensive approach: if we can't reliably get a working event loop,
-        we skip async cleanup. The coroutines will be garbage collected anyway.
-        Better to exit cleanly than hang indefinitely.
+        Checked BEFORE creating close coroutines: creating them with no
+        usable loop triggers 'coroutine was never awaited' warnings, and
+        garbage collection handles the sessions anyway. Better to exit
+        cleanly than hang indefinitely.
         """
         try:
             loop = asyncio.get_event_loop_policy().get_event_loop()
         except RuntimeError:
             # No event loop - coroutines will be garbage collected
             logger.debug("No event loop available for async closes")
-            return
+            return None
 
-        # Check if loop is usable
         if loop.is_closed():
             logger.debug("Event loop is closed - skipping async closes")
-            return
+            return None
 
+        return loop
+
+    def _run_async_closes_with_loop(
+        self, closes: list, loop: asyncio.AbstractEventLoop
+    ) -> None:
+        """Run async close operations on a usable loop, waiting for completion."""
         async def close_all():
             for name, coro in closes:
                 try:
