@@ -12,8 +12,21 @@ br ready              # Find available work
 br show <id>          # View issue details
 br update <id> --status in_progress  # Claim work
 br close <id>         # Complete work
-br sync               # Sync with git
+br sync               # Tracker owner only: exports tracker state (see Beads Discipline)
 ```
+
+## Beads Discipline
+
+The beads DB is live shared state. The committed `.beads/issues.jsonl` is a periodic snapshot, not live state, and product commits never carry tracker diffs.
+
+- Read freely: `br ready`, `br show`, `br info` for context and planning.
+- Record newly discovered issues with `br create` as you observe them. `br` commands touch only the local shared beads DB; they must never result in committing `.beads/issues.jsonl`.
+- Claim unassigned ready work by assigning it to yourself and setting it in progress (`br update <id> --status in_progress`).
+- Once claimed, close or update only beads assigned to you; never touch another agent's in-progress bead.
+- The operator designates exactly one tracker owner per sync batch (operator or auditor), one writer at a time; that owner exports and commits `.beads/issues.jsonl` in dedicated beads-sync commits.
+- Sync batches land on a regular cadence, not whenever convenient: local-only beads are unrecoverable if the machine is lost before a batch lands.
+- Product PRs must contain zero `.beads/issues.jsonl` diffs. If one appears, unstage it. The only exception is a PR explicitly scoped as tracker maintenance.
+- The beads pre-commit hook is advisory only: no flush, no auto-stage, no blocking. The post-merge import hook (jsonl into DB) stays; that direction is safe.
 
 ## Documentation Locations
 
@@ -74,7 +87,7 @@ A change is not done until:
 
 ## Issue Discovery (Mandatory)
 
-Document issues you encounter with `br create` as you observe them: bugs and unexpected behavior, design violations (god classes, missing protocols, hard-coded dependencies), weak or missing tests, TODO/FIXME debt, documentation gaps. Keep the backlog honest; do not silently absorb problems.
+Document issues you encounter with `br create` as you observe them: bugs and unexpected behavior, design violations (god classes, missing protocols, hard-coded dependencies), weak or missing tests, TODO/FIXME debt, documentation gaps. Keep the backlog honest; do not silently absorb problems. Discovery writes to the local shared beads DB only; it never adds `.beads/issues.jsonl` to a commit (see Beads Discipline).
 
 ## Command Reference
 
