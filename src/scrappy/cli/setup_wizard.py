@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, Optional, Tuple, Callable, TYPE_CHECKING
 
+from scrappy.orchestrator.provider_catalog import build_default_catalog
 from scrappy.orchestrator.provider_definitions import PROVIDERS, SETUP_PROVIDER_GUIDANCE
 from scrappy.infrastructure.config.api_keys import (
     ApiKeyConfigServiceProtocol,
@@ -18,14 +19,13 @@ if TYPE_CHECKING:
     from .unified_io import UnifiedIO
 
 
+_CATALOG = build_default_catalog()
+
 # Map provider names to LiteLLM model IDs for validation
-PROVIDER_TO_MODEL = {
-    "groq": "groq/llama-3.1-8b-instant",
-    "cerebras": "cerebras/gpt-oss-120b",
-    "gemini": "gemini/gemini-2.5-flash",
-    "sambanova": "sambanova/Meta-Llama-3.1-8B-Instruct",
-    "openrouter": "openrouter/meta-llama/llama-3.1-8b-instruct:free",
-    "github_models": "azure/gpt-4o-mini",  # GitHub models uses Azure
+PROVIDER_TO_MODEL: dict[str, str] = {
+    provider: model
+    for provider in _CATALOG.validation_providers()
+    if (model := _CATALOG.validation_model_for(provider)) is not None
 }
 
 

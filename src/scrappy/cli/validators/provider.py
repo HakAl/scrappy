@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass
 from typing import Optional, List
 
+from scrappy.orchestrator.provider_catalog import build_default_catalog
+
 from .base import CONTROL_CHARS_PATTERN
 
 
@@ -37,10 +39,10 @@ class ProviderValidationResult:
     warnings: Optional[List[str]] = None
 
 
-# Valid providers (must match provider_definitions.py PROVIDERS dict)
-VALID_PROVIDERS = {
-    "cerebras", "groq", "gemini", "sambanova"
-}
+_CATALOG = build_default_catalog()
+
+# Valid providers, derived from the provider catalog
+VALID_PROVIDERS: set[str] = set(_CATALOG.cli_provider_allowlist())
 
 # Limits
 MAX_PROVIDER_LENGTH = 50

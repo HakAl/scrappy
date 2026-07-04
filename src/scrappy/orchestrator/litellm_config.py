@@ -109,10 +109,9 @@ def get_configured_models(api_key_service: ApiKeyConfigServiceProtocol) -> list[
     """
     # Map provider names to their API key environment variable names
     provider_to_key = {
-        "groq": "GROQ_API_KEY",
-        "cerebras": "CEREBRAS_API_KEY",
-        "gemini": "GEMINI_API_KEY",
-        "sambanova": "SAMBANOVA_API_KEY",
+        name: env_var
+        for name in _CATALOG.provider_names()
+        if (env_var := _CATALOG.env_var_for(name)) is not None
     }
 
     configured = []

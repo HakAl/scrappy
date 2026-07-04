@@ -470,13 +470,14 @@ class OrchestratorFactory:
             Set of model IDs in "provider/model" format
         """
         from .model_selection import MODEL_PRIORITIES
+        from .provider_catalog import build_default_catalog
 
         # Map providers to their API key names
+        catalog = build_default_catalog()
         provider_to_key = {
-            "groq": "GROQ_API_KEY",
-            "cerebras": "CEREBRAS_API_KEY",
-            "gemini": "GEMINI_API_KEY",
-            "sambanova": "SAMBANOVA_API_KEY",
+            name: env_var
+            for name in catalog.provider_names()
+            if (env_var := catalog.env_var_for(name)) is not None
         }
 
         configured = set()
