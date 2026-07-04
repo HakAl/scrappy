@@ -11,6 +11,13 @@ daemon.log
 daemon.pid
 bd.sock
 
+# Per-operation lock files (br sync / br sync --flush-only)
+.write.lock
+.sync.lock
+
+# Local operation history
+.br_history/
+
 # Local version tracking (prevents upgrade notification spam after git ops)
 .local_version
 last-touched
@@ -20,6 +27,7 @@ db.sqlite
 bd.db
 
 # Merge artifacts (temporary files from 3-way merge)
+*.tmp
 beads.base.jsonl
 beads.base.meta.json
 beads.left.jsonl

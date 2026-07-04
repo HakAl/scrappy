@@ -81,3 +81,8 @@ nul
 .docs
 .docs/.plan
 .audit
+
+# Local coordination tools
+.agent-comms/
+# br doctor per-run artifacts
+.doctor/
