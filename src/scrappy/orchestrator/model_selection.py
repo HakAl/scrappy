@@ -4,11 +4,14 @@ Model selection types and service.
 Provides deterministic model selection with session stickiness and rate limit awareness.
 """
 
+import json
 import logging
+import os
 import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Callable, Optional, Protocol
 
 from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
@@ -148,6 +151,11 @@ class ModelHealthState:
     retry_after: Optional[float] = None
 
 
+def default_model_cooldowns_path() -> Path:
+    """Default persist path for model cooldown state."""
+    return Path.home() / ".scrappy" / "model_cooldowns.json"
+
+
 class ModelAvailabilityTrackerProtocol(Protocol):
     """
     Selection-facing contract for the model availability/cooldown store.
@@ -189,6 +197,11 @@ class ModelAvailabilityTracker:
 
     Callers pass a resolved health state, including its expiration timestamp.
     After the state expires, the model becomes available again.
+
+    With a persist_path, state is written through on mutation and reloaded on
+    construction, so cooldowns survive restart. expires_at is an absolute
+    wall-clock timestamp, so persisted expiry needs no timing adjustment.
+    Without a persist_path, state is process-local (the old behavior).
     """
 
     DEFAULT_COOLDOWN_SECONDS = 60
@@ -197,6 +210,7 @@ class ModelAvailabilityTracker:
         self,
         cooldown_seconds: int = DEFAULT_COOLDOWN_SECONDS,
         now: Callable[[], float] = time.time,
+        persist_path: Optional[Path] = None,
     ):
         """
         Initialize availability tracker.
@@ -205,14 +219,22 @@ class ModelAvailabilityTracker:
             cooldown_seconds: Legacy constructor value retained for callers that
                 instantiate the tracker directly. ModelSelectionService resolves
                 cooldowns before storing health state.
+            now: Clock returning an absolute wall-clock timestamp.
+            persist_path: File to persist cooldown state to. None disables
+                persistence. A corrupt or absent file never fails construction.
         """
         self._legacy_cooldown_seconds = cooldown_seconds
         self._now = now
         self._lock = threading.Lock()
         self._unavailable: dict[str, ModelHealthState] = {}
-        logger.info(
-            "Provider cooldown state is process-local and resets on restart."
-        )
+        self._persist_path = persist_path
+        if persist_path is None:
+            logger.info(
+                "Provider cooldown state is process-local and resets on restart."
+            )
+        else:
+            self._load()
+            logger.info(f"Model cooldown state persists to {persist_path}")
 
     def mark(self, model: str, state: ModelHealthState) -> None:
         """Store resolved health state for a model."""
@@ -220,6 +242,7 @@ class ModelAvailabilityTracker:
             existing = self._unavailable.get(model)
             if existing is None or state.expires_at >= existing.expires_at:
                 self._unavailable[model] = state
+                self._persist_locked()
 
     def now(self) -> float:
         """Return the tracker's injected clock value."""
@@ -268,17 +291,27 @@ class ModelAvailabilityTracker:
     def clear(self) -> None:
         """Clear all rate limit tracking."""
         with self._lock:
-            self._unavailable.clear()
+            if self._unavailable:
+                self._unavailable.clear()
+                self._persist_locked()
 
     def clear_kinds(self, kinds: set[FailureKind]) -> None:
         """Clear health states matching any failure kind."""
         with self._lock:
+            cleared = False
             for model, state in list(self._unavailable.items()):
                 if state.failure_kind in kinds:
                     del self._unavailable[model]
+                    cleared = True
+            if cleared:
+                self._persist_locked()
 
     def get_unavailable_state(self, model: str) -> Optional[ModelHealthState]:
-        """Return current health state for a model, clearing expired entries."""
+        """Return current health state for a model, clearing expired entries.
+
+        Deliberately does NOT write through: the read path stays I/O-free.
+        An expired entry left on disk is pruned at the next load or write.
+        """
         with self._lock:
             state = self._unavailable.get(model)
             if state is None:
@@ -289,6 +322,85 @@ class ModelAvailabilityTracker:
                 return None
 
             return state
+
+    def _load(self) -> None:
+        """Load persisted cooldown state, pruning entries already expired.
+
+        Never raises: a corrupt or absent file starts the tracker empty, and
+        a malformed entry drops that entry only. If pruning or skipping
+        changed the loaded set, the file is rewritten so stale state does not
+        accumulate. A corrupt file is left in place for diagnosis until the
+        next write replaces it.
+        """
+        path = self._persist_path
+        if path is None or not path.exists():
+            return
+
+        try:
+            data = json.loads(path.read_text())
+            if not isinstance(data, dict):
+                raise ValueError(
+                    f"expected a JSON object, got {type(data).__name__}"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to load model cooldowns: {e}")
+            return
+
+        now = self._now()
+        loaded: dict[str, ModelHealthState] = {}
+        dropped = 0
+        for model, entry in data.items():
+            try:
+                retry_after = entry.get("retry_after")
+                state = ModelHealthState(
+                    expires_at=float(entry["expires_at"]),
+                    failure_kind=FailureKind(entry["failure_kind"]),
+                    retry_after=(
+                        float(retry_after) if retry_after is not None else None
+                    ),
+                )
+            except (AttributeError, KeyError, TypeError, ValueError):
+                dropped += 1
+                continue
+            if now >= state.expires_at:
+                dropped += 1
+                continue
+            loaded[model] = state
+
+        with self._lock:
+            self._unavailable = loaded
+            if dropped:
+                logger.debug(
+                    f"Pruned {dropped} stale or malformed model cooldown entries"
+                )
+                self._persist_locked()
+
+    def _persist_locked(self) -> None:
+        """Write current state to the persist path. Caller must hold the lock.
+
+        Atomic (write temp file, then replace) so a crash mid-write cannot
+        leave a truncated file. Never raises: persistence failure degrades to
+        process-local behavior.
+        """
+        path = self._persist_path
+        if path is None:
+            return
+
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                model: {
+                    "expires_at": state.expires_at,
+                    "failure_kind": state.failure_kind.value,
+                    "retry_after": state.retry_after,
+                }
+                for model, state in self._unavailable.items()
+            }
+            tmp_path = path.with_name(path.name + ".tmp")
+            tmp_path.write_text(json.dumps(data, indent=2))
+            os.replace(tmp_path, path)
+        except Exception as e:
+            logger.warning(f"Failed to persist model cooldowns: {e}")
 
 
 class ModelSelectionServiceProtocol(Protocol):

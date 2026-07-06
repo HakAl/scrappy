@@ -46,8 +46,10 @@ from .litellm_config import create_litellm_router
 from .provider_status import ProviderStatusTracker
 from .model_selection import (
     ModelAvailabilityTracker,
+    ModelAvailabilityTrackerProtocol,
     ModelSelectionService,
     ModelSelectionServiceProtocol,
+    default_model_cooldowns_path,
 )
 from .manager_protocols import (
     ContextManagerProtocol,
@@ -441,6 +443,14 @@ class OrchestratorFactory:
         """Create default provider status tracker for health monitoring."""
         return ProviderStatusTracker()
 
+    def create_model_availability_tracker(self) -> ModelAvailabilityTrackerProtocol:
+        """Create the default model availability tracker.
+
+        Persists cooldown state so known-bad models stay suppressed across
+        restart until their cooldown expires.
+        """
+        return ModelAvailabilityTracker(persist_path=default_model_cooldowns_path())
+
     def create_model_selector(self) -> ModelSelectionServiceProtocol:
         """
         Create model selection service with configured models.
@@ -463,7 +473,7 @@ class OrchestratorFactory:
         configured_models = self._get_configured_models(api_key_service)
         return ModelSelectionService(
             configured_models=configured_models,
-            availability_tracker=ModelAvailabilityTracker(),
+            availability_tracker=self.create_model_availability_tracker(),
         )
 
     def _get_configured_models(self, api_key_service) -> set[str]:
