@@ -148,6 +148,41 @@ class ModelHealthState:
     retry_after: Optional[float] = None
 
 
+class ModelAvailabilityTrackerProtocol(Protocol):
+    """
+    Selection-facing contract for the model availability/cooldown store.
+
+    This is the honest minimal surface ModelSelectionService consumes; it does
+    not mirror the concrete tracker. clear() and get_available() have no
+    selection caller and stay off the protocol. Selection depends on this
+    protocol, never on a concrete tracker or a persistence detail.
+    """
+
+    def now(self) -> float:
+        """Return the tracker's clock value (used to compute expiry)."""
+        ...
+
+    def mark(self, model: str, state: ModelHealthState) -> None:
+        """Store resolved health state for a model."""
+        ...
+
+    def is_available(self, model: str) -> bool:
+        """Return whether a model is currently available (no live cooldown)."""
+        ...
+
+    def get_cooldown_remaining(self, model: str) -> float:
+        """Return seconds of cooldown remaining for a model, or 0.0."""
+        ...
+
+    def get_unavailable_state(self, model: str) -> Optional[ModelHealthState]:
+        """Return current health state for a model, clearing expired entries."""
+        ...
+
+    def clear_kinds(self, kinds: set[FailureKind]) -> None:
+        """Clear health states matching any of the given failure kinds."""
+        ...
+
+
 class ModelAvailabilityTracker:
     """
     Track temporary model health states with automatic recovery.
@@ -326,7 +361,7 @@ class ModelSelectionService:
         self,
         configured_models: set[str],
         model_priorities: Optional[dict[ModelSelectionType, list[str]]] = None,
-        availability_tracker: Optional[ModelAvailabilityTracker] = None,
+        availability_tracker: Optional[ModelAvailabilityTrackerProtocol] = None,
     ):
         """
         Initialize model selection service.
@@ -342,7 +377,9 @@ class ModelSelectionService:
         self._configured = set(configured_models)
         self._configured_lock = threading.Lock()
         self._priorities = model_priorities or MODEL_PRIORITIES
-        self._availability = availability_tracker or ModelAvailabilityTracker()
+        self._availability: ModelAvailabilityTrackerProtocol = (
+            availability_tracker or ModelAvailabilityTracker()
+        )
 
     def select(
         self,

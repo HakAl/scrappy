@@ -44,7 +44,11 @@ from .litellm_config import create_litellm_router
 # NOTE: litellm_callbacks imports litellm at top level, so we import it lazily
 # in create_llm_service() to avoid 2s startup delay
 from .provider_status import ProviderStatusTracker
-from .model_selection import ModelSelectionService, ModelSelectionServiceProtocol
+from .model_selection import (
+    ModelAvailabilityTracker,
+    ModelSelectionService,
+    ModelSelectionServiceProtocol,
+)
 from .manager_protocols import (
     ContextManagerProtocol,
     BackgroundTaskManagerProtocol,
@@ -457,7 +461,10 @@ class OrchestratorFactory:
 
         api_key_service = create_api_key_service()
         configured_models = self._get_configured_models(api_key_service)
-        return ModelSelectionService(configured_models=configured_models)
+        return ModelSelectionService(
+            configured_models=configured_models,
+            availability_tracker=ModelAvailabilityTracker(),
+        )
 
     def _get_configured_models(self, api_key_service) -> set[str]:
         """
