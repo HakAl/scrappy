@@ -167,20 +167,26 @@ def _extract_retry_after(
             except (ValueError, TypeError):
                 pass
 
-    # Try parsing from error message (e.g., "retry after 45 seconds")
+    # Try parsing from error message (e.g., "retry after 45 seconds").
+    # The duration must be adjacent to a retry/wait phrase: a message where
+    # 'retry' or 'wait' merely co-occurs with an unrelated duration (latency
+    # reports, context windows) must not extract.
     message = str(error).lower()
-    if 'retry' in message or 'wait' in message:
-        import re
-        # Match patterns like "45 seconds", "2 minutes", "1.5 hours"
-        time_match = re.search(r'(\d+(?:\.\d+)?)\s*(second|minute|hour|s|m|h)', message)
-        if time_match:
-            value = float(time_match.group(1))
-            unit = time_match.group(2)
-            if unit.startswith('m'):
-                value *= 60
-            elif unit.startswith('h'):
-                value *= 3600
-            return value
+    import re
+    time_match = re.search(
+        r'(?:retry(?:ing)?\s+(?:in|after)|try again in|available (?:again )?in'
+        r'|wait(?:ing)?(?:\s+for)?)'
+        r'\s*:?\s*(\d+(?:\.\d+)?)\s*(seconds?|minutes?|hours?|secs?|mins?|s|m|h)\b',
+        message,
+    )
+    if time_match:
+        value = float(time_match.group(1))
+        unit = time_match.group(2)
+        if unit.startswith('m'):
+            value *= 60
+        elif unit.startswith('h'):
+            value *= 3600
+        return value
 
     return None
 

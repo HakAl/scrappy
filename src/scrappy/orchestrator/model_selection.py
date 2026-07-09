@@ -6,6 +6,7 @@ Provides deterministic model selection with session stickiness and rate limit aw
 
 import json
 import logging
+import math
 import os
 import threading
 import time
@@ -154,6 +155,26 @@ class ModelHealthState:
 def default_model_cooldowns_path() -> Path:
     """Default persist path for model cooldown state."""
     return Path.home() / ".scrappy" / "model_cooldowns.json"
+
+
+# Bounds for server-reported retry-after values (PR-3a, operator-ratified):
+# a provider-reported cooldown outside these bounds is a parse glitch or a
+# hostile value, not a real instruction to stall selection for months.
+RETRY_AFTER_FLOOR_SECONDS = 1.0
+RETRY_AFTER_CAP_SECONDS = 86400.0
+
+
+def clamp_retry_after(retry_after: Optional[float]) -> Optional[float]:
+    """Clamp a server-reported retry-after to sane bounds.
+
+    Returns None when the value is unusable (None, non-finite, or
+    non-positive); the caller then falls back to the failure-policy default.
+    """
+    if retry_after is None or not math.isfinite(retry_after) or retry_after <= 0:
+        return None
+    return min(
+        max(retry_after, RETRY_AFTER_FLOOR_SECONDS), RETRY_AFTER_CAP_SECONDS
+    )
 
 
 class ModelAvailabilityTrackerProtocol(Protocol):
@@ -585,16 +606,23 @@ class ModelSelectionService:
         kind: FailureKind,
         retry_after: Optional[float] = None,
     ) -> None:
-        """Mark a model or provider unhealthy according to failure policy."""
+        """Mark a model or provider unhealthy according to failure policy.
+
+        Server-reported retry_after is clamped to
+        [RETRY_AFTER_FLOOR_SECONDS, RETRY_AFTER_CAP_SECONDS]; an unusable
+        value (non-finite or non-positive) falls back to the policy default.
+        The stored health state carries the clamped value, not the raw one.
+        """
         policy = get_failure_policy(kind)
         if policy.scope == HealthScope.NONE:
             return
 
-        cooldown = retry_after if retry_after is not None else policy.cooldown_seconds
+        clamped = clamp_retry_after(retry_after)
+        cooldown = clamped if clamped is not None else policy.cooldown_seconds
         state = ModelHealthState(
             expires_at=self._availability.now() + cooldown,
             failure_kind=kind,
-            retry_after=retry_after,
+            retry_after=clamped,
         )
 
         if policy.scope == HealthScope.PER_MODEL:
