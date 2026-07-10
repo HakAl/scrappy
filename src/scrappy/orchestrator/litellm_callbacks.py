@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, Any, TYPE_CHECKING
 
-from .retry_after import extract_retry_after
+from .retry_after import clamp_retry_after, extract_retry_after
 
 # NOTE: CustomLogger is imported lazily in create_rate_tracking_callback()
 # to avoid slow litellm import at module load time.
@@ -212,8 +212,11 @@ class RateTrackingCallbackBase:
             # Record server-reported retry info for ANY provider. The
             # resulting retry_at feeds /rate-limits display and the legacy
             # recommender only; the enforcement gate does not read it.
+            # Values are clamped to the ratified [floor, cap] bounds before
+            # they become timestamps; unusable values (non-finite,
+            # non-positive) are dropped rather than written.
             if exception is not None and hasattr(self._rate_tracker, 'update_from_error'):
-                retry_after = extract_retry_after(exception)
+                retry_after = clamp_retry_after(extract_retry_after(exception))
                 if retry_after is not None:
                     self._rate_tracker.update_from_error(
                         provider,

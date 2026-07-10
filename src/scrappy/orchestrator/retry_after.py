@@ -1,5 +1,5 @@
 """
-Shared retry-after extraction from provider exceptions.
+Shared retry-after extraction and bounds for provider exceptions.
 
 Single parser for server-reported cooldown hints, used by:
 - litellm_service exception mapping (attaches retry_after to ProviderError,
@@ -7,15 +7,36 @@ Single parser for server-reported cooldown hints, used by:
 - litellm_callbacks failure logging (records provider-scoped retry_at in the
   rate limit tracker for /rate-limits display and the legacy recommender)
 
-Values returned here are raw (unbounded). The selection-path consumer clamps
-at mark_unhealthy; any future consumer that turns these into cooldowns must
-bound them too.
+extract_retry_after returns raw (unbounded) values. Every consumer that
+turns them into a cooldown or timestamp must pass them through
+clamp_retry_after first: mark_unhealthy substitutes its policy default when
+the clamp rejects a value, the failure callback skips the write.
 """
 
 from email.utils import parsedate_to_datetime
+import math
 import re
 import time
 from typing import Callable, Optional
+
+# Bounds for server-reported retry-after values (PR-3a, operator-ratified):
+# a provider-reported cooldown outside these bounds is a parse glitch or a
+# hostile value, not a real instruction to stall selection for months.
+RETRY_AFTER_FLOOR_SECONDS = 1.0
+RETRY_AFTER_CAP_SECONDS = 86400.0
+
+
+def clamp_retry_after(retry_after: Optional[float]) -> Optional[float]:
+    """Clamp a server-reported retry-after to sane bounds.
+
+    Returns None when the value is unusable (None, non-finite, or
+    non-positive); the caller then falls back to its own default behavior.
+    """
+    if retry_after is None or not math.isfinite(retry_after) or retry_after <= 0:
+        return None
+    return min(
+        max(retry_after, RETRY_AFTER_FLOOR_SECONDS), RETRY_AFTER_CAP_SECONDS
+    )
 
 
 def extract_retry_after(

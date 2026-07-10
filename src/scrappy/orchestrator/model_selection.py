@@ -6,7 +6,6 @@ Provides deterministic model selection with session stickiness and rate limit aw
 
 import json
 import logging
-import math
 import os
 import threading
 import time
@@ -19,6 +18,11 @@ from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
 
 from .failure_policy import FailureRecord, HealthScope, get_failure_policy
 from .provider_catalog import build_default_catalog
+from .retry_after import (
+    RETRY_AFTER_CAP_SECONDS as RETRY_AFTER_CAP_SECONDS,
+    RETRY_AFTER_FLOOR_SECONDS as RETRY_AFTER_FLOOR_SECONDS,
+    clamp_retry_after as clamp_retry_after,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -155,26 +159,6 @@ class ModelHealthState:
 def default_model_cooldowns_path() -> Path:
     """Default persist path for model cooldown state."""
     return Path.home() / ".scrappy" / "model_cooldowns.json"
-
-
-# Bounds for server-reported retry-after values (PR-3a, operator-ratified):
-# a provider-reported cooldown outside these bounds is a parse glitch or a
-# hostile value, not a real instruction to stall selection for months.
-RETRY_AFTER_FLOOR_SECONDS = 1.0
-RETRY_AFTER_CAP_SECONDS = 86400.0
-
-
-def clamp_retry_after(retry_after: Optional[float]) -> Optional[float]:
-    """Clamp a server-reported retry-after to sane bounds.
-
-    Returns None when the value is unusable (None, non-finite, or
-    non-positive); the caller then falls back to the failure-policy default.
-    """
-    if retry_after is None or not math.isfinite(retry_after) or retry_after <= 0:
-        return None
-    return min(
-        max(retry_after, RETRY_AFTER_FLOOR_SECONDS), RETRY_AFTER_CAP_SECONDS
-    )
 
 
 class ModelAvailabilityTrackerProtocol(Protocol):

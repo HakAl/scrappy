@@ -23,6 +23,10 @@ from scrappy.orchestrator.litellm_callbacks import RateTrackingCallback
 from scrappy.orchestrator.provider_status import ProviderStatusTracker
 from scrappy.orchestrator.rate_limiting.factory import create_rate_limit_tracker
 from scrappy.orchestrator.rate_limiting.recommender import RateLimitRecommender
+from scrappy.orchestrator.retry_after import (
+    RETRY_AFTER_CAP_SECONDS,
+    RETRY_AFTER_FLOOR_SECONDS,
+)
 
 GEMINI_MESSAGE = "Resource exhausted. Please retry in 7.215400659s"
 GEMINI_RETRY_SECONDS = 7.215400659
@@ -86,17 +90,15 @@ class TestGeminiParity:
 class TestNonGeminiRetryAt:
     """Declared PR-3b delta: retry_at now populates for all providers."""
 
-    def test_header_retry_after_flips_is_rate_limited_until_it_passes(
-        self, tmp_path
-    ):
-        """A groq Retry-After header suppresses groq until the window expires."""
+    def test_header_retry_after_suppresses_provider(self, tmp_path):
+        """A groq Retry-After header flips is_rate_limited through the callback."""
         tracker = create_rate_limit_tracker(
             tracker_file=tmp_path / "rate_limits.json"
         )
         callback = RateTrackingCallback(rate_tracker=tracker)
 
         class FakeResponse:
-            headers = {"Retry-After": "0.2"}
+            headers = {"Retry-After": "60"}
 
         class GroqException(Exception):
             llm_provider = "groq"
@@ -104,11 +106,25 @@ class TestNonGeminiRetryAt:
 
         _fire_failure(callback, GroqException("Too many requests"), "groq/llama")
 
+        assert tracker.is_rate_limited("groq", FakeRegistry()) is True
+
+    def test_retry_at_expires_and_unsuppresses(self, tmp_path):
+        """retry_at suppression self-expires once the window passes.
+
+        Written at the tracker seam (update_from_error trusts its caller;
+        the callback consumer clamps to >= 1s) so the window can be
+        sub-second and the test can watch the real clock cross it.
+        """
+        tracker = create_rate_limit_tracker(
+            tracker_file=tmp_path / "rate_limits.json"
+        )
+        tracker.update_from_error("cerebras", {"retry_after_seconds": 0.2})
+
         registry = FakeRegistry()
-        assert tracker.is_rate_limited("groq", registry) is True
+        assert tracker.is_rate_limited("cerebras", registry) is True
 
         time.sleep(0.25)
-        assert tracker.is_rate_limited("groq", registry) is False
+        assert tracker.is_rate_limited("cerebras", registry) is False
 
     def test_legacy_recommender_skips_provider_in_retry_window(self, tmp_path):
         """The legacy availability path routes around a retry_at-suppressed provider."""
@@ -134,6 +150,72 @@ class TestNonGeminiRetryAt:
         )
 
         assert recommended == "cerebras"
+
+
+class TestCallbackRetryAfterBounds:
+    """The callback consumer enforces the ratified [floor, cap] bounds.
+
+    extract_retry_after stays raw by design; clamp_retry_after guards the
+    tracker write so failure logging never throws on hostile or garbage
+    values and never persists an out-of-bounds suppression window.
+    """
+
+    def _tracker_and_callback(self, tmp_path):
+        tracker = create_rate_limit_tracker(
+            tracker_file=tmp_path / "rate_limits.json"
+        )
+        return tracker, RateTrackingCallback(rate_tracker=tracker)
+
+    @staticmethod
+    def _exception_with_header(value):
+        class FakeResponse:
+            headers = {"Retry-After": value}
+
+        class ProviderException(Exception):
+            llm_provider = "groq"
+            response = FakeResponse()
+
+        return ProviderException("Too many requests")
+
+    @pytest.mark.parametrize("raw", ["nan", "inf", "-5", "0"])
+    def test_unusable_values_neither_write_nor_raise(self, tmp_path, raw):
+        """Non-finite and non-positive values are dropped, not stored or thrown."""
+        tracker, callback = self._tracker_and_callback(tmp_path)
+
+        _fire_failure(
+            callback, self._exception_with_header(raw), "groq/llama"
+        )
+
+        assert tracker.get_provider_headers("groq") is None
+        assert tracker.is_rate_limited("groq", FakeRegistry()) is False
+
+    def test_below_floor_value_clamps_to_floor(self, tmp_path):
+        """A sub-second server value stores the 1s floor, not the raw value."""
+        tracker, callback = self._tracker_and_callback(tmp_path)
+
+        _fire_failure(
+            callback, self._exception_with_header("0.2"), "groq/llama"
+        )
+
+        stored = tracker.get_provider_headers("groq")
+        assert stored["retry_after_seconds"] == RETRY_AFTER_FLOOR_SECONDS
+
+    def test_above_cap_value_clamps_to_cap(self, tmp_path):
+        """A 25-hour server value stores the 86400s cap, not the raw value."""
+        tracker, callback = self._tracker_and_callback(tmp_path)
+
+        before = datetime.now()
+        _fire_failure(
+            callback, self._exception_with_header("90000"), "groq/llama"
+        )
+
+        stored = tracker.get_provider_headers("groq")
+        assert stored["retry_after_seconds"] == RETRY_AFTER_CAP_SECONDS
+        retry_at = datetime.fromisoformat(stored["retry_at"])
+        assert retry_at >= before + timedelta(seconds=RETRY_AFTER_CAP_SECONDS - 1)
+        assert retry_at <= datetime.now() + timedelta(
+            seconds=RETRY_AFTER_CAP_SECONDS
+        )
 
 
 class TestDoubleWriteRetired:
