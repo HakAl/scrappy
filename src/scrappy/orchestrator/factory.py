@@ -440,7 +440,10 @@ class OrchestratorFactory:
         )
 
     def create_provider_status_tracker(self) -> ProviderStatusTrackerProtocol:
-        """Create default provider status tracker for health monitoring."""
+        """Create default provider status tracker for health monitoring.
+
+        Session-scoped: stats are in-memory only and reset on restart.
+        """
         return ProviderStatusTracker()
 
     def create_model_availability_tracker(self) -> ModelAvailabilityTrackerProtocol:

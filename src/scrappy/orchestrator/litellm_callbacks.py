@@ -22,8 +22,9 @@ The CustomLogger base class is imported inside create_rate_tracking_callback().
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-import re
-from typing import Optional, Any, Dict, TYPE_CHECKING
+from typing import Optional, Any, TYPE_CHECKING
+
+from .retry_after import extract_retry_after
 
 # NOTE: CustomLogger is imported lazily in create_rate_tracking_callback()
 # to avoid slow litellm import at module load time.
@@ -33,60 +34,6 @@ if TYPE_CHECKING:
         ProviderStatusTrackerProtocol,
         RateLimitTrackerProtocol,
     )
-
-
-def parse_gemini_rate_limit_error(error_message: str) -> Optional[Dict[str, Any]]:
-    """Parse Gemini rate limit error message to extract retry info.
-
-    Gemini returns rate limit info in error responses (429), not headers.
-    Common formats:
-    - "Resource has been exhausted (e.g. check quota)."
-    - "Please retry in 7.215400659s"
-    - "Quota exceeded for quota metric"
-
-    Args:
-        error_message: The error message string from the exception
-
-    Returns:
-        Dict with parsed data or None if not a rate limit error:
-        - retry_after_seconds: Float seconds until retry (if found)
-        - quota_type: Type of quota exceeded (if identifiable)
-        - message: Original error message
-    """
-    if not error_message:
-        return None
-
-    error_lower = error_message.lower()
-
-    # Check if this is a rate limit error
-    rate_limit_indicators = [
-        "rate limit",
-        "quota",
-        "exhausted",
-        "too many requests",
-        "429",
-        "retry in",
-    ]
-    if not any(indicator in error_lower for indicator in rate_limit_indicators):
-        return None
-
-    result: Dict[str, Any] = {"message": error_message}
-
-    # Parse "Please retry in Xs" or "retry in Xs"
-    # Matches: "retry in 7.215400659s", "Please retry in 30s", etc.
-    retry_match = re.search(r"retry in (\d+(?:\.\d+)?)\s*s", error_lower)
-    if retry_match:
-        result["retry_after_seconds"] = float(retry_match.group(1))
-
-    # Try to identify quota type
-    if "token" in error_lower:
-        result["quota_type"] = "tokens"
-    elif "request" in error_lower:
-        result["quota_type"] = "requests"
-    elif "quota" in error_lower:
-        result["quota_type"] = "quota"
-
-    return result
 
 
 @dataclass
@@ -229,7 +176,9 @@ class RateTrackingCallbackBase:
         Called by LiteLLM after failed request.
 
         Records failure to rate tracker and status tracker.
-        For Gemini, also parses rate limit info from error message.
+        Server-reported retry-after info (headers, body, or message) is
+        extracted from the exception for any provider and recorded as a
+        provider-scoped retry_at in the rate tracker.
 
         Args:
             kwargs: Original request kwargs
@@ -260,12 +209,19 @@ class RateTrackingCallbackBase:
                 error_message=error_msg,
             )
 
-            # For Gemini, parse rate limit info from error message
-            # Gemini returns rate limit details in error body, not headers
-            if provider == "gemini" and hasattr(self._rate_tracker, 'update_from_error'):
-                parsed_error = parse_gemini_rate_limit_error(error_msg)
-                if parsed_error:
-                    self._rate_tracker.update_from_error(provider, parsed_error)
+            # Record server-reported retry info for ANY provider. The
+            # resulting retry_at feeds /rate-limits display and the legacy
+            # recommender only; the enforcement gate does not read it.
+            if exception is not None and hasattr(self._rate_tracker, 'update_from_error'):
+                retry_after = extract_retry_after(exception)
+                if retry_after is not None:
+                    self._rate_tracker.update_from_error(
+                        provider,
+                        {
+                            "retry_after_seconds": retry_after,
+                            "message": error_msg,
+                        },
+                    )
 
         # Record failure to status tracker (D10)
         if self._status_tracker:

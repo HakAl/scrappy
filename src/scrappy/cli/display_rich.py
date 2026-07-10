@@ -175,7 +175,7 @@ def show_status_rich(
     # Add health summary if any requests have been made
     if provider_health:
         lines.append("")
-        lines.append("Provider Performance:")
+        lines.append("Provider Performance (this session):")
         for provider, health in sorted(provider_health.items()):
             healthy = health.get('healthy', True)
             requests = health.get('request_count', 0)

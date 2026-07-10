@@ -659,11 +659,12 @@ class RateLimitTracker:
     def update_from_error(self, provider: str, error_data: Dict[str, Any]) -> None:
         """Update rate limits from error response data.
 
-        For providers like Gemini that return rate limit info in error responses
-        (429 status) rather than headers. Stores retry_after and any quota info.
+        Called for any provider whose exception carried server-reported retry
+        info (headers, body, or message). Stores retry_after and computes the
+        provider-scoped retry_at consumed by is_rate_limited.
 
         Args:
-            provider: Provider name (e.g., "gemini")
+            provider: Provider name (e.g., "gemini", "groq")
             error_data: Parsed error data with keys like:
                 - retry_after_seconds: Seconds until retry allowed
                 - quota_type: Type of quota exceeded (e.g., "requests", "tokens")
