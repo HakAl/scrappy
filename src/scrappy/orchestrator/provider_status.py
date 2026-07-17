@@ -18,9 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, Any, Deque
 import asyncio
-import json
 import logging
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -104,31 +102,21 @@ class ProviderStatusTracker:
     Real-time status is updated by RateTrackingCallback on each request.
     On-demand health checks can be run for the /status command.
 
+    Session-scoped: stats live in memory only and reset on restart.
+    Displays fed by this tracker must label themselves accordingly.
+
     Features:
     - Rolling window metrics (last N requests per provider)
-    - Persistence to user-level ~/.scrappy/provider_stats.json
     - Success rate and average latency calculations
     - Token tracking
 
     Thread-safe for use in async contexts.
     """
 
-    def __init__(self, persist_path: Optional[Path] = None):
-        """
-        Initialize provider status tracker.
-
-        Args:
-            persist_path: Path for persistence file. If None, uses
-                         ~/.scrappy/provider_stats.json
-        """
+    def __init__(self) -> None:
+        """Initialize provider status tracker with empty in-memory state."""
         self._status: dict[str, ProviderStatus] = {}
         self._lock = asyncio.Lock()
-        self._persist_path = persist_path or self._default_persist_path()
-        self._load()
-
-    def _default_persist_path(self) -> Path:
-        """Get default persistence path (~/.scrappy/provider_stats.json)."""
-        return Path.home() / ".scrappy" / "provider_stats.json"
 
     def on_success(
         self,
@@ -167,8 +155,6 @@ class ProviderStatusTracker:
             tokens=tokens,
         ))
 
-        self._persist()
-
     def on_failure(
         self,
         provider: str,
@@ -201,8 +187,6 @@ class ProviderStatusTracker:
             latency_ms=latency_ms,
             error=error,
         ))
-
-        self._persist()
 
     def get_healthy_providers(self, min_success_rate: float = 0.5) -> list[str]:
         """
@@ -324,74 +308,6 @@ class ProviderStatusTracker:
 
         return results
 
-    def _load(self) -> None:
-        """Load persisted stats from disk."""
-        if not self._persist_path.exists():
-            return
-
-        try:
-            data = json.loads(self._persist_path.read_text())
-            for provider, stats_data in data.items():
-                status = ProviderStatus(
-                    healthy=stats_data.get("healthy", True),
-                    last_success=datetime.fromisoformat(stats_data["last_success"])
-                    if stats_data.get("last_success") else None,
-                    last_failure=datetime.fromisoformat(stats_data["last_failure"])
-                    if stats_data.get("last_failure") else None,
-                    last_error=stats_data.get("last_error"),
-                    last_latency_ms=stats_data.get("last_latency_ms"),
-                    request_count=stats_data.get("request_count", 0),
-                    error_count=stats_data.get("error_count", 0),
-                    total_tokens=stats_data.get("total_tokens", 0),
-                )
-                # Restore rolling window
-                for record_data in stats_data.get("recent_requests", []):
-                    status.add_request(RequestRecord(
-                        timestamp=datetime.fromisoformat(record_data["timestamp"]),
-                        success=record_data["success"],
-                        latency_ms=record_data["latency_ms"],
-                        tokens=record_data.get("tokens", 0),
-                        error=record_data.get("error"),
-                    ))
-                self._status[provider] = status
-            logger.debug(f"Loaded provider stats for {len(self._status)} providers")
-        except Exception as e:
-            logger.warning(f"Failed to load provider stats: {e}")
-
-    def _persist(self) -> None:
-        """Persist stats to disk."""
-        try:
-            self._persist_path.parent.mkdir(parents=True, exist_ok=True)
-
-            data = {}
-            for provider, status in self._status.items():
-                data[provider] = {
-                    "healthy": status.healthy,
-                    "last_success": status.last_success.isoformat()
-                    if status.last_success else None,
-                    "last_failure": status.last_failure.isoformat()
-                    if status.last_failure else None,
-                    "last_error": status.last_error,
-                    "last_latency_ms": status.last_latency_ms,
-                    "request_count": status.request_count,
-                    "error_count": status.error_count,
-                    "total_tokens": status.total_tokens,
-                    "recent_requests": [
-                        {
-                            "timestamp": r.timestamp.isoformat(),
-                            "success": r.success,
-                            "latency_ms": r.latency_ms,
-                            "tokens": r.tokens,
-                            "error": r.error,
-                        }
-                        for r in status._recent_requests
-                    ],
-                }
-
-            self._persist_path.write_text(json.dumps(data, indent=2))
-        except Exception as e:
-            logger.warning(f"Failed to persist provider stats: {e}")
-
     def reset_stats(self, provider: Optional[str] = None) -> None:
         """
         Reset statistics for one or all providers.
@@ -404,4 +320,3 @@ class ProviderStatusTracker:
                 del self._status[provider]
         else:
             self._status.clear()
-        self._persist()

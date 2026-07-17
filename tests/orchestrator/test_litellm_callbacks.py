@@ -12,7 +12,6 @@ from scrappy.orchestrator.litellm_callbacks import (
     RateTrackingCallback,
     EscalationMetrics,
     create_rate_tracking_callback,
-    parse_gemini_rate_limit_error,
 )
 
 from tests.helpers import (
@@ -492,196 +491,129 @@ class TestExtractProvider:
         assert result == "anthropic"
 
 
-class TestParseGeminiRateLimitError:
-    """Tests for parse_gemini_rate_limit_error function."""
+def _capturing_tracker():
+    """MockRateLimitTracker extended with a capturing update_from_error."""
+    tracker = MockRateLimitTracker()
+    tracker.error_updates = []
 
-    def test_parses_retry_in_seconds(self):
-        """Verify retry delay is extracted from error message."""
-        error = "Resource exhausted. Please retry in 7.215400659s"
+    def capture_error_update(provider, data):
+        tracker.error_updates.append({"provider": provider, "data": data})
 
-        result = parse_gemini_rate_limit_error(error)
-
-        assert result is not None
-        assert result["retry_after_seconds"] == pytest.approx(7.215400659)
-
-    def test_parses_integer_retry_seconds(self):
-        """Verify integer retry delay is parsed correctly."""
-        error = "Rate limit exceeded. Please retry in 30s"
-
-        result = parse_gemini_rate_limit_error(error)
-
-        assert result is not None
-        assert result["retry_after_seconds"] == 30.0
-
-    def test_identifies_quota_exceeded(self):
-        """Verify quota type is identified."""
-        error = "Quota exceeded for quota metric"
-
-        result = parse_gemini_rate_limit_error(error)
-
-        assert result is not None
-        assert result["quota_type"] == "quota"
-
-    def test_identifies_token_quota(self):
-        """Verify token quota is identified."""
-        error = "Token quota exceeded"
-
-        result = parse_gemini_rate_limit_error(error)
-
-        assert result is not None
-        assert result["quota_type"] == "tokens"
-
-    def test_identifies_request_quota(self):
-        """Verify request quota is identified."""
-        error = "Request rate limit exceeded"
-
-        result = parse_gemini_rate_limit_error(error)
-
-        assert result is not None
-        assert result["quota_type"] == "requests"
-
-    def test_preserves_original_message(self):
-        """Verify original error message is preserved."""
-        error = "Resource has been exhausted (e.g. check quota)."
-
-        result = parse_gemini_rate_limit_error(error)
-
-        assert result is not None
-        assert result["message"] == error
-
-    def test_returns_none_for_non_rate_limit_error(self):
-        """Verify None returned for non-rate-limit errors."""
-        error = "Invalid API key"
-
-        result = parse_gemini_rate_limit_error(error)
-
-        assert result is None
-
-    def test_returns_none_for_empty_message(self):
-        """Verify None returned for empty message."""
-        result = parse_gemini_rate_limit_error("")
-
-        assert result is None
-
-    def test_returns_none_for_none_message(self):
-        """Verify None returned for None message."""
-        result = parse_gemini_rate_limit_error(None)
-
-        assert result is None
-
-    def test_handles_429_status_code_in_message(self):
-        """Verify 429 in error message triggers parsing."""
-        error = "Error 429: Too many requests"
-
-        result = parse_gemini_rate_limit_error(error)
-
-        assert result is not None
-        assert result["message"] == error
-
-    def test_handles_exhausted_keyword(self):
-        """Verify 'exhausted' keyword triggers parsing."""
-        error = "Resource has been exhausted"
-
-        result = parse_gemini_rate_limit_error(error)
-
-        assert result is not None
+    tracker.update_from_error = capture_error_update
+    return tracker
 
 
-class TestGeminiRateLimitIntegration:
-    """Tests for Gemini rate limit parsing integration with callbacks."""
+def _fire_failure(callback, exception, model):
+    """Drive one failure event through the callback."""
+    start_time = datetime.now()
+    end_time = start_time + timedelta(milliseconds=100)
+    callback.log_failure_event(
+        kwargs={"exception": exception, "model": model},
+        response_obj=None,
+        start_time=start_time,
+        end_time=end_time,
+    )
 
-    def test_gemini_failure_triggers_error_parsing(self):
-        """Verify Gemini failures trigger rate limit error parsing."""
-        # Create a tracker that supports update_from_error
-        tracker = MockRateLimitTracker()
-        tracker.error_updates = []
 
-        def capture_error_update(provider, data):
-            tracker.error_updates.append({"provider": provider, "data": data})
+class TestRetryAfterCaptureIntegration:
+    """Tests for provider-agnostic retry-after capture in the callback.
 
-        tracker.update_from_error = capture_error_update
+    The gemini-only string parse was deleted; retry info is now extracted
+    from the exception (headers, body, or message) for ANY provider and
+    written via update_from_error when a value is found.
+    """
 
+    def test_gemini_failure_records_retry_after(self):
+        """Verify the gemini message shape still records retry_after (parity)."""
+        tracker = _capturing_tracker()
         callback = RateTrackingCallback(rate_tracker=tracker)
 
         class GeminiException(Exception):
             llm_provider = "gemini"
 
-        start_time = datetime.now()
-        end_time = start_time + timedelta(milliseconds=100)
-
-        callback.log_failure_event(
-            kwargs={
-                "exception": GeminiException("Please retry in 5.5s"),
-                "model": "gemini-2.0-flash"
-            },
-            response_obj=None,
-            start_time=start_time,
-            end_time=end_time,
+        _fire_failure(
+            callback, GeminiException("Please retry in 5.5s"), "gemini-2.0-flash"
         )
 
-        # Should have called update_from_error
         assert len(tracker.error_updates) == 1
         assert tracker.error_updates[0]["provider"] == "gemini"
         assert tracker.error_updates[0]["data"]["retry_after_seconds"] == pytest.approx(5.5)
 
-    def test_non_gemini_failure_does_not_trigger_parsing(self):
-        """Verify non-Gemini failures don't trigger error parsing."""
-        tracker = MockRateLimitTracker()
-        tracker.error_updates = []
-
-        def capture_error_update(provider, data):
-            tracker.error_updates.append({"provider": provider, "data": data})
-
-        tracker.update_from_error = capture_error_update
-
+    def test_non_gemini_message_retry_info_recorded(self):
+        """Verify non-gemini providers now record retry info too (PR-3b delta)."""
+        tracker = _capturing_tracker()
         callback = RateTrackingCallback(rate_tracker=tracker)
 
         class GroqException(Exception):
             llm_provider = "groq"
 
-        start_time = datetime.now()
-        end_time = start_time + timedelta(milliseconds=100)
-
-        callback.log_failure_event(
-            kwargs={
-                "exception": GroqException("Rate limit exceeded"),
-                "model": "groq/llama"
-            },
-            response_obj=None,
-            start_time=start_time,
-            end_time=end_time,
+        _fire_failure(
+            callback,
+            GroqException("Rate limit exceeded. Please try again in 30s"),
+            "groq/llama",
         )
 
-        # Should not have called update_from_error for groq
+        assert len(tracker.error_updates) == 1
+        assert tracker.error_updates[0]["provider"] == "groq"
+        assert tracker.error_updates[0]["data"]["retry_after_seconds"] == pytest.approx(30.0)
+
+    def test_header_retry_after_recorded_for_any_provider(self):
+        """Verify Retry-After response headers are captured via the exception."""
+        tracker = _capturing_tracker()
+        callback = RateTrackingCallback(rate_tracker=tracker)
+
+        class FakeResponse:
+            headers = {"Retry-After": "42"}
+
+        class CerebrasException(Exception):
+            llm_provider = "cerebras"
+            response = FakeResponse()
+
+        _fire_failure(
+            callback, CerebrasException("Too many requests"), "cerebras/llama3.1-8b"
+        )
+
+        assert len(tracker.error_updates) == 1
+        assert tracker.error_updates[0]["provider"] == "cerebras"
+        assert tracker.error_updates[0]["data"]["retry_after_seconds"] == pytest.approx(42.0)
+
+    def test_failure_without_retry_info_not_recorded(self):
+        """Verify failures with no extractable retry value write nothing."""
+        tracker = _capturing_tracker()
+        callback = RateTrackingCallback(rate_tracker=tracker)
+
+        class GroqException(Exception):
+            llm_provider = "groq"
+
+        _fire_failure(callback, GroqException("Rate limit exceeded"), "groq/llama")
+
         assert len(tracker.error_updates) == 0
 
-    def test_gemini_non_rate_limit_error_not_stored(self):
-        """Verify Gemini non-rate-limit errors don't update tracker."""
-        tracker = MockRateLimitTracker()
-        tracker.error_updates = []
-
-        def capture_error_update(provider, data):
-            tracker.error_updates.append({"provider": provider, "data": data})
-
-        tracker.update_from_error = capture_error_update
-
+    def test_non_rate_limit_error_not_stored(self):
+        """Verify unrelated errors don't update the tracker."""
+        tracker = _capturing_tracker()
         callback = RateTrackingCallback(rate_tracker=tracker)
 
         class GeminiException(Exception):
             llm_provider = "gemini"
 
-        start_time = datetime.now()
-        end_time = start_time + timedelta(milliseconds=100)
-
-        callback.log_failure_event(
-            kwargs={
-                "exception": GeminiException("Invalid API key"),
-                "model": "gemini-2.0-flash"
-            },
-            response_obj=None,
-            start_time=start_time,
-            end_time=end_time,
+        _fire_failure(
+            callback, GeminiException("Invalid API key"), "gemini-2.0-flash"
         )
 
-        # Should not have called update_from_error for non-rate-limit error
         assert len(tracker.error_updates) == 0
+
+    def test_tracker_without_update_from_error_is_tolerated(self):
+        """Verify a tracker lacking update_from_error still records the failure."""
+        tracker = MockRateLimitTracker()  # no update_from_error attribute
+        callback = RateTrackingCallback(rate_tracker=tracker)
+
+        class GeminiException(Exception):
+            llm_provider = "gemini"
+
+        _fire_failure(
+            callback, GeminiException("Please retry in 5.5s"), "gemini-2.0-flash"
+        )
+
+        assert tracker.last_recorded is not None
+        assert tracker.last_recorded["success"] is False
