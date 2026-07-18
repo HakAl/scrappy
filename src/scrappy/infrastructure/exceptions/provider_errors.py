@@ -20,6 +20,7 @@ from .suggestions import (
     AUTH_SUGGESTION_TEMPLATE,
     NETWORK_SUGGESTION,
     PROVIDER_NOT_FOUND_TEMPLATE,
+    RATE_LIMIT_FALLBACK_SUGGESTION,
     RATE_LIMIT_WAIT_TEMPLATE,
     TIMEOUT_SUGGESTION,
     format_wait_time,
@@ -100,8 +101,11 @@ class RateLimitError(ProviderError, RetryableError):
 
         # Add helpful suggestion
         suggestion = kwargs.pop('suggestion', None)
-        if not suggestion and resolved_retry_after:
-            suggestion = RATE_LIMIT_WAIT_TEMPLATE.format(seconds=resolved_retry_after)
+        if not suggestion:
+            if resolved_retry_after:
+                suggestion = RATE_LIMIT_WAIT_TEMPLATE.format(seconds=resolved_retry_after)
+            else:
+                suggestion = RATE_LIMIT_FALLBACK_SUGGESTION
 
         super().__init__(
             message,

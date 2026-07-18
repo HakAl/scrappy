@@ -16,10 +16,14 @@ AUTH_SUGGESTION_TEMPLATE = (
 NETWORK_SUGGESTION = "Check your network connection and try again."
 
 TIMEOUT_SUGGESTION = (
-    "The request took too long. Try again or check network connection."
+    "The provider may be slow. Try again or use a different provider."
 )
 
 RATE_LIMIT_WAIT_TEMPLATE = "Wait {seconds:.1f} seconds before retrying."
+
+RATE_LIMIT_FALLBACK_SUGGESTION = (
+    "Wait a few seconds before retrying, or try a different provider."
+)
 
 PROVIDER_NOT_FOUND_TEMPLATE = "Available providers: {providers}"
 

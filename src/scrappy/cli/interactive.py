@@ -130,7 +130,10 @@ class InteractiveMode:
                             return content
                 return "(no response)"
             else:
-                return f"Error: {result.error or 'unknown error'}"
+                error_text = f"Error: {result.error or 'unknown error'}"
+                if result.suggestion:
+                    error_text += f"\nSuggestion: {result.suggestion}"
+                return error_text
 
         except Exception as e:
             logger.exception("LangGraph processing failed: %s", e)

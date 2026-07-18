@@ -9,11 +9,14 @@ import pytest
 from unittest.mock import Mock
 
 from scrappy.orchestrator.litellm_service import (
+    NOT_CONFIGURED_SUGGESTION,
     LiteLLMService,
+    NotConfiguredError,
     _extract_retry_after,
     _map_litellm_error,
     _map_rate_limit_error,
 )
+from scrappy.infrastructure.exceptions.enums import ErrorSeverity, RecoveryAction
 from scrappy.orchestrator.fallback_metrics import provider_fallback_metrics
 from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
 from scrappy.infrastructure.exceptions.provider_errors import (
@@ -877,8 +880,10 @@ class TestMapperSuggestionCharacterization:
         ("message", "suggestion"),
         [
             (
+                # W1 winner (PR-4): class default owns auth copy.
                 "401 unauthorized",
-                "Check your API key for groq is correct in .env file.",
+                "Check your API key for groq. "
+                "Ensure it is valid and has proper permissions.",
             ),
             (
                 "402 payment required",
@@ -889,8 +894,9 @@ class TestMapperSuggestionCharacterization:
                 "Wait a few seconds before retrying, or try a different provider.",
             ),
             (
+                # W2 winner (PR-4): class default owns network copy.
                 "connection refused",
-                "Check your internet connection and try again.",
+                "Check your network connection and try again.",
             ),
             (
                 "request timed out",
@@ -931,3 +937,43 @@ class TestMapperSuggestionCharacterization:
         )
 
         assert mapped.suggestion == suggestion
+
+    def test_rate_limit_with_retry_after_gets_exact_wait(self):
+        """W4 (PR-4): a known Retry-After window surfaces the exact wait."""
+        import httpx
+
+        error = Exception("429 rate limit exceeded")
+        error.response = httpx.Response(
+            status_code=429,
+            headers={"Retry-After": "30"},
+        )
+
+        mapped = _map_litellm_error(
+            error,
+            provider="groq",
+            model="groq/llama-3.1-8b-instant",
+        )
+
+        assert mapped.suggestion == "Wait 30.0 seconds before retrying."
+
+
+class TestNotConfiguredErrorContract:
+    """NotConfiguredError metadata contract (PR-4 D3)."""
+
+    def test_severity_is_critical(self):
+        assert NotConfiguredError().severity is ErrorSeverity.CRITICAL
+
+    def test_recovery_action_is_abort(self):
+        assert NotConfiguredError().recovery_action is RecoveryAction.ABORT
+
+    def test_is_not_retryable(self):
+        assert NotConfiguredError().is_retryable is False
+
+    def test_explicit_suggestion_overrides_default(self):
+        error = NotConfiguredError(
+            "API key not configured for groq",
+            suggestion="Add GROQ_API_KEY and restart.",
+        )
+
+        assert error.suggestion == "Add GROQ_API_KEY and restart."
+        assert error.suggestion != NOT_CONFIGURED_SUGGESTION

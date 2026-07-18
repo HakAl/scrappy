@@ -95,3 +95,43 @@ def test_process_via_langgraph_returns_last_assistant_message():
 
     assert result == "final"
     bridge.run_agent.assert_called_once()
+
+
+def test_process_via_langgraph_failure_appends_suggestion_line():
+    """PR-4 Option D: chat failures render the suggestion channel."""
+    mode, _, _ = create_mode()
+    bridge = Mock()
+    bridge.run_agent.return_value = SimpleNamespace(
+        cancelled=False,
+        success=False,
+        error="Rate limit exceeded for groq",
+        suggestion="Wait 30.0 seconds before retrying.",
+        final_state=None,
+    )
+    mode.set_langgraph_bridge(bridge)
+
+    result = mode._process_via_langgraph("hello")
+
+    assert result == (
+        "Error: Rate limit exceeded for groq\n"
+        "Suggestion: Wait 30.0 seconds before retrying."
+    )
+
+
+def test_process_via_langgraph_failure_without_suggestion_has_no_line():
+    """No suggestion channel means no dangling Suggestion: line."""
+    mode, _, _ = create_mode()
+    bridge = Mock()
+    bridge.run_agent.return_value = SimpleNamespace(
+        cancelled=False,
+        success=False,
+        error="Tool execution failed",
+        suggestion=None,
+        final_state=None,
+    )
+    mode.set_langgraph_bridge(bridge)
+
+    result = mode._process_via_langgraph("hello")
+
+    assert result == "Error: Tool execution failed"
+    assert "Suggestion:" not in result

@@ -60,6 +60,9 @@ class AgentResult:
     cancelled: bool
     """Whether the run was cancelled."""
 
+    suggestion: Optional[str] = None
+    """Actionable suggestion for the failure, None if none available."""
+
 
 @runtime_checkable
 class ConfirmCallbackProtocol(Protocol):
@@ -568,6 +571,9 @@ class LangGraphBridge:
             elif error:
                 error_msg = error[:100]
             self._output_callback(f"[failed] {elapsed_sec:.1f}s - {error_msg}\n")
+            # Suggestion travels on its own channel and is never truncated
+            if final_state and final_state.error_suggestion:
+                self._output_callback(f"  Suggestion: {final_state.error_suggestion}\n")
 
     def _extract_key_param(self, tool_name: str, args: dict[str, Any]) -> str:
         """
@@ -834,6 +840,7 @@ class LangGraphBridge:
                 final_state=final_state,
                 error=final_state.last_error,
                 cancelled=False,
+                suggestion=final_state.error_suggestion,
             )
 
         except WorkerCancelled:

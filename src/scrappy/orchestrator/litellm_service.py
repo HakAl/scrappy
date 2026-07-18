@@ -29,7 +29,7 @@ import logging
 import re
 import time
 import threading
-from typing import Callable, Iterator, Optional, TYPE_CHECKING, AsyncIterator, Type, TypeVar, cast
+from typing import Any, Callable, Iterator, Optional, TYPE_CHECKING, AsyncIterator, Type, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -46,6 +46,12 @@ from ..infrastructure.exceptions.provider_errors import (
     NetworkError,
     TimeoutError as ProviderTimeoutError,
     ProviderExecutionError,
+)
+from ..infrastructure.exceptions.base import BaseError
+from ..infrastructure.exceptions.enums import (
+    ErrorCategory,
+    ErrorSeverity,
+    RecoveryAction,
 )
 from ..infrastructure.exceptions.failure_kinds import FailureKind
 from ..cli.protocols import BaseOutputProtocol
@@ -303,7 +309,6 @@ def _map_litellm_error(
             failure_kind=FailureKind.AUTH,
             retry_after=retry_after,
             original_error=error,
-            suggestion=f"Check your API key for {provider_display} is correct in .env file."
         )
 
     if rule is LiteLLMErrorRule.PAYMENT:
@@ -323,7 +328,6 @@ def _map_litellm_error(
             failure_kind=FailureKind.RATE_LIMIT,
             retry_after=retry_after,
             original_error=error,
-            suggestion="Wait a few seconds before retrying, or try a different provider."
         )
 
     if rule is LiteLLMErrorRule.CONNECTION:
@@ -333,7 +337,6 @@ def _map_litellm_error(
             failure_kind=FailureKind.NETWORK,
             retry_after=retry_after,
             original_error=error,
-            suggestion="Check your internet connection and try again."
         )
 
     if rule is LiteLLMErrorRule.TIMEOUT:
@@ -343,7 +346,6 @@ def _map_litellm_error(
             failure_kind=FailureKind.TIMEOUT,
             retry_after=retry_after,
             original_error=error,
-            suggestion="The provider may be slow. Try again or use a different provider."
         )
 
     if rule is LiteLLMErrorRule.CONTENT_FILTER:
@@ -419,9 +421,23 @@ def _map_litellm_error(
     )
 
 
-class NotConfiguredError(Exception):
+NOT_CONFIGURED_SUGGESTION = "Run /setup to configure provider API keys."
+
+
+class NotConfiguredError(BaseError):
     """Raised when LLM service is used before API keys are configured."""
-    pass
+
+    default_category = ErrorCategory.AUTHENTICATION
+    default_severity = ErrorSeverity.CRITICAL
+    default_recovery_action = RecoveryAction.ABORT
+
+    def __init__(
+        self,
+        message: str = "LLM service not configured. Run setup wizard first.",
+        **kwargs: Any,
+    ):
+        kwargs.setdefault("suggestion", NOT_CONFIGURED_SUGGESTION)
+        super().__init__(message, **kwargs)
 
 
 class StreamStuckError(Exception):

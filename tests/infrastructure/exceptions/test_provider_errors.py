@@ -288,12 +288,12 @@ class TestTimeoutError:
         assert error.timeout_seconds == 60.0
         assert error.context['timeout_seconds'] == 60.0
 
-    def test_suggestion_mentions_network(self):
-        """Test suggestion mentions network or timeout."""
+    def test_suggestion_is_actionable(self):
+        """Test suggestion offers a concrete next step (W3 copy, PR-4)."""
         error = TimeoutError("Timeout occurred")
 
         suggestion = error.suggestion.lower()
-        assert 'network' in suggestion or 'timeout' in suggestion or 'long' in suggestion
+        assert 'try again' in suggestion or 'different provider' in suggestion
 
 
 class TestNetworkError:
@@ -471,10 +471,11 @@ class TestSuggestionCopyCharacterization:
         )
 
     def test_timeout_default(self):
+        # W3 winner (PR-4): unified with the mapper's timeout copy.
         error = TimeoutError("Timed out")
 
         assert error.suggestion == (
-            "The request took too long. Try again or check network connection."
+            "The provider may be slow. Try again or use a different provider."
         )
 
     def test_network_default(self):
@@ -501,9 +502,12 @@ class TestSuggestionCopyCharacterization:
         assert error.suggestion == "Wait 45.5 seconds before retrying."
 
     def test_rate_limit_without_wait_window(self):
+        # W4 (PR-4): generic fallback replaces the former None.
         error = RateLimitError("Rate limit hit")
 
-        assert error.suggestion is None
+        assert error.suggestion == (
+            "Wait a few seconds before retrying, or try a different provider."
+        )
 
     def test_router_group_suggestion_with_min_retry(self):
         error = RouterGroupExhaustedError(
