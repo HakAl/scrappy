@@ -27,6 +27,7 @@ from scrappy.cli.protocols import (
 )
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
+from scrappy.orchestrator.api_key_composition import create_api_key_service
 
 from .runtime_wiring import create_textual_runtime_session, wire_textual_runtime
 from .bridge import ThreadSafeAsyncBridge
@@ -322,7 +323,6 @@ class ScrappyApp(App):
         has_provider, env_key_count = self._check_and_migrate_providers()
 
         # Check if disclaimer has been acknowledged
-        from scrappy.infrastructure.config.api_keys import create_api_key_service
         config_service = create_api_key_service()
         disclaimer_acknowledged = config_service.is_disclaimer_acknowledged()
 
@@ -670,7 +670,6 @@ class ScrappyApp(App):
             Tuple of (has_any_provider, 0)
             Note: Second value kept for API compatibility but always 0
         """
-        from scrappy.infrastructure.config.api_keys import create_api_key_service
         from scrappy.orchestrator.provider_definitions import PROVIDERS
 
         # Migration happens automatically in load() via _migrate_from_env()

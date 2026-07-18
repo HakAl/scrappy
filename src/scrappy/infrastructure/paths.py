@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 # App name for platformdirs
 APP_NAME = "scrappy"
 
+# User config location (platform-appropriate via platformdirs)
+USER_CONFIG_DIR = Path(user_config_dir(APP_NAME))
+USER_CONFIG_FILE = USER_CONFIG_DIR / "config.json"
+
 # Legacy path for migration
 LEGACY_USER_DIR = Path.home() / ".scrappy"
 

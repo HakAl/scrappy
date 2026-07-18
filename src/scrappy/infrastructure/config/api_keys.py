@@ -8,7 +8,9 @@ Architecture:
 - ApiKeyConfig: Dataclass for API key data
 - ApiKeyConfigServiceProtocol: Protocol defining the service interface
 - ApiKeyConfigService: Implementation using PersistenceProtocol
-- create_api_key_service: Factory function for production use
+
+Production wiring lives in scrappy.orchestrator.api_key_composition;
+this module holds no provider facts and no app paths.
 
 Environment Variable Migration:
 - On load(), API keys from environment variables are automatically migrated
@@ -19,22 +21,13 @@ Environment Variable Migration:
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Protocol
+from typing import Dict, Optional, Protocol, Sequence
 
 from .base import BaseConfig
 from ..persistence.protocols import PersistenceProtocol
 from ..validation import validate_api_key, validate_env_var_name
 
 logger = logging.getLogger(__name__)
-
-# Known provider API key environment variables
-# Used for automatic migration from env vars to config
-PROVIDER_ENV_VARS = [
-    "CEREBRAS_API_KEY",
-    "GROQ_API_KEY",
-    "GEMINI_API_KEY",
-    "SAMBANOVA_API_KEY",
-]
 
 
 class ApiKeyValidationError(ValueError):
@@ -205,20 +198,26 @@ class ApiKeyConfigService:
         # Production use
         from scrappy.infrastructure.persistence.json_persistence import JSONPersistence
         persistence = JSONPersistence("~/.scrappy/config.json")
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=("CEREBRAS_API_KEY",))
 
         # Testing use
         from tests.helpers import InMemoryPersistence
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
     """
 
-    def __init__(self, persistence: PersistenceProtocol):
+    def __init__(
+        self,
+        persistence: PersistenceProtocol,
+        provider_env_vars: Sequence[str],
+    ):
         """
         Initialize with persistence backend.
 
         Args:
             persistence: Storage backend (JSONPersistence for prod, InMemory for tests)
+            provider_env_vars: Env var names eligible for automatic migration
+                on load(). Callers that never exercise migration pass ().
 
         Notes:
             - Constructor has NO side effects
@@ -226,6 +225,7 @@ class ApiKeyConfigService:
             - Config is lazy-loaded on first access
         """
         self._persistence = persistence
+        self._provider_env_vars = provider_env_vars
         self._config: Optional[ApiKeyConfig] = None
 
     def load(self, migrate_env: bool = True) -> ApiKeyConfig:
@@ -364,7 +364,7 @@ class ApiKeyConfigService:
         config.disclaimer_acknowledged = True
         self.save(config)
 
-    def _migrate_from_env(self, env_vars: Optional[List[str]] = None) -> int:
+    def _migrate_from_env(self, env_vars: Optional[Sequence[str]] = None) -> int:
         """
         Migrate API keys from environment variables to config.
 
@@ -373,7 +373,8 @@ class ApiKeyConfigService:
         with .env files to have their keys automatically persisted.
 
         Args:
-            env_vars: List of env var names to check. Defaults to PROVIDER_ENV_VARS.
+            env_vars: Env var names to check. Defaults to the provider_env_vars
+                given at construction.
 
         Returns:
             Number of keys migrated (not including already-configured keys)
@@ -381,7 +382,7 @@ class ApiKeyConfigService:
         if self._config is None:
             return 0
 
-        env_vars = env_vars or PROVIDER_ENV_VARS
+        env_vars = self._provider_env_vars if env_vars is None else env_vars
         migrated = []
         skipped = []
 
@@ -423,24 +424,3 @@ class ApiKeyConfigService:
             logger.warning(f"Skipped {len(skipped)} invalid key(s) from environment")
 
         return len(migrated)
-
-
-def create_api_key_service() -> ApiKeyConfigService:
-    """
-    Factory function to create ApiKeyConfigService with default persistence.
-
-    Creates service backed by JSONPersistence at USER_CONFIG_FILE.
-
-    Returns:
-        ApiKeyConfigService backed by JSONPersistence at USER_CONFIG_FILE
-
-    Design:
-    - Centralizes production configuration
-    - Hides infrastructure details from callers
-    - Enables easy testing via optional dependency injection
-    """
-    from ..persistence.json_persistence import JSONPersistence
-    from ...cli.config.paths import USER_CONFIG_FILE
-
-    persistence = JSONPersistence(str(USER_CONFIG_FILE))
-    return ApiKeyConfigService(persistence)

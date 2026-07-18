@@ -5,6 +5,8 @@ Handles help, status, listings, and usage statistics.
 
 from datetime import datetime
 
+from scrappy.orchestrator.api_key_composition import create_api_key_service
+
 from .io_interface import CLIIOProtocol
 from .unified_io import UnifiedIO
 from .display_rich import show_help_table, show_status_rich, show_usage_rich
@@ -165,7 +167,6 @@ class CLIDisplay:
         """
         from scrappy.orchestrator.litellm_config import get_configured_models
         from scrappy.orchestrator.model_selection import MODEL_GROUPS
-        from scrappy.infrastructure.config.api_keys import create_api_key_service
 
         api_key_service = create_api_key_service()
         configured_models = get_configured_models(api_key_service)

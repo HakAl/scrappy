@@ -11,12 +11,10 @@ import os
 from pathlib import Path
 from typing import List, Set
 
-from platformdirs import user_config_dir, user_data_dir
+from platformdirs import user_data_dir
 
 # User directories (platform-appropriate via platformdirs)
-USER_CONFIG_DIR = Path(user_config_dir("scrappy"))
 USER_DATA_DIR = Path(user_data_dir("scrappy"))
-USER_CONFIG_FILE = USER_CONFIG_DIR / 'config.json'
 
 # Legacy path (for reference/migration)
 LEGACY_USER_DIR = Path.home() / '.scrappy'
