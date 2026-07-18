@@ -9,70 +9,6 @@ import pytest
 from unittest.mock import Mock, patch
 
 
-class TestRetryStrategy:
-    """Test retry mechanism for transient failures."""
-
-    @pytest.mark.unit
-    def test_retry_succeeds_on_second_attempt(self):
-        """Retry should succeed if second attempt works."""
-        from scrappy.cli.error_recovery import retry_operation
-
-        attempts = []
-
-        def flaky_operation():
-            attempts.append(1)
-            if len(attempts) < 2:
-                raise ConnectionError("Temporary failure")
-            return "success"
-
-        result = retry_operation(flaky_operation, max_retries=3)
-
-        assert result == "success"
-        assert len(attempts) == 2
-
-
-
-    @pytest.mark.unit
-    def test_retry_only_on_retryable_errors(self):
-        """Retry should not retry non-retryable errors."""
-        from scrappy.cli.error_recovery import retry_operation
-        from scrappy.cli.exceptions import ProviderError
-
-        attempts = []
-
-        def auth_error():
-            attempts.append(1)
-            raise ProviderError("Invalid key", provider="test", is_auth_error=True)
-
-        with pytest.raises(ProviderError):
-            retry_operation(auth_error, max_retries=3)
-
-        # Should not retry auth errors
-        assert len(attempts) == 1
-
-    @pytest.mark.unit
-    def test_retry_with_custom_exception_filter(self):
-        """Retry should allow custom exception filtering."""
-        from scrappy.cli.error_recovery import retry_operation
-
-        attempts = []
-
-        def specific_failure():
-            attempts.append(1)
-            if len(attempts) < 2:
-                raise TimeoutError("Timeout")
-            return "ok"
-
-        result = retry_operation(
-            specific_failure,
-            max_retries=3,
-            retry_on=(TimeoutError,)
-        )
-
-        assert result == "ok"
-        assert len(attempts) == 2
-
-
 class TestFallbackStrategy:
     """Test fallback mechanism for provider failures."""
 
@@ -219,13 +155,6 @@ class TestGracefulDegradation:
         assert "degraded" in output.lower()
 
 
-class TestCircuitBreaker:
-    """Test circuit breaker pattern for repeated failures."""
-
-
-
-
-
 class TestErrorRecoveryContext:
     """Test error recovery context manager."""
 
@@ -272,73 +201,8 @@ class TestErrorRecoveryContext:
         assert ctx.result == "fallback_value"
 
 
-class TestSafeOperationEnhancements:
-    """Test enhancements to safe_operation for recovery."""
-
-    @pytest.mark.unit
-    def test_safe_operation_with_retry(self):
-        """safe_operation should support retry parameter."""
-        from scrappy.cli.error_recovery import safe_operation_with_recovery
-
-        attempts = []
-
-        def flaky():
-            attempts.append(1)
-            if len(attempts) < 2:
-                raise ConnectionError("Fail")
-            return "OK"
-
-        success, result = safe_operation_with_recovery(
-            flaky,
-            retry=True,
-            max_retries=3
-        )
-
-        assert success
-        assert result == "OK"
-        assert len(attempts) == 2
-
-    @pytest.mark.unit
-    def test_safe_operation_with_fallback_value(self):
-        """safe_operation should support fallback values."""
-        from scrappy.cli.error_recovery import safe_operation_with_recovery
-
-        def failing():
-            raise Exception("Fail")
-
-        success, result = safe_operation_with_recovery(
-            failing,
-            fallback_value="default"
-        )
-
-        assert not success
-        assert result == "default"
-
-
 class TestRecoveryLogging:
     """Test that recovery actions are logged properly."""
-
-    @pytest.mark.unit
-    def test_retry_logs_attempts(self):
-        """Retry should log each attempt."""
-        from scrappy.cli.error_recovery import retry_operation
-
-        attempts = []
-
-        def flaky():
-            attempts.append(1)
-            if len(attempts) < 2:
-                raise ConnectionError("Fail")
-            return "OK"
-
-        with patch('logging.getLogger') as mock_logger:
-            logger_instance = Mock()
-            mock_logger.return_value = logger_instance
-
-            retry_operation(flaky, max_retries=3, logger=logger_instance)
-
-            # Should have logged the retry
-            assert logger_instance.warning.called or logger_instance.info.called
 
     @pytest.mark.unit
     def test_fallback_logs_provider_switch(self):

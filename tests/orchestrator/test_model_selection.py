@@ -2,10 +2,13 @@
 
 import pytest
 
+from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
+from scrappy.orchestrator.failure_policy import FailureRecord
 from scrappy.orchestrator.model_selection import (
     ModelSelectionService,
     ModelSelectionType,
     MODEL_PRIORITIES,
+    _build_selection_exhausted_suggestion,
 )
 
 
@@ -208,3 +211,76 @@ class TestModelPrioritiesConfig:
         for selection_type, models in MODEL_PRIORITIES.items():
             for model_id in models:
                 assert "/" in model_id, f"{model_id} missing provider prefix"
+
+
+class TestSelectionExhaustedSuggestion:
+    """Exact-output pins for _build_selection_exhausted_suggestion.
+
+    Pins every branch of the selection-exhausted copy so relocation or
+    refactors cannot silently change user guidance.
+    """
+
+    def test_empty_summary(self):
+        assert _build_selection_exhausted_suggestion({}) == (
+            "Configure another model or try again later."
+        )
+
+    def test_rate_limit_with_retry_after_values(self):
+        summary = {
+            "groq/llama-3.1-8b-instant": FailureRecord(
+                kind=FailureKind.RATE_LIMIT,
+                provider="groq",
+                retry_after=30.0,
+                message="429",
+            ),
+        }
+
+        assert _build_selection_exhausted_suggestion(summary) == (
+            "Unavailable models: groq/llama-3.1-8b-instant (groq: rate_limit). "
+            "Wait at least 30s before retrying rate-limited models."
+        )
+
+    def test_rate_limit_without_retry_after_values(self):
+        summary = {
+            "groq/llama-3.1-8b-instant": FailureRecord(
+                kind=FailureKind.RATE_LIMIT,
+                provider="groq",
+                retry_after=None,
+                message="429",
+            ),
+        }
+
+        assert _build_selection_exhausted_suggestion(summary) == (
+            "Unavailable models: groq/llama-3.1-8b-instant (groq: rate_limit). "
+            "Wait before retrying rate-limited models."
+        )
+
+    def test_auth_line_present(self):
+        summary = {
+            "groq/llama-3.1-8b-instant": FailureRecord(
+                kind=FailureKind.AUTH,
+                provider="groq",
+                retry_after=None,
+                message="401",
+            ),
+        }
+
+        assert _build_selection_exhausted_suggestion(summary) == (
+            "Unavailable models: groq/llama-3.1-8b-instant (groq: auth). "
+            "Run /setup or update API keys and billing for affected providers."
+        )
+
+    def test_non_rate_limit_fallback_tail(self):
+        summary = {
+            "groq/llama-3.1-8b-instant": FailureRecord(
+                kind=FailureKind.NETWORK,
+                provider="groq",
+                retry_after=None,
+                message="connection refused",
+            ),
+        }
+
+        assert _build_selection_exhausted_suggestion(summary) == (
+            "Unavailable models: groq/llama-3.1-8b-instant (groq: network). "
+            "Configure another provider or try again later."
+        )

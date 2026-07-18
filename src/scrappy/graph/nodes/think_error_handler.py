@@ -15,6 +15,7 @@ from scrappy.graph.run_context import AgentRunContextProtocol
 from scrappy.infrastructure.exceptions import (
     AllProvidersRateLimitedError,
     AuthenticationError,
+    BaseError,
     NetworkError,
     ProviderError,
     ProviderExecutionError,
@@ -27,6 +28,39 @@ from scrappy.orchestrator.litellm_service import NotConfiguredError, StreamCance
 from scrappy.orchestrator.model_selection import SelectionExhaustedError
 
 logger = get_logger(__name__)
+
+
+def _cause_text(cause: BaseException) -> str:
+    """Render an exception cause without any owned suggestion copy.
+
+    BaseError causes render as message + their own recursively rendered
+    cause chain; str(cause) would re-embed the suggestion tail via
+    BaseError.__str__. Non-BaseError causes render verbatim.
+    """
+    if isinstance(cause, BaseError):
+        text = cause.message
+        if cause.original_error:
+            text += (
+                f"\nCaused by: {type(cause.original_error).__name__}: "
+                f"{_cause_text(cause.original_error)}"
+            )
+        return text
+    return str(cause)
+
+
+def _error_text(error: BaseError) -> str:
+    """Message plus cause chain for the error channel; suggestion excluded.
+
+    The suggestion travels in ThinkResult.suggestion; embedding it here
+    would double-render at display and in the recovery prompt.
+    """
+    text = error.message
+    if error.original_error:
+        text += (
+            f"\nCaused by: {type(error.original_error).__name__}: "
+            f"{_cause_text(error.original_error)}"
+        )
+    return text
 
 
 @runtime_checkable
@@ -91,6 +125,7 @@ class DefaultThinkErrorHandler:
             logger.error("LLM not configured. User needs to run setup.")
             return ThinkResult(
                 error="LLM not configured. Run /setup",
+                suggestion=error.suggestion,
                 recovery_action=RecoveryAction.ABORT.value,
                 is_fatal=True,
             )
@@ -99,7 +134,8 @@ class DefaultThinkErrorHandler:
         if isinstance(error, AuthenticationError):
             logger.error("Authentication error: %s", error)
             return ThinkResult(
-                error=str(error),
+                error=_error_text(error),
+                suggestion=error.suggestion,
                 recovery_action=error.recovery_action.value,
                 error_category=error.category.value,
                 is_fatal=True,
@@ -120,7 +156,8 @@ class DefaultThinkErrorHandler:
         if isinstance(error, AllProvidersRateLimitedError):
             logger.warning("Router group exhausted")
             return ThinkResult(
-                error="All providers rate limited. Please try again later.",
+                error=_error_text(error),
+                suggestion=error.suggestion,
                 recovery_action=RecoveryAction.FALLBACK.value,
                 error_category=error.category.value,
                 is_fatal=False,  # Delegator should try fallback
@@ -135,7 +172,8 @@ class DefaultThinkErrorHandler:
                 extra=error.logging_extra(),
             )
             return ThinkResult(
-                error=str(error),
+                error=_error_text(error),
+                suggestion=error.suggestion,
                 recovery_action=error.recovery_action.value,
                 error_category=error.category.value,
                 is_fatal=False,
@@ -149,7 +187,8 @@ class DefaultThinkErrorHandler:
                 extra=error.logging_extra(),
             )
             return ThinkResult(
-                error=str(error),
+                error=_error_text(error),
+                suggestion=error.suggestion,
                 recovery_action=error.recovery_action.value,
                 error_category=error.category.value,
                 is_fatal=False,
@@ -173,7 +212,8 @@ class DefaultThinkErrorHandler:
                 extra=error.logging_extra(),
             )
             return ThinkResult(
-                error=str(error),
+                error=_error_text(error),
+                suggestion=error.suggestion,
                 recovery_action=error.recovery_action.value,
                 error_category=error.category.value,
                 is_fatal=False,
@@ -188,7 +228,8 @@ class DefaultThinkErrorHandler:
                 extra=error.logging_extra(),
             )
             return ThinkResult(
-                error=str(error),
+                error=_error_text(error),
+                suggestion=error.suggestion,
                 recovery_action=error.recovery_action.value,
                 error_category=error.category.value,
                 is_fatal=not error.is_retryable,

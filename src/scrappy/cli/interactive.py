@@ -14,7 +14,6 @@ from .input_handler import InputHandler
 from .command_router import CommandRouter
 from .display import CLIDisplay
 from .tasks import CLITaskExecution
-from .exceptions import CLIError, ProviderError
 from .error_recovery import graceful_degrade
 from .logging import CLILogger
 from ..orchestrator.protocols import Orchestrator
@@ -131,7 +130,10 @@ class InteractiveMode:
                             return content
                 return "(no response)"
             else:
-                return f"Error: {result.error or 'unknown error'}"
+                error_text = f"Error: {result.error or 'unknown error'}"
+                if result.suggestion:
+                    error_text += f"\nSuggestion: {result.suggestion}"
+                return error_text
 
         except Exception as e:
             logger.exception("LangGraph processing failed: %s", e)
@@ -270,68 +272,3 @@ class InteractiveMode:
 
         self.display.show_usage()
         io.secho("Goodbye!", fg=self._theme.primary, bold=True)
-
-    def _handle_error(self, exception: Exception) -> None:
-        """
-        Handle general exceptions.
-
-        Displays error messages with appropriate styling based on severity
-        and exception type. Logs errors with structured data.
-
-        Args:
-            exception: The exception that occurred.
-
-        Side Effects:
-            - Displays error message to console with severity-based styling
-            - Shows suggestion if available in exception
-            - Logs error with structured data (CLIError) or full traceback
-            - Displays help reminder
-
-        State Changes:
-            - None; purely handles display and logging
-
-        Returns:
-            None
-        """
-        io = self.io
-
-        if isinstance(exception, CLIError):
-            # Use severity-appropriate styling
-            if exception.severity.value >= 4:  # CRITICAL
-                io.secho(f"\nError: {exception}", fg=self._theme.error, bold=True)
-            else:
-                io.secho(f"\nError: {exception}", fg=self._theme.error)
-
-            # Show suggestion if available
-            if exception.suggestion:
-                io.echo(f"Suggestion: {exception.suggestion}")
-
-            # Log with structured data
-            self.logger.error(
-                str(exception),
-                extra=exception.logging_extra()
-            )
-        elif isinstance(exception, ProviderError):
-            io.secho(f"\nProvider error: {exception}", fg=self._theme.error)
-            if exception.suggestion:
-                io.echo(f"Suggestion: {exception.suggestion}")
-            self.logger.error(
-                str(exception),
-                extra={
-                    "provider": exception.provider,
-                    "rate_limited": exception.rate_limited,
-                    "is_timeout": exception.is_timeout,
-                }
-            )
-        else:
-            from .utils.error_handler import format_error, get_error_suggestion
-
-            error_msg = format_error(exception)
-            suggestion = get_error_suggestion(exception)
-
-            io.secho(f"\nError: {error_msg}", fg=self._theme.error)
-            if suggestion:
-                io.echo(f"Suggestion: {suggestion}")
-            self.logger.exception("Unhandled exception in interactive mode")
-
-        io.echo("Type /help for available commands.\n")

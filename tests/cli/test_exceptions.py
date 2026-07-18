@@ -129,66 +129,6 @@ class TestValidationError:
         assert len(error.suggestion) > 0
 
 
-class TestProviderError:
-    """Test ProviderError for API/provider failures."""
-
-    @pytest.mark.unit
-    def test_provider_error_stores_provider_name(self):
-        """ProviderError should store the provider name."""
-        from scrappy.cli.exceptions import ProviderError
-
-        error = ProviderError("Connection failed", provider="openai")
-        assert error.provider == "openai"
-        assert "Connection failed" in str(error)
-
-    @pytest.mark.unit
-    def test_provider_error_has_api_category(self):
-        """ProviderError should have API category."""
-        from scrappy.cli.exceptions import ProviderError
-        from scrappy.cli.utils.error_handler import ErrorCategory
-
-        error = ProviderError("Test", provider="test")
-        assert error.category == ErrorCategory.API
-
-    @pytest.mark.unit
-    def test_provider_error_rate_limit(self):
-        """ProviderError should indicate rate limiting."""
-        from scrappy.cli.exceptions import ProviderError
-
-        error = ProviderError("Rate limit exceeded", provider="gemini", rate_limited=True)
-        assert error.rate_limited is True
-
-    @pytest.mark.unit
-    def test_provider_error_timeout(self):
-        """ProviderError should indicate timeouts."""
-        from scrappy.cli.exceptions import ProviderError
-
-        error = ProviderError("Request timed out", provider="cerebras", is_timeout=True)
-        assert error.is_timeout is True
-
-    @pytest.mark.unit
-    def test_provider_error_retryable(self):
-        """ProviderError should indicate if retry is possible."""
-        from scrappy.cli.exceptions import ProviderError
-
-        # Rate limits and timeouts are typically retryable
-        error = ProviderError("Rate limit", provider="test", rate_limited=True)
-        assert error.is_retryable is True
-
-        # Auth errors are not retryable
-        error2 = ProviderError("Invalid API key", provider="test", is_auth_error=True)
-        assert error2.is_retryable is False
-
-    @pytest.mark.unit
-    def test_provider_error_stores_original_exception(self):
-        """ProviderError should wrap original exception."""
-        from scrappy.cli.exceptions import ProviderError
-
-        original = ConnectionError("Network unreachable")
-        error = ProviderError("Connection failed", provider="test", original=original)
-        assert error.original is original
-
-
 class TestFileOperationError:
     """Test FileOperationError for file system failures."""
 
@@ -398,36 +338,18 @@ class TestExceptionFormatting:
     @pytest.mark.unit
     def test_exception_to_dict_for_logging(self):
         """Exceptions should be convertible to dict for structured logging."""
-        from scrappy.cli.exceptions import ProviderError
+        from scrappy.cli.exceptions import ValidationError
 
-        error = ProviderError("Timeout", provider="openai", is_timeout=True)
+        error = ValidationError("Invalid input", field="timeout")
         error_dict = error.to_dict()
 
-        assert error_dict["message"] == "Timeout"
-        assert error_dict["provider"] == "openai"
-        assert error_dict["is_timeout"] is True
+        assert error_dict["message"] == "Invalid input"
         assert "category" in error_dict
         assert "severity" in error_dict
 
 
 class TestErrorRecoveryStrategies:
     """Test error recovery strategy support in exceptions."""
-
-    @pytest.mark.unit
-    def test_provider_error_suggests_retry_for_rate_limit(self):
-        """Rate limited errors should suggest waiting and retrying."""
-        from scrappy.cli.exceptions import ProviderError
-
-        error = ProviderError("Rate limited", provider="test", rate_limited=True)
-        assert "retry" in error.suggestion.lower() or "wait" in error.suggestion.lower()
-
-    @pytest.mark.unit
-    def test_provider_error_suggests_fallback_provider(self):
-        """Provider errors should suggest trying another provider."""
-        from scrappy.cli.exceptions import ProviderError
-
-        error = ProviderError("Failed", provider="openai")
-        assert "provider" in error.suggestion.lower() or "alternative" in error.suggestion.lower()
 
     @pytest.mark.unit
     def test_file_error_suggests_check_path(self):
@@ -445,22 +367,6 @@ class TestErrorRecoveryStrategies:
         error = ValidationError("Invalid", field="timeout", value="abc")
         assert error.suggestion is not None
         assert len(error.suggestion) > 0
-
-    @pytest.mark.unit
-    def test_exception_recovery_action_enum(self):
-        """Exceptions should suggest recovery actions."""
-        from scrappy.cli.exceptions import ProviderError, RecoveryAction
-
-        error = ProviderError("Timeout", provider="test", is_timeout=True)
-        assert error.recovery_action == RecoveryAction.RETRY
-
-    @pytest.mark.unit
-    def test_exception_recovery_action_abort_for_auth(self):
-        """Auth errors should suggest aborting."""
-        from scrappy.cli.exceptions import ProviderError, RecoveryAction
-
-        error = ProviderError("Invalid key", provider="test", is_auth_error=True)
-        assert error.recovery_action == RecoveryAction.ABORT
 
 
 class TestExceptionLogging:
@@ -485,14 +391,12 @@ class TestExceptionLogging:
     @pytest.mark.unit
     def test_exception_extra_for_logging(self):
         """Exceptions should provide extra dict for structured logging."""
-        from scrappy.cli.exceptions import ProviderError
+        from scrappy.cli.exceptions import ValidationError
 
-        error = ProviderError("Failed", provider="openai", rate_limited=True)
+        error = ValidationError("Invalid input", field="timeout")
         extra = error.logging_extra()
 
-        assert extra["error_type"] == "ProviderError"
-        assert extra["provider"] == "openai"
-        assert extra["rate_limited"] is True
+        assert extra["error_type"] == "ValidationError"
         assert "category" in extra
 
 

@@ -89,7 +89,13 @@ class TestAgentResult:
     def test_has_expected_fields(self):
         """AgentResult has all required fields."""
         field_names = {f.name for f in fields(AgentResult)}
-        assert field_names == {"success", "final_state", "error", "cancelled"}
+        assert field_names == {
+            "success",
+            "final_state",
+            "error",
+            "cancelled",
+            "suggestion",
+        }
 
 
 class TestTruncateResult:
@@ -806,3 +812,88 @@ class TestOutputCallback:
         bridge._output_callback("hello")
 
         assert app.tui_event_sink.events == [TranscriptAppendText(content="hello")]
+
+
+def make_failed_state(
+    last_error: str,
+    error_suggestion: "str | None" = None,
+) -> AgentState:
+    """Build a terminal failed AgentState for display/plumbing tests."""
+    return AgentState.create_initial("task", "/tmp").model_copy(
+        update={
+            "done": True,
+            "last_error": last_error,
+            "error_suggestion": error_suggestion,
+        }
+    )
+
+
+class TestFailureSuggestionDisplay:
+    """PR-4 Option D: the suggestion channel reaches the failed summary."""
+
+    @pytest.fixture
+    def app_and_bridge(self):
+        app = create_app_with_sink()
+        bridge = LangGraphBridge(
+            app=app,
+            bridge=Mock(),
+            output_adapter=Mock(),
+            orchestrator=Mock(),
+            tool_adapter=Mock(),
+        )
+        return app, bridge
+
+    def _transcript_text(self, app) -> str:
+        return "".join(
+            event.content
+            for event in app.tui_event_sink.events
+            if isinstance(event, TranscriptAppendText)
+        )
+
+    def test_failed_summary_renders_untruncated_suggestion_line(
+        self, app_and_bridge
+    ):
+        app, bridge = app_and_bridge
+        state = make_failed_state(
+            last_error="Rate limit exceeded for groq",
+            error_suggestion="Wait 30s or add another provider API key.",
+        )
+
+        bridge._output_completion_summary(success=False, final_state=state)
+
+        text = self._transcript_text(app)
+        assert "[failed]" in text
+        assert "  Suggestion: Wait 30s or add another provider API key.\n" in text
+
+    def test_failed_summary_has_no_suggestion_line_when_absent(
+        self, app_and_bridge
+    ):
+        app, bridge = app_and_bridge
+        state = make_failed_state(last_error="Tool execution failed")
+
+        bridge._output_completion_summary(success=False, final_state=state)
+
+        text = self._transcript_text(app)
+        assert "[failed]" in text
+        assert "Suggestion:" not in text
+
+    def test_run_agent_failure_result_carries_suggestion(
+        self, app_and_bridge, tmp_path
+    ):
+        """AgentResult.suggestion is populated from final_state.error_suggestion."""
+        app, bridge = app_and_bridge
+        final_state = make_failed_state(
+            last_error="Rate limit exceeded for groq",
+            error_suggestion="Wait 30s or add another provider API key.",
+        )
+        bridge._run_with_streaming = Mock(return_value=final_state)
+
+        with patch(
+            "scrappy.graph.agent.create_agent_runner",
+            return_value=(Mock(), Mock()),
+        ):
+            result = bridge.run_agent("task", str(tmp_path))
+
+        assert result.success is False
+        assert result.error == "Rate limit exceeded for groq"
+        assert result.suggestion == "Wait 30s or add another provider API key."

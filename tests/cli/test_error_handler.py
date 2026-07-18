@@ -835,3 +835,31 @@ class TestDebugMode:
         # API key should still be redacted even in traceback
         assert "sk-proj-" not in result
         assert "[REDACTED]" in result
+
+
+class TestInfraProviderErrorDisplay:
+    """PR-4: CLI error boundary honors infra provider-error suggestions."""
+
+    def test_handle_error_displays_infra_rate_limit_suggestion(self):
+        """handle_error surfaces the infra exception's own suggestion."""
+        from scrappy.cli.utils.error_handler import handle_error
+        from scrappy.infrastructure.exceptions import RateLimitError
+
+        io = MockIO()
+        error = RateLimitError("Rate limit exceeded for groq", retry_after=30.0)
+
+        handle_error(error, io)
+
+        output = io.get_output()
+        assert "Wait 30.0 seconds before retrying." in output
+
+    def test_get_error_suggestion_returns_infra_suggestion_verbatim(self):
+        """get_error_suggestion prefers the exception's .suggestion."""
+        from scrappy.cli.utils.error_handler import get_error_suggestion
+        from scrappy.infrastructure.exceptions import NetworkError
+
+        error = NetworkError("Could not connect to groq")
+
+        assert get_error_suggestion(error) == (
+            "Check your network connection and try again."
+        )

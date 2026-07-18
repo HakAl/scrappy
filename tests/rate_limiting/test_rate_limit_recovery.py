@@ -76,7 +76,8 @@ class TestRateLimitExceptions:
 
     def test_rate_limit_error_custom_message(self):
         error = RateLimitError("Custom rate limit message")
-        assert str(error) == "Custom rate limit message"
+        assert error.message == "Custom rate limit message"
+        assert str(error).startswith("Custom rate limit message")
 
     def test_all_providers_error_lists_attempted(self):
         error = AllProvidersRateLimitedError(

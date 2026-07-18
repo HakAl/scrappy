@@ -179,17 +179,6 @@ class TestAllProvidersRateLimitedError:
         )
         assert '1.0h' in str(error3)
 
-    def test_user_friendly_message_includes_suggestion(self):
-        """Test user_friendly_message combines message and suggestion."""
-        error = AllProvidersRateLimitedError(
-            "",
-            provider_details={'groq': {'retry_after': 60}}
-        )
-
-        friendly = error.user_friendly_message()
-        assert 'groq' in friendly
-        assert 'Suggestion' in friendly
-
     def test_compatibility_aliases_use_router_group_exhaustion(self):
         """Old public names remain aliases for router-group exhaustion."""
         assert AllProvidersRateLimitedError is RouterGroupExhaustedError
@@ -299,12 +288,12 @@ class TestTimeoutError:
         assert error.timeout_seconds == 60.0
         assert error.context['timeout_seconds'] == 60.0
 
-    def test_suggestion_mentions_network(self):
-        """Test suggestion mentions network or timeout."""
+    def test_suggestion_is_actionable(self):
+        """Test suggestion offers a concrete next step (W3 copy, PR-4)."""
         error = TimeoutError("Timeout occurred")
 
         suggestion = error.suggestion.lower()
-        assert 'network' in suggestion or 'timeout' in suggestion or 'long' in suggestion
+        assert 'try again' in suggestion or 'different provider' in suggestion
 
 
 class TestNetworkError:
@@ -455,3 +444,114 @@ class TestProviderErrorBase:
         assert error.provider_name is None
         # Should not crash when accessing context
         assert isinstance(error.context, dict)
+
+
+class TestSuggestionCopyCharacterization:
+    """Exact-output pins for every authored default suggestion string.
+
+    These pins prove suggestion copy stays byte-identical through the
+    provider-error-contract refactor. A pin update here is a declared
+    copy change, never incidental drift.
+    """
+
+    def test_authentication_default_with_provider_name(self):
+        error = AuthenticationError("Auth failed", provider_name="groq")
+
+        assert error.suggestion == (
+            "Check your API key for groq. "
+            "Ensure it is valid and has proper permissions."
+        )
+
+    def test_authentication_default_without_provider_name(self):
+        error = AuthenticationError("Auth failed")
+
+        assert error.suggestion == (
+            "Check your API key for the provider. "
+            "Ensure it is valid and has proper permissions."
+        )
+
+    def test_timeout_default(self):
+        # W3 winner (PR-4): unified with the mapper's timeout copy.
+        error = TimeoutError("Timed out")
+
+        assert error.suggestion == (
+            "The provider may be slow. Try again or use a different provider."
+        )
+
+    def test_network_default(self):
+        error = NetworkError("Network down")
+
+        assert error.suggestion == "Check your network connection and try again."
+
+    def test_provider_not_found_with_available_list(self):
+        error = ProviderNotFoundError(
+            "Provider missing",
+            available_providers=["groq", "cerebras"],
+        )
+
+        assert error.suggestion == "Available providers: groq, cerebras"
+
+    def test_provider_not_found_without_available_list(self):
+        error = ProviderNotFoundError("Provider missing")
+
+        assert error.suggestion is None
+
+    def test_rate_limit_with_wait_window(self):
+        error = RateLimitError("Rate limit exceeded", retry_after=45.5)
+
+        assert error.suggestion == "Wait 45.5 seconds before retrying."
+
+    def test_rate_limit_without_wait_window(self):
+        # W4 (PR-4): generic fallback replaces the former None.
+        error = RateLimitError("Rate limit hit")
+
+        assert error.suggestion == (
+            "Wait a few seconds before retrying, or try a different provider."
+        )
+
+    def test_router_group_suggestion_with_min_retry(self):
+        error = RouterGroupExhaustedError(
+            "Rate limited",
+            provider_details={"groq": {"retry_after": 30}},
+        )
+
+        assert error.suggestion == "Wait 30s or add another provider API key."
+
+    def test_router_group_suggestion_without_retry_windows(self):
+        error = RouterGroupExhaustedError(
+            "Rate limited",
+            attempted_providers=["groq"],
+        )
+
+        assert error.suggestion == (
+            "Wait for rate limits to reset or add more provider API keys."
+        )
+
+    def test_router_group_message_no_attempted_providers(self):
+        error = RouterGroupExhaustedError("")
+
+        assert error.message == "All providers are rate limited."
+
+    def test_router_group_message_provider_without_retry_after(self):
+        error = RouterGroupExhaustedError("", attempted_providers=["groq"])
+
+        assert error.message == "Rate limited by all providers:\n  - groq"
+
+    def test_router_group_message_provider_with_retry_after(self):
+        error = RouterGroupExhaustedError(
+            "",
+            provider_details={"groq": {"retry_after": 30}},
+        )
+
+        assert error.message == (
+            "Rate limited by all providers:\n  - groq: retry after 30s"
+        )
+
+    def test_format_time_seconds(self):
+        assert RouterGroupExhaustedError._format_time(30) == "30s"
+
+    def test_format_time_minutes(self):
+        assert RouterGroupExhaustedError._format_time(300) == "5m"
+
+    def test_format_time_hours(self):
+        assert RouterGroupExhaustedError._format_time(5400) == "1.5h"

@@ -9,11 +9,14 @@ import pytest
 from unittest.mock import Mock
 
 from scrappy.orchestrator.litellm_service import (
+    NOT_CONFIGURED_SUGGESTION,
     LiteLLMService,
+    NotConfiguredError,
     _extract_retry_after,
     _map_litellm_error,
     _map_rate_limit_error,
 )
+from scrappy.infrastructure.exceptions.enums import ErrorSeverity, RecoveryAction
 from scrappy.orchestrator.fallback_metrics import provider_fallback_metrics
 from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
 from scrappy.infrastructure.exceptions.provider_errors import (
@@ -864,3 +867,113 @@ class TestClose:
 
         assert litellm_module.aclient_session is None
         assert async_client.closed is False
+
+
+class TestMapperSuggestionCharacterization:
+    """Exact-output pins for each mapper construction site's suggestion.
+
+    One pin per _map_litellm_error branch, in predicate order. A pin
+    update here is a declared copy change, never incidental drift.
+    """
+
+    @pytest.mark.parametrize(
+        ("message", "suggestion"),
+        [
+            (
+                # W1 winner (PR-4): class default owns auth copy.
+                "401 unauthorized",
+                "Check your API key for groq. "
+                "Ensure it is valid and has proper permissions.",
+            ),
+            (
+                "402 payment required",
+                "Check billing or quota for groq.",
+            ),
+            (
+                "429 rate limit exceeded",
+                "Wait a few seconds before retrying, or try a different provider.",
+            ),
+            (
+                # W2 winner (PR-4): class default owns network copy.
+                "connection refused",
+                "Check your network connection and try again.",
+            ),
+            (
+                "request timed out",
+                "The provider may be slow. Try again or use a different provider.",
+            ),
+            (
+                "content blocked by safety filters",
+                "Try rephrasing your request to avoid triggering content filters.",
+            ),
+            (
+                "model not found",
+                "Check the model name or run '/providers' to see available models.",
+            ),
+            (
+                "503 service unavailable",
+                "The provider is experiencing issues. "
+                "Try again later or use a different provider.",
+            ),
+            (
+                "400 bad request",
+                "There may be an issue with the request format. Try a simpler prompt.",
+            ),
+            (
+                "500 internal server error",
+                "This is a provider-side issue. Try again or use a different provider.",
+            ),
+            (
+                "totally weird provider failure",
+                "Try again or use a different provider.",
+            ),
+        ],
+    )
+    def test_mapper_suggestion_per_branch(self, message, suggestion):
+        mapped = _map_litellm_error(
+            Exception(message),
+            provider="groq",
+            model="groq/llama-3.1-8b-instant",
+        )
+
+        assert mapped.suggestion == suggestion
+
+    def test_rate_limit_with_retry_after_gets_exact_wait(self):
+        """W4 (PR-4): a known Retry-After window surfaces the exact wait."""
+        import httpx
+
+        error = Exception("429 rate limit exceeded")
+        error.response = httpx.Response(
+            status_code=429,
+            headers={"Retry-After": "30"},
+        )
+
+        mapped = _map_litellm_error(
+            error,
+            provider="groq",
+            model="groq/llama-3.1-8b-instant",
+        )
+
+        assert mapped.suggestion == "Wait 30.0 seconds before retrying."
+
+
+class TestNotConfiguredErrorContract:
+    """NotConfiguredError metadata contract (PR-4 D3)."""
+
+    def test_severity_is_critical(self):
+        assert NotConfiguredError().severity is ErrorSeverity.CRITICAL
+
+    def test_recovery_action_is_abort(self):
+        assert NotConfiguredError().recovery_action is RecoveryAction.ABORT
+
+    def test_is_not_retryable(self):
+        assert NotConfiguredError().is_retryable is False
+
+    def test_explicit_suggestion_overrides_default(self):
+        error = NotConfiguredError(
+            "API key not configured for groq",
+            suggestion="Add GROQ_API_KEY and restart.",
+        )
+
+        assert error.suggestion == "Add GROQ_API_KEY and restart."
+        assert error.suggestion != NOT_CONFIGURED_SUGGESTION
