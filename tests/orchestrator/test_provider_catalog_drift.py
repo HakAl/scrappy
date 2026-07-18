@@ -69,11 +69,6 @@ class TestProviderFactsDrift:
             p.name for p in CATALOG.providers_by_setup_priority()
         ] == get_provider_priority()
 
-    def test_known_env_vars_match_api_keys_module(self):
-        from scrappy.infrastructure.config.api_keys import PROVIDER_ENV_VARS
-
-        assert list(CATALOG.known_provider_env_vars()) == PROVIDER_ENV_VARS
-
     def test_cli_allowlist_matches_provider_validator(self):
         from scrappy.cli.validators.provider import VALID_PROVIDERS
 

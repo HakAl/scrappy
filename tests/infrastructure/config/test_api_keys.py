@@ -122,7 +122,7 @@ class TestApiKeyConfigService:
     def test_load_creates_empty_config_when_no_data(self):
         """load() should create empty config when persistence has no data."""
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
 
         # Disable env migration for this test
         config = service.load(migrate_env=False)
@@ -137,7 +137,7 @@ class TestApiKeyConfigService:
                 "CEREBRAS_API_KEY": "test-key"
             }
         }
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
 
         config = service.load()
 
@@ -146,7 +146,7 @@ class TestApiKeyConfigService:
     def test_save_persists_config(self):
         """save() should persist config to storage."""
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
 
         config = ApiKeyConfig()
         config.set_key("GROQ_API_KEY", "gsk_test")
@@ -168,7 +168,7 @@ class TestApiKeyConfigService:
                 "CEREBRAS_API_KEY": "test-key"
             }
         }
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
 
         # Don't call load() explicitly
         result = service.get_key("CEREBRAS_API_KEY")
@@ -178,7 +178,7 @@ class TestApiKeyConfigService:
     def test_get_key_returns_none_for_missing(self):
         """get_key() should return None for unconfigured keys."""
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
 
         result = service.get_key("NONEXISTENT_KEY")
 
@@ -187,7 +187,7 @@ class TestApiKeyConfigService:
     def test_set_key_saves_immediately(self):
         """set_key() should save config immediately."""
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
 
         # Use a valid key (min 10 chars, no placeholders)
         service.set_key("CEREBRAS_API_KEY", "csk_abc123xyz789")
@@ -203,7 +203,7 @@ class TestApiKeyConfigService:
                 "EXISTING_KEY": "existing-value-123"
             }
         }
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
 
         # Don't call load() explicitly - use valid key
         service.set_key("NEW_KEY", "new-value-123456")
@@ -215,7 +215,7 @@ class TestApiKeyConfigService:
     def test_has_any_key_returns_false_when_empty(self):
         """has_any_key() should return False when no keys configured."""
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
 
         result = service.has_any_key(["CEREBRAS_API_KEY", "GROQ_API_KEY"])
 
@@ -225,7 +225,7 @@ class TestApiKeyConfigService:
     def test_has_any_key_returns_false_when_different_keys_configured(self):
         """has_any_key() should return False when different keys configured."""
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
         # Use valid key
         service.set_key("OTHER_KEY", "other-key-123456")
 
@@ -241,7 +241,7 @@ class TestApiKeyConfigService:
                 "GROQ_API_KEY": "test-key"
             }
         }
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
 
         # Don't call load() explicitly
         result = service.has_any_key(["CEREBRAS_API_KEY", "GROQ_API_KEY"])
@@ -258,7 +258,7 @@ class TestEnvMigration:
         monkeypatch.setenv("GROQ_API_KEY", "gsk_test_key_1234567890")
 
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=("GROQ_API_KEY",))
 
         # Load with migration
         config = service.load(migrate_env=True)
@@ -279,7 +279,7 @@ class TestEnvMigration:
                 "GROQ_API_KEY": "config_key_existing"
             }
         }
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=("GROQ_API_KEY",))
 
         # Load with migration
         config = service.load(migrate_env=True)
@@ -293,7 +293,7 @@ class TestEnvMigration:
         monkeypatch.setenv("GROQ_API_KEY", "short")
 
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=("GROQ_API_KEY",))
 
         # Load with migration
         config = service.load(migrate_env=True)
@@ -307,7 +307,7 @@ class TestEnvMigration:
         monkeypatch.setenv("GROQ_API_KEY", "gsk_test_key_1234567890")
 
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=("GROQ_API_KEY",))
 
         # Load without migration
         config = service.load(migrate_env=False)
@@ -322,7 +322,7 @@ class TestEnvMigration:
         monkeypatch.setenv("CEREBRAS_API_KEY", "csk_test_key_1234567890")
 
         persistence = InMemoryPersistence()
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
         service.load(migrate_env=False)  # Load without migration
 
         # Migrate manually
@@ -341,7 +341,7 @@ class TestEnvMigration:
                 "GROQ_API_KEY": "existing_config_key"
             }
         }
-        service = ApiKeyConfigService(persistence)
+        service = ApiKeyConfigService(persistence, provider_env_vars=())
         service.load(migrate_env=False)  # Load without migration
 
         # Migrate manually
@@ -349,18 +349,3 @@ class TestEnvMigration:
 
         # Should not count the already-existing key
         assert count == 0
-
-
-class TestCreateApiKeyService:
-    """Tests for create_api_key_service() factory function."""
-
-    def test_factory_creates_service(self):
-        """Factory should create ApiKeyConfigService instance."""
-        from scrappy.infrastructure.config.api_keys import create_api_key_service
-
-        service = create_api_key_service()
-
-        # Should be able to use service
-        assert service is not None
-        # Should lazy-load without errors
-        service.get_key("SOME_KEY")

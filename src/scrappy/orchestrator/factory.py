@@ -16,7 +16,7 @@ from ..infrastructure.logging import StructuredLogger
 
 from .provider_types import ProviderRegistry
 from ..context import CodebaseContext
-from ..infrastructure.config.api_keys import create_api_key_service
+from .api_key_composition import create_api_key_service
 
 from .cache import ResponseCache
 from .rate_limiting import (

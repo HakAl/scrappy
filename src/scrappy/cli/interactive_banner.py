@@ -10,11 +10,9 @@ from typing import TYPE_CHECKING, Optional
 from rich.text import Text
 
 from scrappy import __version__
-from scrappy.infrastructure.config.api_keys import (
-    ApiKeyConfigServiceProtocol,
-    create_api_key_service,
-)
+from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from scrappy.infrastructure.paths import ScrappyPathProvider
+from scrappy.orchestrator.api_key_composition import create_api_key_service
 from scrappy.orchestrator.litellm_config import get_configured_models
 from scrappy.orchestrator.provider_definitions import AGENT_PROVIDER_GUIDANCE
 from scrappy.sandbox.docker_executor import DockerExecutor

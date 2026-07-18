@@ -47,7 +47,7 @@ async def test_restore_mouse_support_delegates_to_policy_enable() -> None:
     with (
         patch.object(app, "_check_and_migrate_providers", return_value=(True, 0)),
         patch.object(app, "_show_main_screen"),
-        patch("scrappy.infrastructure.config.api_keys.create_api_key_service") as api_keys,
+        patch("scrappy.cli.textual.app.create_api_key_service") as api_keys,
         patch("scrappy.orchestrator.mock_llm_service.is_mock_mode_enabled", return_value=True),
     ):
         api_keys.return_value.is_disclaimer_acknowledged.return_value = True

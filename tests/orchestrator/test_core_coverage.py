@@ -304,7 +304,7 @@ class TestStatus:
 
         with patch("scrappy.orchestrator.litellm_config.get_configured_models") as mock_models, \
              patch("scrappy.orchestrator.litellm_config.get_available_groups") as mock_groups, \
-             patch("scrappy.infrastructure.config.api_keys.create_api_key_service"):
+             patch("scrappy.orchestrator.core.create_api_key_service"):
             mock_models.return_value = []
             mock_groups.return_value = ["fast", "quality"]
 

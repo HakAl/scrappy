@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, Optional, Tuple, Callable, TYPE_CHECKING
 
+from scrappy.orchestrator.api_key_composition import create_api_key_service
 from scrappy.orchestrator.provider_catalog import build_default_catalog
 from scrappy.orchestrator.provider_definitions import PROVIDERS, SETUP_PROVIDER_GUIDANCE
 from scrappy.infrastructure.config.api_keys import (
     ApiKeyConfigServiceProtocol,
     ApiKeyValidationError,
-    create_api_key_service,
 )
 from scrappy.infrastructure.validation import validate_api_key
 from scrappy.orchestrator.protocols import KeyValidatorProtocol

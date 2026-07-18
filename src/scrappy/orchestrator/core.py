@@ -48,7 +48,7 @@ from .protocols import (
 )
 from .provider_types import ProviderAttempt
 from .litellm_config import get_configured_models
-from ..infrastructure.config.api_keys import create_api_key_service
+from .api_key_composition import create_api_key_service
 from ..infrastructure.logging import get_logger
 
 
@@ -913,7 +913,6 @@ class AgentOrchestrator:
     def status(self) -> dict:
         """Get current status of all providers and model groups."""
         from .litellm_config import get_configured_models, get_available_groups
-        from ..infrastructure.config.api_keys import create_api_key_service
 
         # Get LiteLLM model group info
         api_key_service = create_api_key_service()
