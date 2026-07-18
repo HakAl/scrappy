@@ -864,3 +864,70 @@ class TestClose:
 
         assert litellm_module.aclient_session is None
         assert async_client.closed is False
+
+
+class TestMapperSuggestionCharacterization:
+    """Exact-output pins for each mapper construction site's suggestion.
+
+    One pin per _map_litellm_error branch, in predicate order. A pin
+    update here is a declared copy change, never incidental drift.
+    """
+
+    @pytest.mark.parametrize(
+        ("message", "suggestion"),
+        [
+            (
+                "401 unauthorized",
+                "Check your API key for groq is correct in .env file.",
+            ),
+            (
+                "402 payment required",
+                "Check billing or quota for groq.",
+            ),
+            (
+                "429 rate limit exceeded",
+                "Wait a few seconds before retrying, or try a different provider.",
+            ),
+            (
+                "connection refused",
+                "Check your internet connection and try again.",
+            ),
+            (
+                "request timed out",
+                "The provider may be slow. Try again or use a different provider.",
+            ),
+            (
+                "content blocked by safety filters",
+                "Try rephrasing your request to avoid triggering content filters.",
+            ),
+            (
+                "model not found",
+                "Check the model name or run '/providers' to see available models.",
+            ),
+            (
+                "503 service unavailable",
+                "The provider is experiencing issues. "
+                "Try again later or use a different provider.",
+            ),
+            (
+                "400 bad request",
+                "There may be an issue with the request format. Try a simpler prompt.",
+            ),
+            (
+                "500 internal server error",
+                "This is a provider-side issue. Try again or use a different provider.",
+            ),
+            (
+                "totally weird provider failure",
+                "Try again or use a different provider.",
+            ),
+        ],
+    )
+    def test_mapper_suggestion_per_branch(self, message, suggestion):
+        mapped = _map_litellm_error(
+            Exception(message),
+            provider="groq",
+            model="groq/llama-3.1-8b-instant",
+        )
+
+        assert mapped.suggestion == suggestion
