@@ -54,6 +54,10 @@ from .types import StreamChunk, ToolCallFragment
 from .litellm_config import MODEL_METADATA, build_model_list
 from .fallback_metrics import provider_fallback_metrics
 from .model_selection import MODEL_GROUPS
+from .provider_error_classification import (
+    LiteLLMErrorRule,
+    classify_litellm_error,
+)
 from .retry_after import extract_retry_after as _extract_retry_after
 
 if TYPE_CHECKING:
@@ -285,15 +289,14 @@ def _map_litellm_error(
     Returns:
         A mapped exception with user-friendly message and suggestion
     """
-    error_msg = str(error).lower()
     error_type = type(error).__name__
 
     # Provider name for messages
     provider_display = provider or "the provider"
     retry_after = _extract_retry_after(error, now=now)
+    rule = classify_litellm_error(error)
 
-    # Authentication errors
-    if "auth" in error_type.lower() or "401" in str(error) or "unauthorized" in error_msg:
+    if rule is LiteLLMErrorRule.AUTH:
         return AuthenticationError(
             f"Authentication failed for {provider_display}",
             provider_name=provider,
@@ -303,13 +306,7 @@ def _map_litellm_error(
             suggestion=f"Check your API key for {provider_display} is correct in .env file."
         )
 
-    # Payment/account errors
-    if (
-        "402" in str(error)
-        or "payment" in error_msg
-        or "billing" in error_msg
-        or "insufficient_quota" in error_msg
-    ):
+    if rule is LiteLLMErrorRule.PAYMENT:
         return ProviderExecutionError(
             f"Account quota or billing issue for {provider_display}",
             provider_name=provider,
@@ -319,8 +316,7 @@ def _map_litellm_error(
             suggestion=f"Check billing or quota for {provider_display}."
         )
 
-    # Rate limiting - more specific than base RateLimitError
-    if "rate" in error_type.lower() or "429" in str(error) or "rate limit" in error_msg or "quota" in error_msg:
+    if rule is LiteLLMErrorRule.RATE_LIMIT:
         return RateLimitError(
             f"Rate limit exceeded for {provider_display}",
             provider_name=provider,
@@ -330,8 +326,7 @@ def _map_litellm_error(
             suggestion="Wait a few seconds before retrying, or try a different provider."
         )
 
-    # Connection errors
-    if "connection" in error_type.lower() or "connection" in error_msg or "unreachable" in error_msg:
+    if rule is LiteLLMErrorRule.CONNECTION:
         return NetworkError(
             f"Could not connect to {provider_display}",
             provider_name=provider,
@@ -341,8 +336,7 @@ def _map_litellm_error(
             suggestion="Check your internet connection and try again."
         )
 
-    # Timeout errors
-    if "timeout" in error_type.lower() or "timeout" in error_msg or "timed out" in error_msg:
+    if rule is LiteLLMErrorRule.TIMEOUT:
         return ProviderTimeoutError(
             f"Request to {provider_display} timed out",
             provider_name=provider,
@@ -352,8 +346,7 @@ def _map_litellm_error(
             suggestion="The provider may be slow. Try again or use a different provider."
         )
 
-    # Content filtering / safety errors
-    if "content" in error_msg and ("filter" in error_msg or "blocked" in error_msg or "safety" in error_msg):
+    if rule is LiteLLMErrorRule.CONTENT_FILTER:
         return ProviderExecutionError(
             f"Content was blocked by {provider_display}'s safety filters",
             provider_name=provider,
@@ -363,11 +356,7 @@ def _map_litellm_error(
             suggestion="Try rephrasing your request to avoid triggering content filters."
         )
 
-    # Model not found
-    if (
-        "deprecated" in error_msg
-        or ("model" in error_msg and ("not found" in error_msg or "unknown" in error_msg or "invalid" in error_msg))
-    ):
+    if rule is LiteLLMErrorRule.MODEL_NOT_FOUND:
         return ProviderExecutionError(
             f"Model '{model}' not available from {provider_display}",
             provider_name=provider,
@@ -377,8 +366,7 @@ def _map_litellm_error(
             suggestion="Check the model name or run '/providers' to see available models."
         )
 
-    # Service unavailable
-    if "503" in str(error) or "service unavailable" in error_msg or "overloaded" in error_msg:
+    if rule is LiteLLMErrorRule.SERVICE_UNAVAILABLE:
         return ProviderExecutionError(
             f"{provider_display} is temporarily unavailable",
             provider_name=provider,
@@ -388,8 +376,7 @@ def _map_litellm_error(
             suggestion="The provider is experiencing issues. Try again later or use a different provider."
         )
 
-    # Bad request (400) - often malformed input
-    if "400" in str(error) or "bad request" in error_msg:
+    if rule is LiteLLMErrorRule.BAD_REQUEST:
         _record_unknown_classification(
             error_type=error_type,
             provider=provider,
@@ -405,8 +392,7 @@ def _map_litellm_error(
             suggestion="There may be an issue with the request format. Try a simpler prompt."
         )
 
-    # Server errors (500)
-    if "500" in str(error) or "internal server error" in error_msg:
+    if rule is LiteLLMErrorRule.SERVER_ERROR:
         return ProviderExecutionError(
             f"{provider_display} experienced an internal error",
             provider_name=provider,

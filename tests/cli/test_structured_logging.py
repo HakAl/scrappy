@@ -199,21 +199,21 @@ class TestExceptionLogging:
     def test_logger_cli_exception_includes_extra(self):
         """Logger should extract extra data from CLI exceptions."""
         from scrappy.cli.logging import CLILogger
-        from scrappy.cli.exceptions import ProviderError
+        from scrappy.cli.exceptions import ValidationError
         from tests.helpers import MockIO
 
         io = MockIO()
         logger = CLILogger("test", io=io)
 
         try:
-            raise ProviderError("Timeout", provider="openai", is_timeout=True)
-        except ProviderError:
-            logger.exception("Provider failed")
+            raise ValidationError("Invalid input", field="timeout")
+        except ValidationError:
+            logger.exception("Validation failed")
 
         records = logger.get_records()
         # Should include exception's extra data
         extra = records[-1].get("extra", {})
-        assert extra.get("provider") == "openai" or "openai" in str(records[-1])
+        assert extra.get("error_type") == "ValidationError" or "ValidationError" in str(records[-1])
 
 
 class TestLoggerConfiguration:

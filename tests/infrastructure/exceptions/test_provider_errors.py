@@ -179,17 +179,6 @@ class TestAllProvidersRateLimitedError:
         )
         assert '1.0h' in str(error3)
 
-    def test_user_friendly_message_includes_suggestion(self):
-        """Test user_friendly_message combines message and suggestion."""
-        error = AllProvidersRateLimitedError(
-            "",
-            provider_details={'groq': {'retry_after': 60}}
-        )
-
-        friendly = error.user_friendly_message()
-        assert 'groq' in friendly
-        assert 'Suggestion' in friendly
-
     def test_compatibility_aliases_use_router_group_exhaustion(self):
         """Old public names remain aliases for router-group exhaustion."""
         assert AllProvidersRateLimitedError is RouterGroupExhaustedError

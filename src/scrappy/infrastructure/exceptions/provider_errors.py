@@ -16,6 +16,15 @@ from .enums import (
     RecoveryAction
 )
 from .failure_kinds import FailureKind
+from .suggestions import (
+    AUTH_SUGGESTION_TEMPLATE,
+    NETWORK_SUGGESTION,
+    PROVIDER_NOT_FOUND_TEMPLATE,
+    RATE_LIMIT_WAIT_TEMPLATE,
+    TIMEOUT_SUGGESTION,
+    format_wait_time,
+    router_group_suggestion,
+)
 
 
 class ProviderError(BaseError):
@@ -92,7 +101,7 @@ class RateLimitError(ProviderError, RetryableError):
         # Add helpful suggestion
         suggestion = kwargs.pop('suggestion', None)
         if not suggestion and resolved_retry_after:
-            suggestion = f"Wait {resolved_retry_after:.1f} seconds before retrying."
+            suggestion = RATE_LIMIT_WAIT_TEMPLATE.format(seconds=resolved_retry_after)
 
         super().__init__(
             message,
@@ -192,31 +201,12 @@ class RouterGroupExhaustedError(ProviderError, NonRetryableError):
                 if min_retry is None or retry_after < min_retry:
                     min_retry = retry_after
 
-        if min_retry is not None:
-            return f"Wait {self._format_time(min_retry)} or add another provider API key."
-        return "Wait for rate limits to reset or add more provider API keys."
+        return router_group_suggestion(min_retry)
 
     @staticmethod
     def _format_time(seconds: float) -> str:
         """Format seconds into human-readable time."""
-        if seconds < 60:
-            return f"{int(seconds)}s"
-        elif seconds < 3600:
-            minutes = int(seconds / 60)
-            return f"{minutes}m"
-        else:
-            hours = seconds / 3600
-            return f"{hours:.1f}h"
-
-    def user_friendly_message(self) -> str:
-        """Get complete user-friendly message with suggestion.
-
-        Returns formatted message suitable for display to users.
-        """
-        parts = [str(self)]
-        if self.suggestion:
-            parts.append(f"Suggestion: {self.suggestion}")
-        return "\n".join(parts)
+        return format_wait_time(seconds)
 
 
 # Backward-compatible public aliases. New code should use
@@ -255,7 +245,7 @@ class ProviderNotFoundError(NonRetryableError):
         suggestion = kwargs.pop('suggestion', None)
         if not suggestion and available_providers:
             providers_str = ", ".join(available_providers)
-            suggestion = f"Available providers: {providers_str}"
+            suggestion = PROVIDER_NOT_FOUND_TEMPLATE.format(providers=providers_str)
 
         super().__init__(
             message,
@@ -294,9 +284,8 @@ class AuthenticationError(ProviderError, NonRetryableError):
 
         suggestion = kwargs.pop('suggestion', None)
         if not suggestion:
-            suggestion = (
-                f"Check your API key for {provider_name or 'the provider'}. "
-                "Ensure it is valid and has proper permissions."
+            suggestion = AUTH_SUGGESTION_TEMPLATE.format(
+                provider=provider_name or 'the provider'
             )
 
         super().__init__(
@@ -338,7 +327,7 @@ class TimeoutError(ProviderError, RetryableError):
 
         suggestion = kwargs.pop('suggestion', None)
         if not suggestion:
-            suggestion = "The request took too long. Try again or check network connection."
+            suggestion = TIMEOUT_SUGGESTION
 
         super().__init__(
             message,
@@ -374,7 +363,7 @@ class NetworkError(ProviderError, RetryableError):
         """
         suggestion = kwargs.pop('suggestion', None)
         if not suggestion:
-            suggestion = "Check your network connection and try again."
+            suggestion = NETWORK_SUGGESTION
 
         super().__init__(
             message,

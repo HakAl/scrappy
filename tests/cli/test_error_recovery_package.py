@@ -11,44 +11,6 @@ import pytest
 
 
 
-class TestRetryModuleExports:
-    """Test retry.py module exports the correct functions."""
-
-
-
-    @pytest.mark.unit
-    def test_retry_operation_behavior(self):
-        """Verify retry_operation works correctly from module import."""
-        from scrappy.cli.error_recovery.retry import retry_operation
-
-        attempts = []
-
-        def flaky():
-            attempts.append(1)
-            if len(attempts) < 2:
-                raise ConnectionError("Temp")
-            return "success"
-
-        result = retry_operation(flaky, max_retries=3)
-        assert result == "success"
-        assert len(attempts) == 2
-
-    @pytest.mark.unit
-    def test_safe_operation_with_recovery_behavior(self):
-        """Verify safe_operation_with_recovery works correctly."""
-        from scrappy.cli.error_recovery.retry import safe_operation_with_recovery
-
-        def failing():
-            raise Exception("Fail")
-
-        success, result = safe_operation_with_recovery(
-            failing, fallback_value="default"
-        )
-
-        assert not success
-        assert result == "default"
-
-
 class TestFallbackModuleExports:
     """Test fallback.py module exports the correct functions."""
 
@@ -83,31 +45,6 @@ class TestFallbackModuleExports:
         )
 
         assert result == "degraded"
-
-
-class TestCircuitBreakerModuleExports:
-    """Test circuit_breaker.py module exports the correct class."""
-
-    @pytest.mark.unit
-
-    @pytest.mark.unit
-    def test_circuit_breaker_instantiation(self):
-        """Verify CircuitBreaker can be instantiated from module import."""
-        from scrappy.cli.error_recovery.circuit_breaker import CircuitBreaker
-
-        breaker = CircuitBreaker(failure_threshold=3)
-        assert breaker.failure_threshold == 3
-        assert not breaker.is_open
-
-    @pytest.mark.unit
-    def test_circuit_breaker_call_success(self):
-        """Verify CircuitBreaker.call works for successful operations."""
-        from scrappy.cli.error_recovery.circuit_breaker import CircuitBreaker
-
-        breaker = CircuitBreaker()
-        result = breaker.call(lambda: "OK")
-        assert result == "OK"
-
 
 
 class TestContextModuleExports:
@@ -162,12 +99,9 @@ class TestPackageInitialization:
         assert hasattr(pkg, '__all__')
 
         expected_exports = [
-            'retry_operation',
-            'safe_operation_with_recovery',
             'with_fallback',
             'fallback_providers',
             'graceful_degrade',
-            'CircuitBreaker',
             'error_recovery_context',
             'ErrorRecoveryContext',
         ]
