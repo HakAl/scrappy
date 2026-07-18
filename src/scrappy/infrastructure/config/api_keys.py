@@ -382,7 +382,7 @@ class ApiKeyConfigService:
         if self._config is None:
             return 0
 
-        env_vars = env_vars or self._provider_env_vars
+        env_vars = self._provider_env_vars if env_vars is None else env_vars
         migrated = []
         skipped = []
 

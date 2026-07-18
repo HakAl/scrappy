@@ -349,3 +349,16 @@ class TestEnvMigration:
 
         # Should not count the already-existing key
         assert count == 0
+
+    def test_explicit_empty_override_migrates_nothing(self, monkeypatch):
+        """_migrate_from_env(()) must not fall back to constructor defaults."""
+        monkeypatch.setenv("GROQ_API_KEY", "gsk_test_key_1234567890")
+
+        persistence = InMemoryPersistence()
+        service = ApiKeyConfigService(persistence, provider_env_vars=("GROQ_API_KEY",))
+        service.load(migrate_env=False)
+
+        count = service._migrate_from_env(())
+
+        assert count == 0
+        assert service.get_key("GROQ_API_KEY") is None
