@@ -1446,26 +1446,6 @@ class AgentOrchestrator:
         ):
             yield chunk
 
-    def delegate_smart(
-        self,
-        prompt: str,
-        selection_type: ModelSelectionType = ModelSelectionType.FAST,
-        **kwargs
-    ) -> LLMResponse:
-        """
-        Delegate with automatic provider/model selection.
-
-        Args:
-            prompt: The prompt to send
-            selection_type: What kind of model to use
-            **kwargs: Additional arguments for delegate()
-
-        Returns:
-            LLMResponse from selected provider
-        """
-        provider_name, model = self.provider_selector.get_model(selection_type)
-        return self.delegate(provider_name, prompt, model=model, **kwargs)
-
     def batch_delegate(self, tasks: list[dict], provider_name: str = 'groq') -> list[LLMResponse]:
         """Process multiple tasks with same provider."""
         return self.delegation_manager.delegate_batch(tasks, provider_name)
@@ -1600,32 +1580,6 @@ class AgentOrchestrator:
             tasks, provider_name, max_concurrent
         )
 
-    async def multi_provider_query_async(
-        self,
-        prompt: str,
-        providers: list[str] = None,
-        **kwargs
-    ) -> dict[str, tuple]:
-        """
-        Query multiple providers in parallel for the same prompt.
-
-        This intentionally bypasses orchestrator-level model fallback because
-        each provider is queried as an independent comparison target.
-
-        Useful for getting different perspectives or comparing outputs.
-
-        Args:
-            prompt: The prompt to send to all providers
-            providers: List of provider names (defaults to all available)
-            **kwargs: Additional arguments passed to delegate_async
-
-        Returns:
-            Dict mapping provider name to (LLMResponse, task_record) tuple
-        """
-        return await self.delegation_manager.multi_provider_query_async(
-            prompt, providers, **kwargs
-        )
-
     # Usage and Cache Statistics (delegates to UsageReporter)
 
     def get_usage_report(self) -> dict:
@@ -1736,10 +1690,6 @@ class AgentOrchestrator:
     def reset_rate_tracking(self, provider_name: Optional[str] = None):
         """Reset rate tracking data."""
         self.rate_tracker.reset_rate_tracking(provider_name)
-
-    def recommend_provider(self, requirements: dict) -> str:
-        """Recommend best provider based on requirements."""
-        return self.provider_selector.recommend(requirements)
 
 
 def create_orchestrator() -> AgentOrchestrator:

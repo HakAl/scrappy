@@ -11,7 +11,7 @@ Selection logic is now handled by:
 """
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 from .model_selection import ModelSelectionType, SELECTION_TYPE_TO_GROUP
 from .output import BaseOutputProtocol, ConsoleOutput
@@ -151,47 +151,6 @@ class ProviderSelector:
 
         self._log(f"Mapped to model group: {group}", "SELECTED")
         return (group, None)
-
-    def get_provider_for_fallback(
-        self,
-        exclude: Optional[list[str]] = None,
-        selection_type: Optional[ModelSelectionType] = None,
-        min_context: int = 0
-    ) -> Optional[str]:
-        """
-        Get a fallback provider.
-
-        DEPRECATED: LiteLLM Router handles fallback internally.
-        Returns the model group for compatibility.
-
-        Args:
-            exclude: List of provider names to exclude (ignored)
-            selection_type: Optional selection type (used to determine group)
-            min_context: Minimum context length required (ignored, baked into groups)
-
-        Returns:
-            Model group name ("fast" or "quality")
-        """
-        self._log("Fallback requested - LiteLLM Router handles this internally", "INFO")
-
-        if selection_type:
-            group = SELECTION_TYPE_TO_GROUP.get(selection_type, "fast")
-        else:
-            group = "fast"
-
-        return group
-
-    def select_for_planning(self) -> Tuple[str, None]:
-        """
-        Select model group for planning/agent tasks.
-
-        DEPRECATED: Use setup_brain() or pass "instruct" directly.
-
-        Returns:
-            Tuple of ("instruct", None) - instruction-tuned models for planning
-        """
-        self._log("Planning tasks use instruct group", "SELECTED")
-        return ("instruct", None)
 
     def recommend(self, requirements: dict) -> str:
         """

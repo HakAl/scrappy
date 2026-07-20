@@ -209,37 +209,6 @@ class DelegationManagerProtocol(Protocol):
         """
         ...
 
-    async def multi_provider_query_async(
-        self,
-        prompt: str,
-        providers: list[str],
-        model: Optional[str] = None,
-        system_prompt: Optional[str] = None,
-        max_tokens: int = DEFAULT_MAX_TOKENS,
-        temperature: float = DEFAULT_TEMPERATURE,
-        **kwargs: Any,
-    ) -> dict[str, tuple]:
-        """
-        Query multiple providers in parallel for the same prompt.
-
-        Args:
-            prompt: The prompt to send to all providers
-            providers: List of provider names to query
-            model: Specific model (optional)
-            system_prompt: System prompt (optional)
-            max_tokens: Maximum tokens in response
-            temperature: Sampling temperature
-            **kwargs: Additional arguments passed to requests
-
-        Returns:
-            Dict mapping provider name to (LLMResponse, task_record) tuple.
-            Failed providers are excluded from results.
-
-        Raises:
-            ValueError: If providers list is empty
-        """
-        ...
-
 
 @runtime_checkable
 class TaskExecutorProtocol(Protocol):

@@ -130,14 +130,6 @@ class BatchSchedulerProtocol(Protocol):
         """Execute multiple requests in parallel."""
         ...
 
-    async def execute_multi_provider(
-        self,
-        request: LLMRequest,
-        providers: list[str],
-    ) -> dict[str, tuple[Any, dict]]:
-        """Execute same request across multiple providers in parallel."""
-        ...
-
 
 @runtime_checkable
 class Orchestrator(Protocol):

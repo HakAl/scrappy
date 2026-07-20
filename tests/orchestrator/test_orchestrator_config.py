@@ -57,39 +57,6 @@ class TestProviderSelectorModelGroups:
         assert model is None
 
 
-class TestFallbackModelGroups:
-    """Tests for fallback returning model groups."""
-
-    def test_fallback_returns_fast_by_default(self):
-        """get_provider_for_fallback() returns 'fast' by default."""
-        selector = ProviderSelector()
-
-        result = selector.get_provider_for_fallback()
-
-        assert result == "fast"
-
-    def test_fallback_with_chat_selection_type(self):
-        """get_provider_for_fallback() returns 'chat' for chat selection."""
-        selector = ProviderSelector()
-
-        result = selector.get_provider_for_fallback(
-            selection_type=ModelSelectionType.CHAT
-        )
-
-        assert result == "chat"
-
-    def test_fallback_ignores_exclude_list(self):
-        """get_provider_for_fallback() ignores exclude - LiteLLM handles fallback."""
-        selector = ProviderSelector()
-
-        # Exclude list is ignored - LiteLLM Router handles fallback internally
-        result = selector.get_provider_for_fallback(
-            exclude=["cerebras", "groq", "gemini"]
-        )
-
-        assert result in ("fast", "chat", "instruct")
-
-
 class TestTaskPreferencesRegression:
     """
     Regression tests for task-based provider preferences.

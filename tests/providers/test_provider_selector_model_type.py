@@ -17,14 +17,6 @@ from scrappy.orchestrator.model_selection import ModelSelectionType, SELECTION_T
 class TestProviderSelectorInstructModels:
     """Test instruction-tuned model selection via model groups."""
 
-    def test_select_for_planning_returns_instruct_group(self):
-        """Planning tasks return 'instruct' model group (contains instruction-tuned models)."""
-        selector = ProviderSelector()
-        group, model = selector.select_for_planning()
-
-        assert group == "instruct"
-        assert model is None  # Router picks actual model
-
     def test_instruct_selection_type_returns_instruct_group(self):
         """INSTRUCT selection type maps to 'instruct' group."""
         selector = ProviderSelector()
@@ -32,15 +24,6 @@ class TestProviderSelectorInstructModels:
 
         assert group == "instruct"
         assert model is None
-
-    def test_select_for_planning_logs_decision(self):
-        """Should log the model selection decision."""
-        selector = ProviderSelector(verbose=True)
-        selector.select_for_planning()
-
-        log = selector.get_selection_log()
-        assert len(log) > 0
-        assert any("planning" in entry.lower() or "instruct" in entry.lower() for entry in log)
 
 
 class TestProviderSelectorModelGroups:

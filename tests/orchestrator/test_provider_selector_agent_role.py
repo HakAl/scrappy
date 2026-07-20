@@ -112,65 +112,6 @@ class TestSetupBrainModelGroup:
         assert any("brain" in entry.lower() for entry in log)
 
 
-class TestSelectForPlanningModelGroup:
-    """Tests for select_for_planning() returning model groups."""
-
-    def test_select_for_planning_returns_instruct_group(self):
-        """select_for_planning() returns 'instruct' group."""
-        selector = ProviderSelector()
-
-        group, model = selector.select_for_planning()
-
-        assert group == "instruct"
-        assert model is None  # Router picks actual model
-
-    def test_select_for_planning_logs_selection(self):
-        """select_for_planning() logs the selection decision."""
-        selector = ProviderSelector(verbose=True)
-
-        selector.select_for_planning()
-
-        log = selector.get_selection_log()
-        assert len(log) > 0
-        assert any("planning" in entry.lower() or "instruct" in entry.lower() for entry in log)
-
-
-class TestGetProviderForFallbackModelGroup:
-    """Tests for get_provider_for_fallback() returning model groups."""
-
-    def test_fallback_returns_fast_by_default(self):
-        """get_provider_for_fallback() returns 'fast' by default."""
-        selector = ProviderSelector()
-
-        result = selector.get_provider_for_fallback()
-
-        assert result == "fast"
-
-    def test_fallback_returns_chat_for_chat_selection(self):
-        """get_provider_for_fallback() returns 'chat' for chat selection type."""
-        from scrappy.orchestrator.model_selection import ModelSelectionType
-
-        selector = ProviderSelector()
-
-        result = selector.get_provider_for_fallback(
-            selection_type=ModelSelectionType.CHAT
-        )
-
-        assert result == "chat"
-
-    def test_fallback_ignores_exclude_list(self):
-        """get_provider_for_fallback() ignores exclude list (LiteLLM handles fallback)."""
-        selector = ProviderSelector()
-
-        # Exclude list should be ignored - LiteLLM Router handles fallback
-        result = selector.get_provider_for_fallback(
-            exclude=["cerebras", "groq", "gemini"]
-        )
-
-        # Should still return a valid group
-        assert result in ("fast", "chat", "instruct")
-
-
 class TestRecommendModelGroup:
     """Tests for recommend() returning model groups."""
 

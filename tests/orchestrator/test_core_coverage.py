@@ -11,7 +11,6 @@ from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.output import NullOutput
 from scrappy.orchestrator.memory import WorkingMemory
 from scrappy.orchestrator.provider_types import LLMResponse
-from scrappy.orchestrator.model_selection import ModelSelectionType
 from scrappy.infrastructure.exceptions import (
     RateLimitError,
 )
@@ -51,9 +50,6 @@ class MockDelegationManager:
 
     async def batch_delegate_async(self, tasks, provider_name, max_concurrent):
         return [self.delegate_response for _ in tasks]
-
-    async def multi_provider_query_async(self, prompt, providers, **kwargs):
-        return {"mock": (self.delegate_response, self.delegate_task_record)}
 
 
 class MockProviderSelector:
@@ -371,17 +367,6 @@ class TestTaskExecutionMethods:
 class TestProviderSelection:
     """Tests for provider selection methods."""
 
-    def test_get_recommended_provider_returns_provider(self, mock_orchestrator):
-        """get_recommended_provider returns a provider name."""
-        result = mock_orchestrator.get_recommended_provider(ModelSelectionType.FAST)
-        assert result == "mock-provider"
-
-    def test_get_recommended_provider_returns_none_on_error(self, mock_orchestrator):
-        """get_recommended_provider returns None when no providers available."""
-        mock_orchestrator.provider_selector.get_model = Mock(side_effect=RuntimeError)
-        result = mock_orchestrator.get_recommended_provider(ModelSelectionType.FAST)
-        assert result is None
-
     def test_is_rate_limited_delegates(self, mock_orchestrator):
         """is_rate_limited delegates to rate tracker."""
         result = mock_orchestrator.is_rate_limited("mock")
@@ -450,18 +435,6 @@ class TestDelegateStructured:
         assert result == {"result": "structured"}
 
 
-class TestDelegateSmart:
-    """Tests for delegate_smart() method."""
-
-    def test_delegate_smart_uses_provider_selector(self, mock_orchestrator):
-        """delegate_smart uses provider selector for model selection."""
-        response = mock_orchestrator.delegate_smart(
-            prompt="test",
-            selection_type=ModelSelectionType.FAST
-        )
-        assert response.content == "mock response"
-
-
 class TestBatchDelegate:
     """Tests for batch_delegate() method."""
 
@@ -503,15 +476,6 @@ class TestAsyncMethods:
             tasks, provider_name="mock", max_concurrent=5
         )
         assert len(results) == 2
-
-    @pytest.mark.asyncio
-    async def test_multi_provider_query_async(self, mock_orchestrator):
-        """multi_provider_query_async queries multiple providers."""
-        result = await mock_orchestrator.multi_provider_query_async(
-            prompt="test",
-            providers=["mock"]
-        )
-        assert "mock" in result
 
 
 class TestUsageAndCacheMethods:
@@ -579,8 +543,3 @@ class TestRateLimitMethods:
         """check_rate_limit_warnings delegates to rate tracker."""
         result = mock_orchestrator.check_rate_limit_warnings()
         assert result == []
-
-    def test_recommend_provider_delegates(self, mock_orchestrator):
-        """recommend_provider delegates to provider selector."""
-        result = mock_orchestrator.recommend_provider({"speed": "fast"})
-        assert result == "mock-provider"
