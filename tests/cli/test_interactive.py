@@ -1,10 +1,15 @@
 """Tests for InteractiveMode chat routing behavior."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 from scrappy.cli.interactive import InteractiveMode
 from scrappy.cli.io_interface import TestIO as CLIIOFixture
+from scrappy.orchestrator.core import AgentOrchestrator
+from scrappy.orchestrator.memory import WorkingMemory
+from scrappy.orchestrator.provider_selector import ProviderSelector
+from scrappy.orchestrator.session import SessionManager
 
 
 class MockTheme:
@@ -13,6 +18,8 @@ class MockTheme:
     text = "white"
     error = "red"
     warning = "yellow"
+    success = "green"
+    primary = "blue"
 
 
 def create_mode() -> tuple[InteractiveMode, CLIIOFixture, Mock]:
@@ -135,3 +142,56 @@ def test_process_via_langgraph_failure_without_suggestion_has_no_line():
 
     assert result == "Error: Tool execution failed"
     assert "Suggestion:" not in result
+
+
+def test_handle_eof_autosave_persists_real_conversation_history(tmp_path):
+    """EOF autosave writes the actual conversation history to disk (PR-5 pin).
+
+    The EOF closure passes session_context.conversation_history through to
+    orchestrator.save_session, so the saved payload carries the real messages.
+    Asserts on the saved content, not the call shape, so it survives seam
+    rework in commit 3.
+    """
+    io = CLIIOFixture()
+    io.theme = MockTheme()
+    history = [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "hi there"},
+    ]
+    orchestrator = AgentOrchestrator(
+        output=Mock(),
+        registry=Mock(),
+        cache=Mock(),
+        rate_tracker=Mock(),
+        working_memory=WorkingMemory(),
+        session_manager=SessionManager(tmp_path),
+        provider_selector=ProviderSelector(),
+        usage_reporter=Mock(),
+        status_reporter=Mock(),
+        task_executor=Mock(),
+        context_manager=Mock(),
+        delegation_manager=Mock(),
+        background_manager=Mock(),
+    )
+    session_context = Mock()
+    session_context.auto_save = True
+    session_context.conversation_history = history
+
+    mode = InteractiveMode(
+        io=io,
+        orchestrator=orchestrator,
+        session_context=session_context,
+        state_manager=Mock(),
+        input_handler=Mock(),
+        command_router=Mock(),
+        display=Mock(),
+        tasks=Mock(),
+        logger=Mock(),
+        theme=MockTheme(),
+    )
+
+    mode._handle_eof()
+
+    saved = json.loads((tmp_path / ".scrappy" / "session.json").read_text())
+    assert saved["conversation_history"] == history
+    assert "Session saved to:" in io.get_output()

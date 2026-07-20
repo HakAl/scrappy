@@ -4,6 +4,8 @@ Tests for CommandRouter.
 Tests command routing, handler dispatch, and individual command handlers.
 """
 
+import json
+
 import pytest
 from unittest.mock import Mock, patch
 from pathlib import Path
@@ -11,6 +13,10 @@ from pathlib import Path
 from scrappy.cli.command_router import CommandRouter
 from scrappy.cli.io_interface import TestIO
 from scrappy.cli.validators.command import CommandValidationResult
+from scrappy.orchestrator.core import AgentOrchestrator
+from scrappy.orchestrator.memory import WorkingMemory
+from scrappy.orchestrator.provider_selector import ProviderSelector
+from scrappy.orchestrator.session import SessionManager
 
 
 class MockTheme:
@@ -631,3 +637,187 @@ class TestHandleExistingTasks:
         # Confirmation message shown
         output = mock_io.get_output()
         assert "cleared" in output.lower()
+
+
+class TestModelCommandCopyPins:
+    """Characterization pins for /model command copy (PR-5).
+
+    Uses a real ProviderSelector so the "Using: {group}/None" line pins the
+    actual selection surface: get_model() returns (group, None), so the user
+    sees the literal string "None" as the model.
+    """
+
+    @pytest.mark.parametrize(
+        "arg, expected_lines",
+        [
+            (
+                "fast",
+                [
+                    "Switched to FAST tier\n",
+                    "  Using: fast/None\n",
+                    "  8B models, high throughput\n",
+                ],
+            ),
+            (
+                "chat",
+                [
+                    "Switched to CHAT tier\n",
+                    "  Using: chat/None\n",
+                    "  70B models, conversation\n",
+                ],
+            ),
+            (
+                "instruct",
+                [
+                    "Switched to INSTRUCT tier\n",
+                    "  Using: instruct/None\n",
+                    "  Instruction-tuned models (agent/tools)\n",
+                ],
+            ),
+            (
+                "quality",
+                [
+                    "Switched to QUALITY tier\n",
+                    "  Using: chat/None\n",
+                ],
+            ),
+        ],
+    )
+    def test_model_tier_switch_copy(
+        self, router, mock_io, mock_orchestrator, arg, expected_lines
+    ):
+        """Tier switch prints the switch line and the group/None model line."""
+        mock_orchestrator.provider_selector = ProviderSelector()
+
+        result = router._handle_model(arg)
+
+        assert result is True
+        output = mock_io.get_output()
+        for line in expected_lines:
+            assert line in output
+
+    def test_model_unknown_arg_usage_copy(self, router, mock_io, mock_orchestrator):
+        """Unknown argument shows the current tier and the usage line."""
+        mock_orchestrator.provider_selector = ProviderSelector()
+        mock_orchestrator.quality_mode = False
+
+        result = router._handle_model("warp")
+
+        assert result is True
+        output = mock_io.get_output()
+        assert "Current tier: FAST\n" in output
+        assert "  Using: fast/None\n" in output
+        assert "Usage: /model fast | /model chat | /model instruct\n" in output
+
+
+class TestQuitCopyPins:
+    """Characterization pins for /quit output copy (PR-5)."""
+
+    def test_quit_saved_display_copy(
+        self, router, mock_io, mock_orchestrator, mock_session_context, mock_display
+    ):
+        """Auto-save quit shows the saved path, message count, resume help, goodbye."""
+        mock_session_context.conversation_history = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello"},
+        ]
+
+        result = router._handle_exit("")
+
+        assert result is False
+        output = mock_io.get_output()
+        assert "\nSession saved to: /tmp/session.json\n" in output
+        assert "  Conversation: 2 messages\n" in output
+        assert "Use 'llm-team --resume' to continue later.\n" in output
+        assert "\nGoodbye!\n" in output
+        mock_display.show_usage.assert_called_once()
+
+    def test_quit_not_saved_warning_copy(
+        self, router, mock_io, mock_orchestrator, mock_session_context
+    ):
+        """Disabled auto-save quit shows the not-saved warning and manual-save hint."""
+        mock_session_context.auto_save = False
+
+        result = router._handle_exit("")
+
+        assert result is False
+        mock_orchestrator.save_session.assert_not_called()
+        output = mock_io.get_output()
+        assert "\nSession not saved (auto-save disabled).\n" in output
+        assert "Use '/session save' to manually save before quitting.\n" in output
+        assert "\nGoodbye!\n" in output
+
+    def test_quit_autosave_writes_empty_history_bug_9qf3(self, mock_io, tmp_path):
+        """BUG PIN (scrappy-9qf3): /quit autosave drops the conversation history.
+
+        _handle_exit calls orchestrator.save_session() with no argument, so the
+        saved payload gets an empty conversation history, while the display
+        reports len(session_context.conversation_history). Both facts pinned
+        here; commit 3 flips this test when the seam is fixed.
+        """
+        orchestrator = AgentOrchestrator(
+            output=Mock(),
+            registry=Mock(),
+            cache=Mock(),
+            rate_tracker=Mock(),
+            working_memory=WorkingMemory(),
+            session_manager=SessionManager(tmp_path),
+            provider_selector=ProviderSelector(),
+            usage_reporter=Mock(),
+            status_reporter=Mock(),
+            task_executor=Mock(),
+            context_manager=Mock(),
+            delegation_manager=Mock(),
+            background_manager=Mock(),
+        )
+        session_context = Mock()
+        session_context.auto_save = True
+        session_context.conversation_history = [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "second"},
+            {"role": "user", "content": "third"},
+        ]
+        router = CommandRouter(
+            io=mock_io,
+            orchestrator=orchestrator,
+            session_context=session_context,
+            display=Mock(),
+            session_mgr=Mock(),
+            codebase=Mock(),
+            tasks=Mock(),
+            agent_mgr=Mock(),
+        )
+
+        result = router._handle_exit("")
+
+        assert result is False
+        saved = json.loads((tmp_path / ".scrappy" / "session.json").read_text())
+        # The bug: real history exists but the saved payload is empty.
+        assert saved["conversation_history"] == []
+        # While the display claims all messages were saved.
+        assert "  Conversation: 3 messages\n" in mock_io.get_output()
+
+
+class TestSetupCliBranchPin:
+    """Regression pin for the /setup CLI (non-TUI) branch (PR-5)."""
+
+    @patch("scrappy.orchestrator.key_validator.create_key_validator")
+    @patch("scrappy.cli.setup_wizard.SetupWizard")
+    def test_setup_cli_branch_runs_wizard_then_refreshes_providers(
+        self, mock_wizard_class, mock_create_validator, router, mock_io, mock_orchestrator
+    ):
+        """CLI /setup runs the wizard, then refreshes provider configuration."""
+        order = []
+        mock_wizard_class.return_value.run.side_effect = (
+            lambda **kwargs: order.append("wizard_run")
+        )
+        mock_orchestrator.refresh_provider_configuration.side_effect = (
+            lambda: order.append("refresh")
+        )
+
+        result = router._handle_setup("")
+
+        assert result is True
+        assert "Launching provider setup wizard...\n" in mock_io.get_output()
+        mock_wizard_class.return_value.run.assert_called_once_with(allow_cancel=True)
+        assert order == ["wizard_run", "refresh"]
