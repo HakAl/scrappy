@@ -8,7 +8,6 @@ from scrappy.cli.interactive import InteractiveMode
 from scrappy.cli.io_interface import TestIO as CLIIOFixture
 from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.memory import WorkingMemory
-from scrappy.orchestrator.provider_selector import ProviderSelector
 from scrappy.orchestrator.session import SessionManager
 
 
@@ -46,6 +45,7 @@ def create_mode() -> tuple[InteractiveMode, CLIIOFixture, Mock]:
         display=Mock(),
         tasks=Mock(),
         logger=Mock(),
+        session_saver=Mock(),
         theme=MockTheme(),
     )
     return mode, io, session_context
@@ -147,8 +147,8 @@ def test_process_via_langgraph_failure_without_suggestion_has_no_line():
 def test_handle_eof_autosave_persists_real_conversation_history(tmp_path):
     """EOF autosave writes the actual conversation history to disk (PR-5 pin).
 
-    The EOF closure passes session_context.conversation_history through to
-    orchestrator.save_session, so the saved payload carries the real messages.
+    The EOF path passes session_context.conversation_history through the
+    session-saver seam, so the saved payload carries the real messages.
     Asserts on the saved content, not the call shape, so it survives seam
     rework in commit 3.
     """
@@ -165,7 +165,6 @@ def test_handle_eof_autosave_persists_real_conversation_history(tmp_path):
         rate_tracker=Mock(),
         working_memory=WorkingMemory(),
         session_manager=SessionManager(tmp_path),
-        provider_selector=ProviderSelector(),
         usage_reporter=Mock(),
         status_reporter=Mock(),
         task_executor=Mock(),
@@ -187,6 +186,7 @@ def test_handle_eof_autosave_persists_real_conversation_history(tmp_path):
         display=Mock(),
         tasks=Mock(),
         logger=Mock(),
+        session_saver=orchestrator,
         theme=MockTheme(),
     )
 
@@ -195,3 +195,17 @@ def test_handle_eof_autosave_persists_real_conversation_history(tmp_path):
     saved = json.loads((tmp_path / ".scrappy" / "session.json").read_text())
     assert saved["conversation_history"] == history
     assert "Session saved to:" in io.get_output()
+
+
+def test_handle_eof_passes_history_through_session_saver():
+    """EOF autosave routes the real history through the session-saver seam."""
+    mode, io, session_context = create_mode()
+    history = [{"role": "user", "content": "hello"}]
+    session_context.auto_save = True
+    session_context.conversation_history = history
+    mode.session_saver.save_session.return_value = "/tmp/session.json"
+
+    mode._handle_eof()
+
+    mode.session_saver.save_session.assert_called_once_with(history)
+    assert "Session saved to: /tmp/session.json" in io.get_output()

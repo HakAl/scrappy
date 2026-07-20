@@ -37,7 +37,6 @@ class CLI:
         brain: Optional[str] = None,
         auto_explore: bool = False,
         context_aware: bool = True,
-        verbose_selection: bool = False,
         show_provider_status: bool = False,
         io: Optional[CLIIOProtocol] = None,
         orchestrator: Optional[AgentOrchestrator] = None,
@@ -64,8 +63,6 @@ class CLI:
             auto_explore: If True, automatically explore the codebase on startup.
             context_aware: If True, enable context-aware features that consider
                 project structure in responses.
-            verbose_selection: If True, display detailed provider selection info
-                during initialization.
             show_provider_status: If True, display provider availability status
                 instead of default initialization messages.
             io: IO interface for input/output operations. Defaults to RichIO.
@@ -80,7 +77,6 @@ class CLI:
         self._brain = brain
         self._auto_explore = auto_explore
         self._context_aware = context_aware
-        self._verbose_selection = verbose_selection
         self._show_provider_status = show_provider_status
         self._theme = theme or DEFAULT_THEME
 
@@ -226,7 +222,6 @@ class CLI:
         return AgentOrchestrator(
             project_path=".",
             context_aware=self._context_aware,
-            verbose_selection=self._verbose_selection,
             enable_semantic_search=True,  # Enable for CLI usage
         )
 
@@ -252,7 +247,17 @@ class CLI:
         return PlanStateManager()
 
     def _create_command_router(self) -> CommandRouter:
-        """Create CommandRouter with all dependencies."""
+        """Create CommandRouter with all dependencies.
+
+        The concrete orchestrator satisfies SessionSaverProtocol structurally
+        and carries the model selection service the router displays tiers
+        through.
+        """
+        model_selection = self.orchestrator.model_selector
+        if model_selection is None:
+            raise RuntimeError(
+                "Orchestrator has no model selection service configured"
+            )
         return CommandRouter(
             io=self.io,
             orchestrator=self.orchestrator,
@@ -262,6 +267,8 @@ class CLI:
             codebase=self.codebase,
             tasks=self.tasks,
             agent_mgr=self.agent_mgr,
+            session_saver=self.orchestrator,
+            model_selection=model_selection,
             state_manager=self.state_manager
         )
 

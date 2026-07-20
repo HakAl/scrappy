@@ -1,17 +1,12 @@
 """Characterization pins for ProviderStatusReporter (PR-5, bead scrappy-86pi).
 
-ProviderStatusReporter calls self._selector._get_brain_selection_reason, a
-method that exists nowhere in production. The bug pins below construct the
-reporter with a REAL ProviderSelector and pin the resulting AttributeError;
-commit 3 flips them. The copy pins ground the exact authored strings in
-status_reporter.py, stubbing only the missing reason seam where the code
-path requires it.
+The reporter is selector-free: it renders availability directly from the
+registry, so real objects produce working output (the 86pi AttributeError
+bug pins flipped here in commit 3). The copy pins ground the exact
+authored strings in status_reporter.py.
 """
 
-import pytest
-
 from scrappy.orchestrator.provider_definitions import AGENT_PROVIDER_GUIDANCE
-from scrappy.orchestrator.provider_selector import ProviderSelector
 from scrappy.orchestrator.status_reporter import ProviderStatusReporter
 
 
@@ -48,54 +43,47 @@ class FakeRegistry:
         return self._providers[name]
 
 
-class SelectorWithAvailableReason(ProviderSelector):
-    """Real selector plus the reason seam the reporter expects.
-
-    Production ProviderSelector lacks _get_brain_selection_reason entirely
-    (scrappy-86pi); this subclass supplies the minimal seam so the authored
-    copy around it can be pinned.
-    """
-
-    def _get_brain_selection_reason(self, provider_name: str) -> str:
-        return "available"
-
-
 def make_reporter(
     registry: FakeRegistry,
-    selector: ProviderSelector,
     output: RecordingOutput,
     brain_name=None,
     quality_mode: bool = True,
 ) -> ProviderStatusReporter:
-    """Build a reporter with real objects and the given selector."""
+    """Build a reporter with real objects."""
     return ProviderStatusReporter(
         registry=registry,
-        provider_selector=selector,
         output=output,
         brain_name=brain_name,
-        verbose_selection=False,
         quality_mode=quality_mode,
     )
 
 
-class TestRealSelectorContractBug86pi:
-    """BUG PINS (scrappy-86pi): real selector lacks the reason method."""
+class TestRealObjectContract86piFixed:
+    """WORKING-OUTPUT PINS (scrappy-86pi fixed): real objects render status."""
 
-    def test_print_status_with_real_selector_raises_attributeerror_bug_86pi(self):
-        """print_status raises the moment any provider is available."""
+    def test_print_status_with_real_objects_renders_available_line(self):
+        """print_status renders the available line for a real registry entry."""
         registry = FakeRegistry({"groq": AgentCapableProvider()})
-        reporter = make_reporter(registry, ProviderSelector(), RecordingOutput())
+        output = RecordingOutput()
+        reporter = make_reporter(registry, output)
 
-        with pytest.raises(AttributeError, match="_get_brain_selection_reason"):
-            reporter.print_status()
+        reporter.print_status()
 
-    def test_get_selection_info_with_real_selector_raises_attributeerror_bug_86pi(self):
-        """get_selection_info raises the moment any provider is available."""
+        assert "  [OK] groq            - available" in output.lines
+
+    def test_get_selection_info_with_real_objects_reports_available(self):
+        """get_selection_info reports availability for a real registry entry."""
         registry = FakeRegistry({"groq": AgentCapableProvider()})
-        reporter = make_reporter(registry, ProviderSelector(), RecordingOutput())
+        reporter = make_reporter(registry, RecordingOutput())
 
-        with pytest.raises(AttributeError, match="_get_brain_selection_reason"):
-            reporter.get_selection_info()
+        info = reporter.get_selection_info()
+
+        assert info["provider_details"]["groq"] == {
+            "available": True,
+            "supports_agent_role": True,
+            "reason": "available",
+        }
+        assert "selection_log" not in info
 
 
 class TestPrintStatusCopyPins:
@@ -105,7 +93,7 @@ class TestPrintStatusCopyPins:
         """Available agent-capable provider line has no suffix."""
         registry = FakeRegistry({"groq": AgentCapableProvider()})
         output = RecordingOutput()
-        reporter = make_reporter(registry, SelectorWithAvailableReason(), output)
+        reporter = make_reporter(registry, output)
 
         reporter.print_status()
 
@@ -115,7 +103,7 @@ class TestPrintStatusCopyPins:
         """Provider that cannot act as agent gets the general-use-only suffix."""
         registry = FakeRegistry({"groq": GeneralUseOnlyProvider()})
         output = RecordingOutput()
-        reporter = make_reporter(registry, SelectorWithAvailableReason(), output)
+        reporter = make_reporter(registry, output)
 
         reporter.print_status()
 
@@ -124,7 +112,7 @@ class TestPrintStatusCopyPins:
     def test_unavailable_provider_line_copy_real_selector(self):
         """With nothing available, every known provider gets the [--] line."""
         output = RecordingOutput()
-        reporter = make_reporter(FakeRegistry({}), ProviderSelector(), output)
+        reporter = make_reporter(FakeRegistry({}), output)
 
         reporter.print_status()
 
@@ -145,25 +133,20 @@ class TestPrintStatusCopyPins:
             in output.lines
         )
 
-    def test_selected_brain_and_reason_copy(self):
-        """Selected brain line shows the name and its selection reason."""
+    def test_selected_brain_copy(self):
+        """Selected brain line shows the name."""
         registry = FakeRegistry({"groq": AgentCapableProvider()})
         output = RecordingOutput()
-        reporter = make_reporter(
-            registry, SelectorWithAvailableReason(), output, brain_name="groq"
-        )
+        reporter = make_reporter(registry, output, brain_name="groq")
 
         reporter.print_status()
 
         assert "\nSelected Brain: groq" in output.lines
-        assert "Selection Reason: available" in output.lines
 
     def test_mode_priority_guidance_copy_real_selector(self):
         """Header, brain-none, mode, priority, and guidance copy pins."""
         output = RecordingOutput()
-        reporter = make_reporter(
-            FakeRegistry({}), ProviderSelector(), output, quality_mode=True
-        )
+        reporter = make_reporter(FakeRegistry({}), output, quality_mode=True)
 
         reporter.print_status()
 
@@ -181,9 +164,7 @@ class TestPrintStatusCopyPins:
     def test_mode_line_fast_when_quality_mode_false(self):
         """quality_mode=False renders the FAST mode line."""
         output = RecordingOutput()
-        reporter = make_reporter(
-            FakeRegistry({}), ProviderSelector(), output, quality_mode=False
-        )
+        reporter = make_reporter(FakeRegistry({}), output, quality_mode=False)
 
         reporter.print_status()
 

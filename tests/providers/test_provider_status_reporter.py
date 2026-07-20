@@ -1,13 +1,22 @@
 """
 Tests for ProviderStatusReporter.
 
-Tests presentation logic for provider status display and information retrieval.
+Tests presentation logic for provider status display and information
+retrieval. The reporter is selector-free: availability is rendered
+directly from the registry (the external boundary, mocked here).
 """
 
 from unittest.mock import Mock
 
 from scrappy.orchestrator.output import CapturingOutput
 from scrappy.orchestrator.status_reporter import ProviderStatusReporter
+
+
+class GeneralUseOnlyProvider:
+    """Provider that does not support the agent/brain role."""
+
+    supports_agent_role = False
+
 
 class TestPrintStatus:
     """Test print_status() presentation logic."""
@@ -16,29 +25,28 @@ class TestPrintStatus:
         """Set up test fixtures."""
         self.output = CapturingOutput()
         self.registry = Mock()
-        self.selector = Mock()
 
-    def _make_reporter(self, brain_name='cerebras', verbose=False):
-        """Create a reporter with configured mocks."""
+    def _make_reporter(self, brain_name='cerebras', quality_mode=True):
+        """Create a reporter with the mocked registry."""
         return ProviderStatusReporter(
             registry=self.registry,
-            provider_selector=self.selector,
             output=self.output,
             brain_name=brain_name,
-            verbose_selection=verbose
+            quality_mode=quality_mode
         )
+
+    def _output_text(self):
+        """Join captured info lines for assertions."""
+        return '\n'.join(self.output.get_by_level('info'))
 
     def test_shows_available_provider_with_ok_status(self):
         """print_status() should show [OK] for available providers."""
         self.registry.list_available.return_value = ['cerebras', 'groq']
-        self.selector._get_brain_selection_reason.return_value = 'fastest'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         reporter.print_status()
 
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
+        output_text = self._output_text()
 
         assert '[OK] cerebras' in output_text
         assert '[OK] groq' in output_text
@@ -46,71 +54,54 @@ class TestPrintStatus:
     def test_shows_unavailable_provider_with_dash_status(self):
         """print_status() should show [--] for unavailable providers."""
         self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'fastest'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         reporter.print_status()
 
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
+        output_text = self._output_text()
 
         assert '[--] groq' in output_text
         assert 'NOT AVAILABLE' in output_text
 
-    def test_shows_selection_reason_for_available_provider(self):
-        """print_status() should show selection reason for available providers."""
+    def test_shows_available_text_for_available_provider(self):
+        """print_status() should describe available providers as available."""
         self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'fastest inference'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         reporter.print_status()
 
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
+        assert '  [OK] cerebras        - available' in self._output_text()
 
-        assert 'fastest inference' in output_text
+    def test_shows_general_use_only_suffix(self):
+        """Providers without agent-role support get the general-use suffix."""
+        self.registry.list_available.return_value = ['groq']
+        self.registry.get.return_value = GeneralUseOnlyProvider()
+
+        reporter = self._make_reporter()
+        reporter.print_status()
+
+        assert (
+            '  [OK] groq            - available (general use only)'
+            in self._output_text()
+        )
 
     def test_shows_selected_brain(self):
         """print_status() should show the selected brain name."""
         self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter(brain_name='groq')
         reporter.print_status()
 
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
-
-        assert 'Selected Brain: groq' in output_text
-
-    def test_shows_selection_reason_for_brain(self):
-        """print_status() should show why the brain was selected."""
-        self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'high priority'
-        self.selector.get_selection_log.return_value = []
-
-        reporter = self._make_reporter(brain_name='cerebras')
-        reporter.print_status()
-
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
-
-        assert 'Selection Reason: high priority' in output_text
+        assert 'Selected Brain: groq' in self._output_text()
 
     def test_shows_selection_priority(self):
         """print_status() should show the selection priority order."""
         self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         reporter.print_status()
 
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
+        output_text = self._output_text()
 
         assert 'Selection Priority:' in output_text
         assert 'cerebras' in output_text
@@ -120,77 +111,29 @@ class TestPrintStatus:
     def test_shows_override_hint(self):
         """print_status() should show how to override selection."""
         self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         reporter.print_status()
 
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
+        assert '--brain' in self._output_text()
 
-        assert '--brain' in output_text
-
-    def test_verbose_shows_selection_log(self):
-        """print_status() should show selection log when verbose is True."""
+    def test_no_selection_log_section(self):
+        """print_status() has no selection log section anymore."""
         self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = [
-            'Checking cerebras: available',
-            'Selected cerebras'
-        ]
 
-        reporter = self._make_reporter(verbose=True)
+        reporter = self._make_reporter()
         reporter.print_status()
 
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
-
-        assert 'Selection Log:' in output_text
-        assert 'Checking cerebras: available' in output_text
-        assert 'Selected cerebras' in output_text
-
-    def test_non_verbose_hides_selection_log(self):
-        """print_status() should not show selection log when verbose is False."""
-        self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = [
-            'Checking cerebras: available'
-        ]
-
-        reporter = self._make_reporter(verbose=False)
-        reporter.print_status()
-
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
-
-        assert 'Selection Log:' not in output_text
-
-    def test_empty_selection_log_not_shown(self):
-        """print_status() should not show selection log section when empty."""
-        self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
-
-        reporter = self._make_reporter(verbose=True)
-        reporter.print_status()
-
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
-
-        assert 'Selection Log:' not in output_text
+        assert 'Selection Log:' not in self._output_text()
 
     def test_all_known_providers_listed(self):
         """print_status() should list all known providers."""
         self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         reporter.print_status()
 
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
+        output_text = self._output_text()
 
         # All known providers should appear
         assert 'cerebras' in output_text
@@ -201,17 +144,12 @@ class TestPrintStatus:
     def test_no_brain_selected_shows_none(self):
         """print_status() should handle case when no brain is selected."""
         self.registry.list_available.return_value = []
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter(brain_name=None)
         reporter.print_status()
 
-        messages = self.output.get_by_level('info')
-        output_text = '\n'.join(messages)
-
         # Should show Selected Brain with None or empty
-        assert 'Selected Brain:' in output_text
+        assert 'Selected Brain:' in self._output_text()
 
 
 class TestGetSelectionInfo:
@@ -221,23 +159,19 @@ class TestGetSelectionInfo:
         """Set up test fixtures."""
         self.output = CapturingOutput()
         self.registry = Mock()
-        self.selector = Mock()
 
-    def _make_reporter(self, brain_name='cerebras', verbose=False):
-        """Create a reporter with configured mocks."""
+    def _make_reporter(self, brain_name='cerebras', quality_mode=True):
+        """Create a reporter with the mocked registry."""
         return ProviderStatusReporter(
             registry=self.registry,
-            provider_selector=self.selector,
             output=self.output,
             brain_name=brain_name,
-            verbose_selection=verbose
+            quality_mode=quality_mode
         )
 
     def test_returns_available_providers(self):
         """get_selection_info() should return list of available providers."""
         self.registry.list_available.return_value = ['cerebras', 'groq']
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         info = reporter.get_selection_info()
@@ -247,8 +181,6 @@ class TestGetSelectionInfo:
     def test_returns_all_known_providers(self):
         """get_selection_info() should return list of all known providers."""
         self.registry.list_available.return_value = []
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         info = reporter.get_selection_info()
@@ -260,8 +192,6 @@ class TestGetSelectionInfo:
     def test_returns_selected_brain(self):
         """get_selection_info() should return the selected brain name."""
         self.registry.list_available.return_value = []
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter(brain_name='gemini')
         info = reporter.get_selection_info()
@@ -271,8 +201,6 @@ class TestGetSelectionInfo:
     def test_returns_selection_priority(self):
         """get_selection_info() should return selection priority list."""
         self.registry.list_available.return_value = []
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         info = reporter.get_selection_info()
@@ -282,21 +210,17 @@ class TestGetSelectionInfo:
     def test_returns_provider_details_for_available(self):
         """get_selection_info() should return details for available providers."""
         self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'fastest'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         info = reporter.get_selection_info()
 
         cerebras_info = info['provider_details']['cerebras']
         assert cerebras_info['available'] is True
-        assert cerebras_info['reason'] == 'fastest'
+        assert cerebras_info['reason'] == 'available'
 
     def test_returns_provider_details_for_unavailable(self):
         """get_selection_info() should return details for unavailable providers."""
         self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         info = reporter.get_selection_info()
@@ -305,22 +229,18 @@ class TestGetSelectionInfo:
         assert groq_info['available'] is False
         assert groq_info['reason'] == 'not available'
 
-    def test_returns_selection_log(self):
-        """get_selection_info() should return the selection log."""
+    def test_no_selection_log_key(self):
+        """get_selection_info() no longer carries a selection log."""
         self.registry.list_available.return_value = []
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = ['entry1', 'entry2']
 
         reporter = self._make_reporter()
         info = reporter.get_selection_info()
 
-        assert info['selection_log'] == ['entry1', 'entry2']
+        assert 'selection_log' not in info
 
     def test_returns_correct_structure(self):
         """get_selection_info() should return dict with all expected keys."""
         self.registry.list_available.return_value = ['cerebras']
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         info = reporter.get_selection_info()
@@ -331,15 +251,12 @@ class TestGetSelectionInfo:
             'selected_brain',
             'selection_priority',
             'provider_details',
-            'selection_log'
         }
         assert set(info.keys()) == expected_keys
 
     def test_provider_details_contains_all_known(self):
         """get_selection_info() should have details for all known providers."""
         self.registry.list_available.return_value = []
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter()
         info = reporter.get_selection_info()
@@ -353,8 +270,6 @@ class TestGetSelectionInfo:
     def test_handles_none_brain_name(self):
         """get_selection_info() should handle None brain name."""
         self.registry.list_available.return_value = []
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = self._make_reporter(brain_name=None)
         info = reporter.get_selection_info()
@@ -369,20 +284,15 @@ class TestProviderStatusReporterEdgeCases:
         """Set up test fixtures."""
         self.output = CapturingOutput()
         self.registry = Mock()
-        self.selector = Mock()
 
     def test_empty_available_providers(self):
         """Should handle case with no available providers."""
         self.registry.list_available.return_value = []
-        self.selector._get_brain_selection_reason.return_value = 'test'
-        self.selector.get_selection_log.return_value = []
 
         reporter = ProviderStatusReporter(
             registry=self.registry,
-            provider_selector=self.selector,
             output=self.output,
             brain_name=None,
-            verbose_selection=False
         )
 
         reporter.print_status()
@@ -398,15 +308,11 @@ class TestProviderStatusReporterEdgeCases:
         """Should handle case with all providers available."""
         all_providers = ['cerebras', 'groq', 'gemini']  # Only test subset since mock setup is limited
         self.registry.list_available.return_value = all_providers
-        self.selector._get_brain_selection_reason.return_value = 'test reason'
-        self.selector.get_selection_log.return_value = []
 
         reporter = ProviderStatusReporter(
             registry=self.registry,
-            provider_selector=self.selector,
             output=self.output,
             brain_name='cerebras',
-            verbose_selection=False
         )
 
         reporter.print_status()

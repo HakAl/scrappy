@@ -1,8 +1,8 @@
 """Characterization pins for AgentOrchestrator selection surface (PR-5).
 
-Real-object pins: ProviderSelector and ModelSelectionService are the real
-implementations, so these tests fail if the selection mapping or the
-quality_mode defaults change.
+Real-object pins: ModelSelectionService is the real implementation, so
+these tests fail if the selection mapping or the quality_mode defaults
+change.
 """
 
 from unittest.mock import Mock, patch
@@ -14,7 +14,6 @@ from scrappy.orchestrator.model_selection import (
     ModelSelectionService,
     ModelSelectionType,
 )
-from scrappy.orchestrator.provider_selector import ProviderSelector
 from scrappy.orchestrator.provider_types import LLMResponse
 
 
@@ -53,7 +52,7 @@ def make_orchestrator(
     model_selector=None,
     delegation_manager=None,
 ) -> AgentOrchestrator:
-    """Build an orchestrator with a real ProviderSelector and mock edges."""
+    """Build an orchestrator with real selection surfaces and mock edges."""
     return AgentOrchestrator(
         quality_mode=quality_mode,
         output=Mock(),
@@ -62,7 +61,6 @@ def make_orchestrator(
         rate_tracker=Mock(),
         working_memory=Mock(),
         session_manager=Mock(),
-        provider_selector=ProviderSelector(),
         usage_reporter=Mock(),
         status_reporter=Mock(),
         task_executor=Mock(),
@@ -86,7 +84,7 @@ class TestGetRecommendedProviderPins:
         ],
     )
     def test_get_recommended_provider_group(self, selection_type, expected_group):
-        """Real ProviderSelector maps each selection type to its group."""
+        """The selection surface maps each selection type to its group."""
         orchestrator = make_orchestrator()
 
         assert orchestrator.get_recommended_provider(selection_type) == expected_group
@@ -177,5 +175,32 @@ class TestQualityModeConstructionSelectionPins:
 
         orchestrator.delegate(prompt="hello")
 
+        assert delegation_manager.calls == [FAST_MODEL]
+        assert delegation_manager.received_kwargs[0]["selection_type"] == "fast"
+
+
+class TestDefaultTypeMutationPin:
+    """set_default_type on the service flips the orchestrator delegate default."""
+
+    def test_set_default_type_flips_delegate_default(self):
+        """Switching the service default to FAST redirects implicit delegate()."""
+        delegation_manager = KwargRecordingDelegationManager()
+        selector = ModelSelectionService(
+            configured_models={CHAT_32K_MODEL, FAST_MODEL},
+            model_priorities={
+                ModelSelectionType.CHAT: [CHAT_32K_MODEL],
+                ModelSelectionType.FAST: [FAST_MODEL],
+            },
+        )
+        orchestrator = make_orchestrator(
+            quality_mode=True,
+            model_selector=selector,
+            delegation_manager=delegation_manager,
+        )
+
+        selector.set_default_type(ModelSelectionType.FAST)
+        orchestrator.delegate(prompt="hello")
+
+        assert orchestrator.quality_mode is False
         assert delegation_manager.calls == [FAST_MODEL]
         assert delegation_manager.received_kwargs[0]["selection_type"] == "fast"

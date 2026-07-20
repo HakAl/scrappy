@@ -52,23 +52,6 @@ class MockDelegationManager:
         return [self.delegate_response for _ in tasks]
 
 
-class MockProviderSelector:
-    """Mock provider selector."""
-
-    def __init__(self):
-        self.brain_provider = Mock()
-        self.brain_name = "mock-brain"
-
-    def setup_brain(self, preferred_provider=None):
-        return self.brain_name, self.brain_provider
-
-    def get_model(self, selection_type):
-        return "mock-provider", "mock-model"
-
-    def recommend(self, requirements):
-        return "mock-provider"
-
-
 class MockRegistry:
     """Mock provider registry."""
 
@@ -94,6 +77,13 @@ class MockModelSelector:
     def __init__(self):
         self.rate_limited_models = set()
         self.models = ["mock/model-id", "mock/fallback-model"]
+        self.default_type = None
+
+    def set_default_type(self, selection_type):
+        self.default_type = selection_type
+
+    def get_default_type(self):
+        return self.default_type
 
     def select(self, selection_type, min_context=0, session_preferred=None, exclude=None):
         excluded = exclude or set()
@@ -247,7 +237,6 @@ def mock_orchestrator(tmp_path):
         rate_tracker=MockRateTracker(),
         working_memory=WorkingMemory(),
         session_manager=MockSessionManager(),
-        provider_selector=MockProviderSelector(),
         usage_reporter=MockUsageReporter(),
         status_reporter=MockStatusReporter(),
         task_executor=MockTaskExecutor(),
@@ -265,7 +254,7 @@ class TestInitialize:
         """Initialize with auto_register=True sets up brain."""
         result = mock_orchestrator.initialize(auto_register=True)
         assert result is mock_orchestrator  # Returns self for chaining
-        assert mock_orchestrator._brain_name == "mock-brain"
+        assert mock_orchestrator._brain_name == "instruct"
 
     def test_initialize_without_auto_register(self, mock_orchestrator):
         """Initialize with auto_register=False skips provider setup."""
@@ -296,7 +285,6 @@ class TestStatus:
     def test_status_returns_comprehensive_info(self, mock_orchestrator):
         """status() returns comprehensive orchestrator state."""
         mock_orchestrator._brain_name = "test-brain"
-        mock_orchestrator.quality_mode = True
 
         with patch("scrappy.orchestrator.litellm_config.get_configured_models") as mock_models, \
              patch("scrappy.orchestrator.litellm_config.get_available_groups") as mock_groups, \

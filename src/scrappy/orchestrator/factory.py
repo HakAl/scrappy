@@ -28,7 +28,6 @@ from .rate_limiting import (
 from .memory import WorkingMemory
 from .session import SessionManager
 from .task_executor import TaskExecutor
-from .provider_selector import ProviderSelector
 from .output import BaseOutputProtocol, ConsoleOutput
 
 from .delegation import DelegationManager
@@ -49,6 +48,7 @@ from .model_selection import (
     ModelAvailabilityTrackerProtocol,
     ModelSelectionService,
     ModelSelectionServiceProtocol,
+    ModelSelectionType,
     default_model_cooldowns_path,
 )
 from .manager_protocols import (
@@ -66,7 +66,6 @@ from .protocols import (
     RateLimitTrackerProtocol,
     SessionManagerProtocol,
     WorkingMemoryProtocol,
-    ProviderSelectorProtocol,
     ProviderRegistryProtocol,
     ContextProvider,
     LLMServiceProtocol,
@@ -100,7 +99,6 @@ class OrchestratorComponents:
         rate_tracker: RateLimitTrackerProtocol,
         working_memory: WorkingMemoryProtocol,
         session_manager: SessionManagerProtocol,
-        provider_selector: ProviderSelectorProtocol,
         usage_reporter: UsageReporterProtocol,
         status_reporter: StatusReporterProtocol,
         task_executor: TaskExecutorProtocol,
@@ -118,7 +116,6 @@ class OrchestratorComponents:
         self.rate_tracker = rate_tracker
         self.working_memory = working_memory
         self.session_manager = session_manager
-        self.provider_selector = provider_selector
         self.usage_reporter = usage_reporter
         self.status_reporter = status_reporter
         self.task_executor = task_executor
@@ -141,7 +138,6 @@ class OrchestratorFactory:
         self,
         project_path: Optional[str] = None,
         cache_ttl_hours: int = 24,
-        verbose_selection: bool = False,
         context_aware: bool = True,
         created_at: Optional[datetime] = None,
         path_provider: Optional[PathProviderProtocol] = None,
@@ -156,7 +152,6 @@ class OrchestratorFactory:
         Args:
             project_path: Path to project directory
             cache_ttl_hours: Cache TTL in hours
-            verbose_selection: Enable verbose provider selection
             context_aware: Enable context awareness
             created_at: Creation timestamp
             path_provider: Path provider for data files (auto-creates if None)
@@ -165,7 +160,6 @@ class OrchestratorFactory:
         """
         self.project_path = project_path
         self.cache_ttl_hours = cache_ttl_hours
-        self.verbose_selection = verbose_selection
         self.context_aware = context_aware
         self.enable_semantic_search = enable_semantic_search
         self.created_at = created_at or datetime.now()
@@ -208,13 +202,6 @@ class OrchestratorFactory:
         cache = self.create_cache(codebase_context)
         rate_tracker = self.create_rate_tracker(codebase_context)
         session_manager = self.create_session_manager(codebase_context)
-
-        # Provider selector (needs config)
-        provider_selector = self.create_provider_selector(
-            registry,
-            output,
-            self.config
-        )
 
         # Model selector (deterministic model selection)
         model_selector = self.create_model_selector()
@@ -261,7 +248,6 @@ class OrchestratorFactory:
         # Status reporter (will need to be updated after brain is set)
         status_reporter = self.create_status_reporter(
             registry,
-            provider_selector,
             output,
             brain_name=None,  # Will be updated after brain setup
             quality_mode=self.config.quality_mode
@@ -276,7 +262,6 @@ class OrchestratorFactory:
             rate_tracker=rate_tracker,
             working_memory=working_memory,
             session_manager=session_manager,
-            provider_selector=provider_selector,
             usage_reporter=usage_reporter,
             status_reporter=status_reporter,
             task_executor=task_executor,
@@ -379,20 +364,6 @@ class OrchestratorFactory:
         """Create default session manager."""
         return SessionManager(codebase_context.project_path, self._path_provider)
 
-    def create_provider_selector(
-        self,
-        registry: ProviderRegistryProtocol,
-        output: BaseOutputProtocol,
-        config: OrchestratorConfig
-    ) -> ProviderSelectorProtocol:
-        """Create default provider selector."""
-        return ProviderSelector(
-            registry,
-            verbose=self.verbose_selection,
-            output=output,
-            config=config
-        )
-
     def create_usage_reporter(self, cache: CacheProtocol) -> UsageReporterProtocol:
         """Create default usage reporter."""
         return UsageReporter(cache=cache, created_at=self.created_at)
@@ -400,7 +371,6 @@ class OrchestratorFactory:
     def create_status_reporter(
         self,
         registry: ProviderRegistryProtocol,
-        provider_selector: ProviderSelectorProtocol,
         output: BaseOutputProtocol,
         brain_name: Optional[str] = None,
         quality_mode: bool = True
@@ -408,10 +378,8 @@ class OrchestratorFactory:
         """Create default status reporter."""
         return ProviderStatusReporter(
             registry=registry,
-            provider_selector=provider_selector,
             output=output,
             brain_name=brain_name,
-            verbose_selection=self.verbose_selection,
             quality_mode=quality_mode
         )
 
@@ -477,6 +445,11 @@ class OrchestratorFactory:
         return ModelSelectionService(
             configured_models=configured_models,
             availability_tracker=self.create_model_availability_tracker(),
+            default_selection_type=(
+                ModelSelectionType.CHAT
+                if self.config.quality_mode
+                else ModelSelectionType.FAST
+            ),
         )
 
     def _get_configured_models(self, api_key_service) -> set[str]:

@@ -37,7 +37,6 @@ def make_orchestrator(*, llm_service, model_selector, delegation_manager) -> Age
         rate_tracker=Mock(),
         working_memory=Mock(),
         session_manager=Mock(),
-        provider_selector=Mock(),
         usage_reporter=Mock(),
         status_reporter=Mock(),
         task_executor=Mock(),

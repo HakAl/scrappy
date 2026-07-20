@@ -93,6 +93,23 @@ class ModelSelectionType(Enum):
     EMBED = "embed"      # Embeddings
 
 
+def selection_type_for_provider_hint(hint: str | None) -> ModelSelectionType:
+    """Map legacy provider or group hints to a model selection type."""
+    normalized = (hint or "").strip().lower()
+    if normalized in {"", "fast", "groq", "cerebras", "auto", "mock"}:
+        return ModelSelectionType.FAST
+    if normalized in {"chat", "quality"}:
+        return ModelSelectionType.CHAT
+    if normalized in {"instruct", "gemini"}:
+        return ModelSelectionType.INSTRUCT
+
+    logger.debug(
+        "Unknown provider hint %r; defaulting to chat model selection",
+        hint,
+    )
+    return ModelSelectionType.CHAT
+
+
 _CATALOG = build_default_catalog()
 
 
@@ -459,6 +476,14 @@ class ModelSelectionServiceProtocol(Protocol):
         """Check if a model is configured and currently healthy."""
         ...
 
+    def set_default_type(self, selection_type: ModelSelectionType) -> None:
+        """Set the default selection type used for implicit requests."""
+        ...
+
+    def get_default_type(self) -> ModelSelectionType:
+        """Return the default selection type used for implicit requests."""
+        ...
+
 
 class ModelSelectionService:
     """
@@ -479,6 +504,7 @@ class ModelSelectionService:
         configured_models: set[str],
         model_priorities: Optional[dict[ModelSelectionType, list[str]]] = None,
         availability_tracker: Optional[ModelAvailabilityTrackerProtocol] = None,
+        default_selection_type: ModelSelectionType = ModelSelectionType.CHAT,
     ):
         """
         Initialize model selection service.
@@ -490,6 +516,8 @@ class ModelSelectionService:
                              Defaults to MODEL_PRIORITIES.
             availability_tracker: Tracker for rate-limited models.
                                  Creates new one if not provided.
+            default_selection_type: Selection type used when a request carries
+                                   no explicit type or provider hint.
         """
         self._configured = set(configured_models)
         self._configured_lock = threading.Lock()
@@ -497,6 +525,7 @@ class ModelSelectionService:
         self._availability: ModelAvailabilityTrackerProtocol = (
             availability_tracker or ModelAvailabilityTracker()
         )
+        self._default_selection_type = default_selection_type
 
     def select(
         self,
@@ -635,6 +664,14 @@ class ModelSelectionService:
     def clear_failure_kinds(self, kinds: set[FailureKind]) -> None:
         """Clear tracked health states matching failure kinds."""
         self._availability.clear_kinds(kinds)
+
+    def set_default_type(self, selection_type: ModelSelectionType) -> None:
+        """Set the default selection type used for implicit requests."""
+        self._default_selection_type = selection_type
+
+    def get_default_type(self) -> ModelSelectionType:
+        """Return the default selection type used for implicit requests."""
+        return self._default_selection_type
 
     def is_configured(self, model_id: str) -> bool:
         """Check if a model has API keys configured."""

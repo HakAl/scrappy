@@ -19,7 +19,12 @@ from ..infrastructure.exceptions import (
 
 from .output import BaseOutputProtocol
 from .types import StreamChunk
-from .model_selection import ModelSelectionType, AllModelsRateLimitedError
+from .model_selection import (
+    ModelSelectionType,
+    AllModelsRateLimitedError,
+    SELECTION_TYPE_TO_GROUP,
+    selection_type_for_provider_hint,
+)
 from .manager_protocols import (
     ContextManagerProtocol,
     BackgroundTaskManagerProtocol,
@@ -32,7 +37,6 @@ from .factory import OrchestratorFactory
 from .model_selection import ModelSelectionServiceProtocol
 from .failure_policy import FailureRecord, SHOULD_RETRY_KINDS, get_failure_policy
 from .fallback_metrics import provider_fallback_metrics
-from .provider_selector import selection_type_for_provider_hint
 
 # Import protocols for type hints (Dependency Inversion Principle)
 from .protocols import (
@@ -40,7 +44,6 @@ from .protocols import (
     RateLimitTrackerProtocol,
     SessionManagerProtocol,
     WorkingMemoryProtocol,
-    ProviderSelectorProtocol,
     ProviderRegistryProtocol,
     ContextProvider,
     LLMServiceProtocol,
@@ -94,7 +97,6 @@ class AgentOrchestrator:
         context_aware: bool = True,
         enable_cache: bool = True,
         cache_ttl_hours: int = 24,
-        verbose_selection: bool = False,
         enable_semantic_search: bool = False,
         quality_mode: bool = True,
         output: Optional[BaseOutputProtocol] = None,
@@ -105,7 +107,6 @@ class AgentOrchestrator:
         rate_tracker: Optional[RateLimitTrackerProtocol] = None,
         working_memory: Optional[WorkingMemoryProtocol] = None,
         session_manager: Optional[SessionManagerProtocol] = None,
-        provider_selector: Optional[ProviderSelectorProtocol] = None,
         usage_reporter: Optional[UsageReporterProtocol] = None,
         status_reporter: Optional[StatusReporterProtocol] = None,
         task_executor: Optional[TaskExecutorProtocol] = None,
@@ -131,9 +132,8 @@ class AgentOrchestrator:
         self._brain_name: Optional[str] = None
         self.context_aware = context_aware
         self.caching_enabled = enable_cache
-        self.verbose_selection = verbose_selection
         self.enable_semantic_search = enable_semantic_search
-        self.quality_mode = quality_mode
+        self._initial_quality_mode = quality_mode
 
         # Per-selection-type model preferences. User preferences are reserved
         # for an explicit user-choice writer; see scrappy-1n7g.
@@ -148,7 +148,7 @@ class AgentOrchestrator:
         # so mypy narrows each component to non-None in this branch.
         if (
             output and registry and cache and rate_tracker and working_memory
-            and session_manager and provider_selector and usage_reporter
+            and session_manager and usage_reporter
             and status_reporter and task_executor and context_manager
             and delegation_manager and background_manager
         ):
@@ -159,7 +159,6 @@ class AgentOrchestrator:
             self.rate_tracker = rate_tracker
             self.working_memory = working_memory
             self.session_manager = session_manager
-            self.provider_selector = provider_selector
             self.usage_reporter = usage_reporter
             self._status_reporter = status_reporter
             self.task_executor = task_executor
@@ -174,7 +173,6 @@ class AgentOrchestrator:
             factory = OrchestratorFactory(
                 project_path=project_path,
                 cache_ttl_hours=cache_ttl_hours,
-                verbose_selection=verbose_selection,
                 context_aware=context_aware,
                 created_at=self.created_at,
                 enable_semantic_search=enable_semantic_search
@@ -192,7 +190,6 @@ class AgentOrchestrator:
             self.rate_tracker = rate_tracker or components.rate_tracker
             self.working_memory = working_memory or components.working_memory
             self.session_manager = session_manager or components.session_manager
-            self.provider_selector = provider_selector or components.provider_selector
             self.usage_reporter = usage_reporter or components.usage_reporter
             self._status_reporter = status_reporter or components.status_reporter
             self.task_executor = task_executor or components.task_executor
@@ -201,6 +198,34 @@ class AgentOrchestrator:
             self.llm_service = llm_service or components.llm_service
             self.provider_status_tracker = provider_status_tracker or components.provider_status_tracker
             self.model_selector = model_selector or components.model_selector
+
+        # The constructor argument stays the source of truth for the session
+        # default tier, matching the pre-service behavior.
+        if self.model_selector is not None:
+            self.model_selector.set_default_type(
+                ModelSelectionType.CHAT if quality_mode else ModelSelectionType.FAST
+            )
+
+    @property
+    def quality_mode(self) -> bool:
+        """Whether implicit requests default to the CHAT tier.
+
+        Reads the model selection service default when present; the
+        constructor-provided value only backs the fixture-only
+        model_selector=None case. There is deliberately no setter: tier
+        changes go through the service via set_default_type.
+        """
+        return self._default_selection_type() == ModelSelectionType.CHAT
+
+    def _default_selection_type(self) -> ModelSelectionType:
+        """Return the selection type used when a request carries no hint."""
+        if self.model_selector is not None:
+            return self.model_selector.get_default_type()
+        return (
+            ModelSelectionType.CHAT
+            if self._initial_quality_mode
+            else ModelSelectionType.FAST
+        )
 
     def _select_fallback_model(
         self,
@@ -819,14 +844,18 @@ class AgentOrchestrator:
         pass
 
     def _setup_brain(self, preferred_provider: Optional[str] = None):
-        """Set up the orchestrator's reasoning brain."""
-        try:
-            self._brain_name, self._brain = self.provider_selector.setup_brain(preferred_provider)
-            self.output.info(f"[BRAIN] Using {self._brain_name} as orchestrator brain")
-        except RuntimeError:
-            # Silent failure - no providers available
-            # The TUI will handle this by launching the setup wizard
-            pass
+        """Set up the orchestrator's reasoning brain.
+
+        Valid group names pass through verbatim; everything else (legacy
+        provider names, "quality", unknown strings, no preference) maps to
+        the instruct tier, which brain/tool work requires.
+        """
+        if preferred_provider in ("fast", "chat", "instruct"):
+            self._brain_name = preferred_provider
+        else:
+            self._brain_name = "instruct"
+        self._brain = None
+        self.output.info(f"[BRAIN] Using {self._brain_name} as orchestrator brain")
 
     def _record_task_completion(self, task_record: dict, is_async: bool = False) -> None:
         """
@@ -1058,11 +1087,7 @@ class AgentOrchestrator:
         Returns:
             Provider name or None
         """
-        try:
-            provider_name, _ = self.provider_selector.get_model(selection_type)
-            return provider_name
-        except RuntimeError:
-            return None
+        return SELECTION_TYPE_TO_GROUP.get(selection_type)
 
     def is_rate_limited(self, provider_name: str) -> bool:
         """
@@ -1122,13 +1147,13 @@ class AgentOrchestrator:
             ProviderNotFoundError: If no providers are available
             ValueError: If no models configured for selection type
         """
-        # Determine selection type based on quality_mode if not explicitly provided.
+        # Determine selection type from the session default if not explicitly provided.
         if selection_type is None:
-            # Explicit provider or group hints take precedence over quality_mode.
+            # Explicit provider or group hints take precedence over the default.
             selection_type = (
                 selection_type_for_provider_hint(provider_name)
                 if provider_name is not None
-                else ModelSelectionType.CHAT if self.quality_mode else ModelSelectionType.FAST
+                else self._default_selection_type()
             )
 
         min_context = self._min_context_for(selection_type)
@@ -1370,13 +1395,13 @@ class AgentOrchestrator:
             ):
                 print(chunk.content, end="", flush=True)
         """
-        # Determine selection type based on quality_mode if not explicitly provided.
+        # Determine selection type from the session default if not explicitly provided.
         if selection_type is None:
-            # Explicit provider or group hints take precedence over quality_mode.
+            # Explicit provider or group hints take precedence over the default.
             selection_type = (
                 selection_type_for_provider_hint(provider_name)
                 if provider_name is not None
-                else ModelSelectionType.CHAT if self.quality_mode else ModelSelectionType.FAST
+                else self._default_selection_type()
             )
 
         min_context = self._min_context_for(selection_type)
@@ -1496,11 +1521,11 @@ class AgentOrchestrator:
             Exception: Other non-rate-limit errors
         """
         if selection_type is None:
-            # Explicit provider or group hints take precedence over quality_mode.
+            # Explicit provider or group hints take precedence over the default.
             selection_type = (
                 selection_type_for_provider_hint(provider_name)
                 if provider_name is not None
-                else ModelSelectionType.CHAT if self.quality_mode else ModelSelectionType.FAST
+                else self._default_selection_type()
             )
 
         min_context = self._min_context_for(selection_type)
