@@ -34,27 +34,21 @@ class ProviderStatusReporter:
     def __init__(
         self,
         registry,
-        provider_selector,
         output: BaseOutputProtocol,
         brain_name: Optional[str],
-        verbose_selection: bool,
         quality_mode: bool = True
     ):
         """Initialize the status reporter.
 
         Args:
             registry: Provider registry with list_available() method
-            provider_selector: Selector with _get_brain_selection_reason() and get_selection_log()
             output: Output interface for displaying messages
             brain_name: Currently selected brain name
-            verbose_selection: Whether to show detailed selection log
             quality_mode: Whether quality mode is enabled
         """
         self._registry = registry
-        self._selector = provider_selector
         self._output = output
         self._brain_name = brain_name
-        self._verbose_selection = verbose_selection
         self._quality_mode = quality_mode
 
     def update_quality_mode(self, quality_mode: bool) -> None:
@@ -76,21 +70,17 @@ class ProviderStatusReporter:
         self._output.info("\nProvider Status:")
         for provider_name in self.ALL_KNOWN_PROVIDERS:
             if provider_name in available:
-                reason = self._selector._get_brain_selection_reason(provider_name)
                 # Check if provider supports agent role
                 provider = self._registry.get(provider_name)
                 if hasattr(provider, 'supports_agent_role') and not provider.supports_agent_role:
-                    status_str = f"  [OK] {provider_name:<15} - {reason} (general use only)"
+                    status_str = f"  [OK] {provider_name:<15} - available (general use only)"
                 else:
-                    status_str = f"  [OK] {provider_name:<15} - {reason}"
+                    status_str = f"  [OK] {provider_name:<15} - available"
             else:
                 status_str = f"  [--] {provider_name:<15} - NOT AVAILABLE (missing API key or package)"
             self._output.info(status_str)
 
         self._output.info(f"\nSelected Brain: {self._brain_name}")
-        if self._brain_name:
-            reason = self._selector._get_brain_selection_reason(self._brain_name)
-            self._output.info(f"Selection Reason: {reason}")
 
         mode = "CHAT" if self._quality_mode else "FAST"
         self._output.info(f"\nModel Selection Mode: {mode}")
@@ -100,11 +90,6 @@ class ProviderStatusReporter:
         self._output.info(f"\nSelection Priority: {priority}")
         self._output.info(AGENT_PROVIDER_GUIDANCE)
         self._output.info("Use --brain <provider> to override auto-selection")
-
-        if self._verbose_selection and self._selector.get_selection_log():
-            self._output.info("\nSelection Log:")
-            for entry in self._selector.get_selection_log():
-                self._output.info(f"  {entry}")
 
         self._output.info("=" * 60 + "\n")
 
@@ -118,7 +103,6 @@ class ProviderStatusReporter:
                 - selected_brain: Currently selected brain name
                 - selection_priority: List of providers in priority order
                 - provider_details: Dict of provider name to availability info
-                - selection_log: List of selection log entries
         """
         available = self._registry.list_available()
 
@@ -130,7 +114,7 @@ class ProviderStatusReporter:
                 provider_info[provider_name] = {
                     'available': True,
                     'supports_agent_role': supports_agent,
-                    'reason': self._selector._get_brain_selection_reason(provider_name)
+                    'reason': 'available'
                 }
             else:
                 provider_info[provider_name] = {
@@ -145,5 +129,4 @@ class ProviderStatusReporter:
             'selected_brain': self._brain_name,
             'selection_priority': self.SELECTION_PRIORITY,
             'provider_details': provider_info,
-            'selection_log': self._selector.get_selection_log()
         }

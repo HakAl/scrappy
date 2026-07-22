@@ -7,7 +7,7 @@ enabling loose coupling and better testability throughout the codebase.
 This is the canonical location for all orchestrator-related protocols including:
 - LLM request/response types (LLMRequest)
 - Delegation protocols (PromptAugmenterProtocol, BatchSchedulerProtocol)
-- Provider management (ProviderRegistryProtocol, ProviderSelectorProtocol)
+- Provider management (ProviderRegistryProtocol)
 - Caching and rate limiting (CacheProtocol, RateLimitTrackerProtocol)
 """
 
@@ -17,7 +17,6 @@ from typing import Protocol, Optional, Dict, Any, List, runtime_checkable, Async
 
 from pydantic import BaseModel
 
-from .model_selection import ModelSelectionType
 from .provider_types import LLMResponse, LLMProviderProtocol, ProviderLimits
 from ..context import CodebaseContextProtocol
 from .types import StreamChunk
@@ -128,14 +127,6 @@ class BatchSchedulerProtocol(Protocol):
         max_concurrent: int = 5,
     ) -> list[tuple[Any, dict]]:
         """Execute multiple requests in parallel."""
-        ...
-
-    async def execute_multi_provider(
-        self,
-        request: LLMRequest,
-        providers: list[str],
-    ) -> dict[str, tuple[Any, dict]]:
-        """Execute same request across multiple providers in parallel."""
         ...
 
 
@@ -533,59 +524,6 @@ class SessionManagerProtocol(Protocol):
 
         Returns:
             Dictionary with 'status' and restored session state
-        """
-        ...
-
-
-@runtime_checkable
-class ProviderSelectorProtocol(Protocol):
-    """
-    Protocol for provider selection.
-
-    Abstracts provider selection logic to enable testing with
-    controlled selection and support different selection strategies.
-
-    Implementations:
-    - ProviderSelector: Smart selection based on availability and limits
-
-    Example:
-        def pick(selector: ProviderSelectorProtocol, requirements: dict) -> str:
-            return selector.recommend(requirements)
-    """
-
-    def setup_brain(self, preferred_provider: Optional[str] = None) -> tuple[str, None]:
-        """
-        Set up the brain provider for orchestration.
-
-        Args:
-            preferred_provider: Preferred provider name (used if available)
-
-        Returns:
-            Tuple of (provider name, None placeholder)
-        """
-        ...
-
-    def get_model(self, selection_type: ModelSelectionType) -> tuple[str, None]:
-        """
-        Get provider for a model selection type.
-
-        Args:
-            selection_type: Model selection type (fast, balanced, etc.)
-
-        Returns:
-            Tuple of (provider name, None placeholder)
-        """
-        ...
-
-    def recommend(self, requirements: dict) -> str:
-        """
-        Recommend a provider for the given requirements.
-
-        Args:
-            requirements: Requirement hints (task type, context size, etc.)
-
-        Returns:
-            Recommended provider name
         """
         ...
 

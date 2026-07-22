@@ -48,6 +48,7 @@ def create_textual_runtime_session(
         display=display,
         tasks=tasks,
         logger=logger,
+        session_saver=command_router.session_saver,
     )
 
 

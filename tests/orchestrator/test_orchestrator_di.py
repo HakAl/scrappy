@@ -17,7 +17,6 @@ from scrappy.orchestrator.cache import ResponseCache
 from scrappy.orchestrator.rate_limiting import RateLimitTracker
 from scrappy.orchestrator.memory import WorkingMemory
 from scrappy.orchestrator.session import SessionManager
-from scrappy.orchestrator.provider_selector import ProviderSelector
 from scrappy.cli.protocols import BaseOutputProtocol
 from scrappy.orchestrator.output import NullOutput
 
@@ -108,20 +107,6 @@ class TestDependencyInjection:
 
         assert orch.session_manager is mock_session
 
-    def test_uses_injected_provider_selector(self, tmp_path):
-        """Injected provider selector should be used instead of creating default."""
-        mock_selector = Mock(spec=ProviderSelector)
-        mock_delegation = MockDelegationManager()
-
-        orch = AgentOrchestrator(
-            project_path=str(tmp_path),
-            provider_selector=mock_selector,
-            delegation_manager=mock_delegation,
-            output=NullOutput()
-        )
-
-        assert orch.provider_selector is mock_selector
-
     def test_uses_injected_background_manager(self, tmp_path):
         """Injected background manager should be used instead of creating default."""
         from scrappy.orchestrator.manager_protocols import BackgroundTaskManagerProtocol
@@ -157,8 +142,6 @@ class TestDependencyInjection:
 
         mock_session = Mock(spec=SessionManager)
 
-        mock_selector = Mock(spec=ProviderSelector)
-
         mock_delegation = MockDelegationManager()
 
         # Create orchestrator with all mocks
@@ -168,7 +151,6 @@ class TestDependencyInjection:
             rate_tracker=mock_tracker,
             working_memory=mock_memory,
             session_manager=mock_session,
-            provider_selector=mock_selector,
             delegation_manager=mock_delegation,
             output=NullOutput()
         )
@@ -178,7 +160,6 @@ class TestDependencyInjection:
         assert orch.rate_tracker is mock_tracker
         assert orch.working_memory is mock_memory
         assert orch.session_manager is mock_session
-        assert orch.provider_selector is mock_selector
 
         # Can now test orchestrator methods in isolation
         # by configuring mock return values

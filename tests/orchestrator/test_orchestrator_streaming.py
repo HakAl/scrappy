@@ -71,21 +71,6 @@ class MockDelegationManager:
         pass
 
 
-class MockProviderSelector:
-    """Mock provider selector for testing auto-selection."""
-
-    def __init__(self, recommended_provider: Optional[str] = "fast"):
-        self._recommended = recommended_provider
-
-    def get_model(self, selection_type: ModelSelectionType):
-        if self._recommended is None:
-            raise RuntimeError("No providers available")
-        return (self._recommended, f"{self._recommended}-model")
-
-    def setup_brain(self, preferred_provider=None):
-        return ("mock-brain", Mock())
-
-
 class MockProviderRegistry:
     """Mock provider registry."""
 
@@ -132,18 +117,13 @@ def mock_delegation_manager():
     return MockDelegationManager()
 
 
-@pytest.fixture
-def mock_provider_selector():
-    """Create mock provider selector."""
-    return MockProviderSelector()
-
-
-@pytest.fixture
-def orchestrator(mock_delegation_manager, mock_provider_selector):
+def build_orchestrator(delegation_manager, quality_mode: bool = True) -> AgentOrchestrator:
     """
     Create AgentOrchestrator with mocked dependencies.
 
-    Uses dependency injection to provide mocks for testing.
+    Uses dependency injection to provide mocks for testing. quality_mode is
+    construction-time only: it becomes a read-only property on the
+    orchestrator.
     """
     # Create minimal mocks for required dependencies
     mock_output = MockOutput()
@@ -159,23 +139,27 @@ def orchestrator(mock_delegation_manager, mock_provider_selector):
     mock_context_manager.context = Mock()
     mock_background_manager = Mock()
 
-    orch = AgentOrchestrator(
+    return AgentOrchestrator(
+        quality_mode=quality_mode,
         output=mock_output,
         registry=mock_registry,
         cache=mock_cache,
         rate_tracker=mock_rate_tracker,
         working_memory=mock_working_memory,
         session_manager=mock_session_manager,
-        provider_selector=mock_provider_selector,
         usage_reporter=mock_usage_reporter,
         status_reporter=mock_status_reporter,
         task_executor=mock_task_executor,
         context_manager=mock_context_manager,
-        delegation_manager=mock_delegation_manager,
+        delegation_manager=delegation_manager,
         background_manager=mock_background_manager,
     )
 
-    return orch
+
+@pytest.fixture
+def orchestrator(mock_delegation_manager):
+    """Create AgentOrchestrator with mocked dependencies."""
+    return build_orchestrator(mock_delegation_manager)
 
 
 # =============================================================================
@@ -246,15 +230,15 @@ async def test_stream_delegate_auto_selects_provider_when_none(orchestrator, moc
     ):
         collected_chunks.append(chunk)
 
-    # Verify auto-selected provider was used
+    # Default quality_mode=True selects the CHAT group
     call = mock_delegation_manager.stream_delegate_calls[0]
-    assert call['provider_name'] == "fast"
+    assert call['provider_name'] == "chat"
 
 
 @pytest.mark.asyncio
-async def test_stream_delegate_uses_quality_mode_for_selection(orchestrator, mock_delegation_manager):
-    """Test that quality_mode affects provider selection."""
-    orchestrator.quality_mode = True
+async def test_stream_delegate_uses_quality_mode_for_selection(mock_delegation_manager):
+    """Test that construction-time quality_mode affects provider selection."""
+    orchestrator = build_orchestrator(mock_delegation_manager, quality_mode=True)
 
     collected_chunks = []
     async for chunk in orchestrator.stream_delegate(
@@ -263,16 +247,15 @@ async def test_stream_delegate_uses_quality_mode_for_selection(orchestrator, moc
     ):
         collected_chunks.append(chunk)
 
-    # Provider selector should have been queried (via get_recommended_provider)
-    # With quality_mode=True, it would use QUALITY selection type
+    # With quality_mode=True, the CHAT selection type picks the chat group
     call = mock_delegation_manager.stream_delegate_calls[0]
-    assert call['provider_name'] == "fast"  # Mock returns "fast"
+    assert call['provider_name'] == "chat"
 
 
 @pytest.mark.asyncio
-async def test_stream_delegate_selection_type_overrides_quality_mode(orchestrator, mock_delegation_manager):
+async def test_stream_delegate_selection_type_overrides_quality_mode(mock_delegation_manager):
     """Test that explicit selection_type overrides quality_mode."""
-    orchestrator.quality_mode = True
+    orchestrator = build_orchestrator(mock_delegation_manager, quality_mode=True)
 
     collected_chunks = []
     async for chunk in orchestrator.stream_delegate(
@@ -282,8 +265,9 @@ async def test_stream_delegate_selection_type_overrides_quality_mode(orchestrato
     ):
         collected_chunks.append(chunk)
 
-    # Should still work - selection_type used for provider selection
+    # selection_type wins over the CHAT default for provider selection
     assert len(mock_delegation_manager.stream_delegate_calls) == 1
+    assert mock_delegation_manager.stream_delegate_calls[0]['provider_name'] == "fast"
 
 
 # =============================================================================

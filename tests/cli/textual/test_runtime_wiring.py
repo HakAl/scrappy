@@ -70,6 +70,7 @@ def test_create_textual_runtime_session_builds_interactive_mode(
         display=display,
         tasks=tasks,
         logger=logger,
+        session_saver=command_router.session_saver,
     )
 
 

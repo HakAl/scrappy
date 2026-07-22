@@ -8,6 +8,7 @@ import os
 from typing import TYPE_CHECKING, Optional
 
 from .io_interface import CLIIOProtocol
+from .protocols import SessionSaverProtocol
 from .state_manager import PlanStateManager
 from .session_context import SessionContextProtocol
 from .input_handler import InputHandler
@@ -37,6 +38,7 @@ class InteractiveMode:
         display: CLIDisplay,
         tasks: CLITaskExecution,
         logger: CLILogger,
+        session_saver: SessionSaverProtocol,
         theme: Optional[ThemeProtocol] = None,
     ) -> None:
         """
@@ -52,6 +54,7 @@ class InteractiveMode:
             display: Display handler for showing information.
             tasks: Task execution handler.
             logger: Logger for structured logging.
+            session_saver: Seam for saving the session on exit.
             theme: Optional theme for consistent styling.
         """
         from scrappy.infrastructure.theme import DEFAULT_THEME
@@ -65,6 +68,7 @@ class InteractiveMode:
         self.display = display
         self.tasks = tasks
         self.logger = logger
+        self.session_saver = session_saver
         self._theme = theme or DEFAULT_THEME
         # LangGraph bridge for unified chat (set later via set_langgraph_bridge)
         self._langgraph_bridge: Optional["LangGraphBridge"] = None
@@ -235,7 +239,7 @@ class InteractiveMode:
         Side Effects:
             - Displays EOF message to console
             - Logs EOF event
-            - Auto-saves session via orchestrator.save_session() if enabled
+            - Auto-saves session via session_saver.save_session() if enabled
             - Displays session save status
             - Shows usage statistics via display.show_usage()
             - Displays goodbye message
@@ -255,7 +259,7 @@ class InteractiveMode:
         # Auto-save session on exit if enabled
         if self.session_context.auto_save:
             def save_session():
-                return self.orchestrator.save_session(self.session_context.conversation_history)
+                return self.session_saver.save_session(self.session_context.conversation_history)
 
             result = graceful_degrade(
                 save_session,

@@ -9,6 +9,7 @@ This is the canonical location for all CLI-related protocols including:
 - Clipboard integration (ClipboardProtocol)
 - CLI I/O operations (CLIIOProtocol)
 - Output formatting (BaseOutputProtocol, FormattedOutputProtocol, RichRenderableProtocol)
+- Session saving (SessionSaverProtocol)
 - Task management (Task, TaskStatus, TaskPriority, TaskStorageProtocol)
 - Status bar (StatusBarUpdaterProtocol)
 """
@@ -291,6 +292,19 @@ class StreamingOutputProtocol(Protocol):
 
     async def stream_end(self, metadata: Optional[dict[str, Any]] = None) -> None:
         """Signal the end of a streaming response."""
+        ...
+
+
+# =============================================================================
+# Session Saving Protocol
+# =============================================================================
+
+@runtime_checkable
+class SessionSaverProtocol(Protocol):
+    """Protocol for persisting the interactive session on exit."""
+
+    def save_session(self, conversation_history: Optional[list] = None) -> str:
+        """Save the current session, returning the saved session path."""
         ...
 
 

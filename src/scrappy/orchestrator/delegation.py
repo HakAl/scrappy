@@ -25,7 +25,6 @@ from .protocols import (
     INTERNAL_KWARGS,
     BatchSchedulerProtocol,
     CacheProtocol,
-    LLMRequest,
     PromptAugmenterProtocol,
 )
 from .constants import (
@@ -700,61 +699,6 @@ class DelegationManager:
         # Execute all tasks in parallel and preserve order
         results = await asyncio.gather(*[process_task(task) for task in tasks])
         return list(results)
-
-    async def multi_provider_query_async(
-        self,
-        prompt: str,
-        providers: list[str],
-        model: Optional[str] = None,
-        system_prompt: Optional[str] = None,
-        max_tokens: int = DEFAULT_MAX_TOKENS,
-        temperature: float = DEFAULT_TEMPERATURE,
-        **kwargs
-    ) -> dict[str, tuple]:
-        """
-        Query multiple providers in parallel for the same prompt (delegates to BatchScheduler).
-
-        This method now delegates to BatchScheduler for parallel multi-provider queries,
-        eliminating ~15 lines of duplicate logic.
-
-        Useful for getting different perspectives or comparing outputs.
-
-        Args:
-            prompt: The prompt to send to all providers
-            providers: List of provider names to query
-            model: Specific model (optional)
-            system_prompt: System prompt (optional)
-            max_tokens: Maximum tokens in response
-            temperature: Sampling temperature
-            **kwargs: Additional arguments passed to requests
-
-        Returns:
-            Dict mapping provider name to (LLMResponse, task_record) tuple.
-            Failed providers are excluded from results.
-
-        Raises:
-            ValueError: If providers list is empty
-        """
-        # Create LLMRequest object (provider will be overridden per provider)
-        request = LLMRequest(
-            prompt=prompt,
-            provider=providers[0] if providers else DEFAULT_PROVIDER,  # Default, will be overridden
-            model=model,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            use_context=kwargs.get('use_context'),
-            use_cache=kwargs.get('use_cache'),
-            intent_classification=kwargs.get('intent_classification'),
-            auto_fallback=False,  # No fallback in multi-provider mode
-            kwargs=kwargs,
-        )
-
-        # Delegate to BatchScheduler for parallel multi-provider execution
-        return await self._batch_scheduler.execute_multi_provider(
-            request=request,
-            providers=providers,
-        )
 
     async def stream_delegate(
         self,

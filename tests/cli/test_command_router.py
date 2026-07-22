@@ -4,6 +4,8 @@ Tests for CommandRouter.
 Tests command routing, handler dispatch, and individual command handlers.
 """
 
+import json
+
 import pytest
 from unittest.mock import Mock, patch
 from pathlib import Path
@@ -11,6 +13,33 @@ from pathlib import Path
 from scrappy.cli.command_router import CommandRouter
 from scrappy.cli.io_interface import TestIO
 from scrappy.cli.validators.command import CommandValidationResult
+from scrappy.orchestrator.core import AgentOrchestrator
+from scrappy.orchestrator.memory import WorkingMemory
+from scrappy.orchestrator.model_selection import (
+    ModelSelectionService,
+    ModelSelectionType,
+)
+from scrappy.orchestrator.session import SessionManager
+
+
+FAST_MODEL = "groq/llama-3.1-8b-instant"
+CHAT_MODEL = "groq/llama-3.3-70b-versatile"
+INSTRUCT_MODEL = "cerebras/gpt-oss-120b"
+
+
+def make_selection_service(
+    default_type: ModelSelectionType = ModelSelectionType.CHAT,
+) -> ModelSelectionService:
+    """Build a real selection service with one known model per tier."""
+    return ModelSelectionService(
+        configured_models={FAST_MODEL, CHAT_MODEL, INSTRUCT_MODEL},
+        model_priorities={
+            ModelSelectionType.FAST: [FAST_MODEL],
+            ModelSelectionType.CHAT: [CHAT_MODEL],
+            ModelSelectionType.INSTRUCT: [INSTRUCT_MODEL],
+        },
+        default_selection_type=default_type,
+    )
 
 
 class MockTheme:
@@ -35,12 +64,25 @@ def mock_io():
 def mock_orchestrator():
     """Create mock orchestrator."""
     orch = Mock()
-    orch.quality_mode = False
-    orch.provider_selector = Mock()
-    orch.provider_selector.get_model.return_value = ("openai", "gpt-4")
-    orch.save_session.return_value = "/tmp/session.json"
     orch.llm_service = Mock()
     return orch
+
+
+@pytest.fixture
+def mock_session_saver():
+    """Create mock session saver seam."""
+    saver = Mock()
+    saver.save_session.return_value = "/tmp/session.json"
+    return saver
+
+
+@pytest.fixture
+def mock_model_selection():
+    """Create mock model selection service."""
+    selection = Mock()
+    selection.select.return_value = "openai/gpt-4"
+    selection.get_default_type.return_value = ModelSelectionType.FAST
+    return selection
 
 
 @pytest.fixture
@@ -93,6 +135,8 @@ def router(
     mock_codebase,
     mock_tasks,
     mock_agent_mgr,
+    mock_session_saver,
+    mock_model_selection,
 ):
     """Create CommandRouter with all mock dependencies."""
     return CommandRouter(
@@ -104,6 +148,8 @@ def router(
         codebase=mock_codebase,
         tasks=mock_tasks,
         agent_mgr=mock_agent_mgr,
+        session_saver=mock_session_saver,
+        model_selection=mock_model_selection,
     )
 
 
@@ -161,15 +207,26 @@ class TestExitCommands:
         output = mock_io.get_output()
         assert "Goodbye" in output
 
-    def test_exit_handles_save_error(self, router, mock_orchestrator, mock_io):
+    def test_exit_handles_save_error(self, router, mock_session_saver, mock_io):
         """Exit handles session save error gracefully."""
-        mock_orchestrator.save_session.side_effect = Exception("Save failed")
+        mock_session_saver.save_session.side_effect = Exception("Save failed")
 
         result = router._handle_exit("")
 
         assert result is False  # Still exits
         # Error should be reported but not crash
         # The warning utility should be called
+
+    def test_exit_passes_history_to_session_saver(
+        self, router, mock_session_saver, mock_session_context
+    ):
+        """_handle_exit hands the real conversation history to the seam."""
+        history = [{"role": "user", "content": "hi"}]
+        mock_session_context.conversation_history = history
+
+        router._handle_exit("")
+
+        mock_session_saver.save_session.assert_called_once_with(history)
 
 
 class TestDisplayCommands:
@@ -207,57 +264,69 @@ class TestDisplayCommands:
 class TestModelCommand:
     """Tests for /model command."""
 
-    def test_model_fast_sets_quality_mode_false(self, router, mock_orchestrator):
-        """Setting fast tier sets quality_mode to False."""
+    def test_model_fast_sets_default_type_fast(self, router, mock_model_selection):
+        """Setting fast tier sets the session default to FAST."""
         router._handle_model("fast")
 
-        assert mock_orchestrator.quality_mode is False
+        mock_model_selection.set_default_type.assert_called_once_with(
+            ModelSelectionType.FAST
+        )
 
-    def test_model_chat_sets_quality_mode_true(self, router, mock_orchestrator):
-        """Setting chat tier sets quality_mode to True."""
+    def test_model_chat_sets_default_type_chat(self, router, mock_model_selection):
+        """Setting chat tier sets the session default to CHAT."""
         router._handle_model("chat")
 
-        assert mock_orchestrator.quality_mode is True
+        mock_model_selection.set_default_type.assert_called_once_with(
+            ModelSelectionType.CHAT
+        )
 
-    def test_model_instruct_sets_quality_mode_true(self, router, mock_orchestrator):
-        """Setting instruct tier sets quality_mode to True."""
+    def test_model_instruct_sets_default_type_chat(self, router, mock_model_selection):
+        """Setting instruct tier keeps the CHAT session default (quirk preserved)."""
         router._handle_model("instruct")
 
-        assert mock_orchestrator.quality_mode is True
+        mock_model_selection.set_default_type.assert_called_once_with(
+            ModelSelectionType.CHAT
+        )
 
-    def test_model_quality_backwards_compat(self, router, mock_orchestrator):
-        """'quality' tier maps to chat for backwards compat."""
+    def test_model_quality_backwards_compat(self, router, mock_model_selection):
+        """'quality' tier maps to the CHAT default for backwards compat."""
         router._handle_model("quality")
 
-        assert mock_orchestrator.quality_mode is True
+        mock_model_selection.set_default_type.assert_called_once_with(
+            ModelSelectionType.CHAT
+        )
 
-    def test_model_no_arg_shows_current(self, router, mock_io, mock_orchestrator):
+    def test_model_no_arg_shows_current(self, router, mock_io, mock_model_selection):
         """No argument shows current tier."""
-        mock_orchestrator.quality_mode = True
+        mock_model_selection.get_default_type.return_value = ModelSelectionType.CHAT
 
         router._handle_model("")
 
         output = mock_io.get_output()
         assert "Current tier" in output
 
-    def test_model_shows_provider_info(self, router, mock_io, mock_orchestrator):
-        """Model command shows provider/model info."""
-        mock_orchestrator.provider_selector.get_model.return_value = ("anthropic", "claude-3")
+    def test_model_display_success_shows_model_id(
+        self, router, mock_io, mock_model_selection
+    ):
+        """Tier switch success displays the selected model id."""
+        mock_model_selection.select.return_value = "anthropic/claude-3"
 
         router._handle_model("chat")
 
         output = mock_io.get_output()
-        assert "anthropic" in output or "claude" in output
+        assert "  Using: anthropic/claude-3\n" in output
 
-    def test_model_handles_selector_error(self, router, mock_io, mock_orchestrator):
-        """Model command handles selector error gracefully."""
-        mock_orchestrator.provider_selector.get_model.side_effect = Exception("No key")
+    def test_model_display_failure_shows_warning(
+        self, router, mock_io, mock_model_selection
+    ):
+        """Model command handles selection error gracefully."""
+        mock_model_selection.select.side_effect = Exception("No key")
 
         result = router._handle_model("fast")
 
         assert result is True  # Still returns True
         output = mock_io.get_output()
-        assert "Warning" in output
+        assert "Warning: Could not determine model - No key" in output
 
 
 class TestSessionCommands:
@@ -631,3 +700,187 @@ class TestHandleExistingTasks:
         # Confirmation message shown
         output = mock_io.get_output()
         assert "cleared" in output.lower()
+
+
+class TestModelCommandCopyPins:
+    """Characterization pins for /model command copy (PR-5).
+
+    Uses a real ModelSelectionService so the "Using: {model_id}" line pins
+    the actual selection surface: the user sees the concrete model id, not
+    a group name.
+    """
+
+    @pytest.mark.parametrize(
+        "arg, expected_lines",
+        [
+            (
+                "fast",
+                [
+                    "Switched to FAST tier\n",
+                    f"  Using: {FAST_MODEL}\n",
+                    "  8B models, high throughput\n",
+                ],
+            ),
+            (
+                "chat",
+                [
+                    "Switched to CHAT tier\n",
+                    f"  Using: {CHAT_MODEL}\n",
+                    "  70B models, conversation\n",
+                ],
+            ),
+            (
+                "instruct",
+                [
+                    "Switched to INSTRUCT tier\n",
+                    f"  Using: {INSTRUCT_MODEL}\n",
+                    "  Instruction-tuned models (agent/tools)\n",
+                ],
+            ),
+            (
+                "quality",
+                [
+                    "Switched to QUALITY tier\n",
+                    f"  Using: {CHAT_MODEL}\n",
+                ],
+            ),
+        ],
+    )
+    def test_model_tier_switch_copy(self, router, mock_io, arg, expected_lines):
+        """Tier switch prints the switch line and the real model id line."""
+        router.model_selection = make_selection_service()
+
+        result = router._handle_model(arg)
+
+        assert result is True
+        output = mock_io.get_output()
+        for line in expected_lines:
+            assert line in output
+
+    def test_model_unknown_arg_usage_copy(self, router, mock_io):
+        """Unknown argument shows the current tier and the usage line."""
+        router.model_selection = make_selection_service(
+            default_type=ModelSelectionType.FAST
+        )
+
+        result = router._handle_model("warp")
+
+        assert result is True
+        output = mock_io.get_output()
+        assert "Current tier: FAST\n" in output
+        assert f"  Using: {FAST_MODEL}\n" in output
+        assert "Usage: /model fast | /model chat | /model instruct\n" in output
+
+
+class TestQuitCopyPins:
+    """Characterization pins for /quit output copy (PR-5)."""
+
+    def test_quit_saved_display_copy(
+        self, router, mock_io, mock_session_context, mock_display
+    ):
+        """Auto-save quit shows the saved path, message count, resume help, goodbye."""
+        mock_session_context.conversation_history = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello"},
+        ]
+
+        result = router._handle_exit("")
+
+        assert result is False
+        output = mock_io.get_output()
+        assert "\nSession saved to: /tmp/session.json\n" in output
+        assert "  Conversation: 2 messages\n" in output
+        assert "Use 'llm-team --resume' to continue later.\n" in output
+        assert "\nGoodbye!\n" in output
+        mock_display.show_usage.assert_called_once()
+
+    def test_quit_not_saved_warning_copy(
+        self, router, mock_io, mock_session_saver, mock_session_context
+    ):
+        """Disabled auto-save quit shows the not-saved warning and manual-save hint."""
+        mock_session_context.auto_save = False
+
+        result = router._handle_exit("")
+
+        assert result is False
+        mock_session_saver.save_session.assert_not_called()
+        output = mock_io.get_output()
+        assert "\nSession not saved (auto-save disabled).\n" in output
+        assert "Use '/session save' to manually save before quitting.\n" in output
+        assert "\nGoodbye!\n" in output
+
+    def test_quit_autosave_writes_real_history(self, mock_io, tmp_path):
+        """FIXED (scrappy-9qf3): /quit autosave persists the real history.
+
+        _handle_exit passes session_context.conversation_history through the
+        session-saver seam, so the saved payload carries the real messages
+        and the displayed count matches what was written.
+        """
+        orchestrator = AgentOrchestrator(
+            output=Mock(),
+            registry=Mock(),
+            cache=Mock(),
+            rate_tracker=Mock(),
+            working_memory=WorkingMemory(),
+            session_manager=SessionManager(tmp_path),
+            usage_reporter=Mock(),
+            status_reporter=Mock(),
+            task_executor=Mock(),
+            context_manager=Mock(),
+            delegation_manager=Mock(),
+            background_manager=Mock(),
+        )
+        session_context = Mock()
+        session_context.auto_save = True
+        history = [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "second"},
+            {"role": "user", "content": "third"},
+        ]
+        session_context.conversation_history = history
+        router = CommandRouter(
+            io=mock_io,
+            orchestrator=orchestrator,
+            session_context=session_context,
+            display=Mock(),
+            session_mgr=Mock(),
+            codebase=Mock(),
+            tasks=Mock(),
+            agent_mgr=Mock(),
+            session_saver=orchestrator,
+            model_selection=Mock(),
+        )
+
+        result = router._handle_exit("")
+
+        assert result is False
+        saved = json.loads((tmp_path / ".scrappy" / "session.json").read_text())
+        # The fix: the saved payload carries the real history.
+        assert saved["conversation_history"] == history
+        # And the display reports the same message count.
+        assert "  Conversation: 3 messages\n" in mock_io.get_output()
+
+
+class TestSetupCliBranchPin:
+    """Regression pin for the /setup CLI (non-TUI) branch (PR-5)."""
+
+    @patch("scrappy.orchestrator.key_validator.create_key_validator")
+    @patch("scrappy.cli.setup_wizard.SetupWizard")
+    def test_setup_cli_branch_runs_wizard_then_refreshes_providers(
+        self, mock_wizard_class, mock_create_validator, router, mock_io, mock_orchestrator
+    ):
+        """CLI /setup runs the wizard, then refreshes provider configuration."""
+        order = []
+        mock_wizard_class.return_value.run.side_effect = (
+            lambda **kwargs: order.append("wizard_run")
+        )
+        mock_orchestrator.refresh_provider_configuration.side_effect = (
+            lambda: order.append("refresh")
+        )
+
+        result = router._handle_setup("")
+
+        assert result is True
+        assert "Launching provider setup wizard...\n" in mock_io.get_output()
+        mock_wizard_class.return_value.run.assert_called_once_with(allow_cancel=True)
+        assert order == ["wizard_run", "refresh"]

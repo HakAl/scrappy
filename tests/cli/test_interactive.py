@@ -1,10 +1,14 @@
 """Tests for InteractiveMode chat routing behavior."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 from scrappy.cli.interactive import InteractiveMode
 from scrappy.cli.io_interface import TestIO as CLIIOFixture
+from scrappy.orchestrator.core import AgentOrchestrator
+from scrappy.orchestrator.memory import WorkingMemory
+from scrappy.orchestrator.session import SessionManager
 
 
 class MockTheme:
@@ -13,6 +17,8 @@ class MockTheme:
     text = "white"
     error = "red"
     warning = "yellow"
+    success = "green"
+    primary = "blue"
 
 
 def create_mode() -> tuple[InteractiveMode, CLIIOFixture, Mock]:
@@ -39,6 +45,7 @@ def create_mode() -> tuple[InteractiveMode, CLIIOFixture, Mock]:
         display=Mock(),
         tasks=Mock(),
         logger=Mock(),
+        session_saver=Mock(),
         theme=MockTheme(),
     )
     return mode, io, session_context
@@ -135,3 +142,70 @@ def test_process_via_langgraph_failure_without_suggestion_has_no_line():
 
     assert result == "Error: Tool execution failed"
     assert "Suggestion:" not in result
+
+
+def test_handle_eof_autosave_persists_real_conversation_history(tmp_path):
+    """EOF autosave writes the actual conversation history to disk (PR-5 pin).
+
+    The EOF path passes session_context.conversation_history through the
+    session-saver seam, so the saved payload carries the real messages.
+    Asserts on the saved content, not the call shape, so it survives seam
+    rework in commit 3.
+    """
+    io = CLIIOFixture()
+    io.theme = MockTheme()
+    history = [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "hi there"},
+    ]
+    orchestrator = AgentOrchestrator(
+        output=Mock(),
+        registry=Mock(),
+        cache=Mock(),
+        rate_tracker=Mock(),
+        working_memory=WorkingMemory(),
+        session_manager=SessionManager(tmp_path),
+        usage_reporter=Mock(),
+        status_reporter=Mock(),
+        task_executor=Mock(),
+        context_manager=Mock(),
+        delegation_manager=Mock(),
+        background_manager=Mock(),
+    )
+    session_context = Mock()
+    session_context.auto_save = True
+    session_context.conversation_history = history
+
+    mode = InteractiveMode(
+        io=io,
+        orchestrator=orchestrator,
+        session_context=session_context,
+        state_manager=Mock(),
+        input_handler=Mock(),
+        command_router=Mock(),
+        display=Mock(),
+        tasks=Mock(),
+        logger=Mock(),
+        session_saver=orchestrator,
+        theme=MockTheme(),
+    )
+
+    mode._handle_eof()
+
+    saved = json.loads((tmp_path / ".scrappy" / "session.json").read_text())
+    assert saved["conversation_history"] == history
+    assert "Session saved to:" in io.get_output()
+
+
+def test_handle_eof_passes_history_through_session_saver():
+    """EOF autosave routes the real history through the session-saver seam."""
+    mode, io, session_context = create_mode()
+    history = [{"role": "user", "content": "hello"}]
+    session_context.auto_save = True
+    session_context.conversation_history = history
+    mode.session_saver.save_session.return_value = "/tmp/session.json"
+
+    mode._handle_eof()
+
+    mode.session_saver.save_session.assert_called_once_with(history)
+    assert "Session saved to: /tmp/session.json" in io.get_output()

@@ -7,6 +7,7 @@ Routes slash commands to appropriate handlers.
 from pathlib import Path
 from typing import Callable, Optional
 from .io_interface import CLIIOProtocol
+from .protocols import SessionSaverProtocol
 from .state_manager import PlanStateManager
 from .session_context import SessionContextProtocol
 from .display import CLIDisplay
@@ -22,7 +23,10 @@ from .utils.session_utils import (
     display_session_not_saved_warning
 )
 from ..orchestrator.protocols import Orchestrator
-from ..orchestrator.model_selection import ModelSelectionType
+from ..orchestrator.model_selection import (
+    ModelSelectionServiceProtocol,
+    ModelSelectionType,
+)
 
 
 class CommandRouter:
@@ -38,6 +42,8 @@ class CommandRouter:
         codebase: CLICodebaseAnalysis,
         tasks: CLITaskExecution,
         agent_mgr: CLIAgentManager,
+        session_saver: SessionSaverProtocol,
+        model_selection: ModelSelectionServiceProtocol,
         state_manager: Optional[PlanStateManager] = None
     ) -> None:
         """
@@ -52,6 +58,8 @@ class CommandRouter:
             codebase: Codebase analysis handler.
             tasks: Task execution handler.
             agent_mgr: Agent manager handler.
+            session_saver: Seam for saving the session on exit.
+            model_selection: Model selection service for tier state and display.
             state_manager: Optional plan state manager.
         """
         self.io = io
@@ -62,6 +70,8 @@ class CommandRouter:
         self.codebase = codebase
         self.tasks = tasks
         self.agent_mgr = agent_mgr
+        self.session_saver = session_saver
+        self.model_selection = model_selection
         self.state_manager = state_manager or PlanStateManager()
 
         # Optional callback for TUI mode to launch wizard screen
@@ -111,7 +121,9 @@ class CommandRouter:
         io = self.io
         if self.session_context.auto_save:
             try:
-                session_file = self.orchestrator.save_session()
+                session_file = self.session_saver.save_session(
+                    self.session_context.conversation_history
+                )
                 display_session_saved(io, session_file, len(self.session_context.conversation_history), with_help=True)
             except Exception as e:
                 display_session_save_error(io, e)
@@ -147,19 +159,21 @@ class CommandRouter:
 
         Model Tiers:
         - fast: 8B models, speed priority
-        - chat: 70B models, conversation (maps to quality_mode=True for backwards compat)
-        - instruct: Instruction-tuned models for agent/tools (maps to quality_mode=True)
+        - chat: 70B models, conversation (default tier CHAT for backwards compat)
+        - instruct: Instruction-tuned models for agent/tools (default tier CHAT)
         """
         io = self.io
         arg = args.strip().lower()
 
-        # Map tier names to selection types and quality_mode
+        # Map tier names to (display selection type, session default type).
+        # "instruct" deliberately keeps the CHAT default, mirroring the old
+        # instruct-maps-to-quality_mode=True behavior.
         tier_map = {
-            "fast": (ModelSelectionType.FAST, False),
-            "chat": (ModelSelectionType.CHAT, True),
-            "instruct": (ModelSelectionType.INSTRUCT, True),
+            "fast": (ModelSelectionType.FAST, ModelSelectionType.FAST),
+            "chat": (ModelSelectionType.CHAT, ModelSelectionType.CHAT),
+            "instruct": (ModelSelectionType.INSTRUCT, ModelSelectionType.CHAT),
             # Backwards compatibility
-            "quality": (ModelSelectionType.CHAT, True),
+            "quality": (ModelSelectionType.CHAT, ModelSelectionType.CHAT),
         }
 
         tier_descriptions = {
@@ -169,25 +183,30 @@ class CommandRouter:
         }
 
         if arg in tier_map:
-            selection_type, quality_mode = tier_map[arg]
-            self.orchestrator.quality_mode = quality_mode
+            selection_type, default_type = tier_map[arg]
+            self.model_selection.set_default_type(default_type)
             # Get actual model being used for feedback
             try:
-                provider, model = self.orchestrator.provider_selector.get_model(selection_type)
+                model_id = self.model_selection.select(selection_type)
                 io.secho(f"Switched to {arg.upper()} tier", fg=io.theme.success, bold=True)
-                io.echo(f"  Using: {provider}/{model}")
+                io.echo(f"  Using: {model_id}")
                 io.echo(f"  {tier_descriptions.get(arg, '')}")
             except Exception as e:
                 io.secho(f"Switched to {arg.upper()} tier", fg=io.theme.success)
                 io.secho(f"  Warning: Could not determine model - {e}", fg=io.theme.warning)
         else:
             # Show current mode
-            mode = "CHAT" if self.orchestrator.quality_mode else "FAST"
-            selection_type = ModelSelectionType.CHAT if self.orchestrator.quality_mode else ModelSelectionType.FAST
+            default_type = self.model_selection.get_default_type()
+            mode = "CHAT" if default_type == ModelSelectionType.CHAT else "FAST"
+            selection_type = (
+                ModelSelectionType.CHAT
+                if default_type == ModelSelectionType.CHAT
+                else ModelSelectionType.FAST
+            )
             try:
-                provider, model = self.orchestrator.provider_selector.get_model(selection_type)
+                model_id = self.model_selection.select(selection_type)
                 io.echo(f"Current tier: {io.style(mode, fg=io.theme.success, bold=True)}")
-                io.echo(f"  Using: {provider}/{model}")
+                io.echo(f"  Using: {model_id}")
             except Exception as e:
                 io.echo(f"Current tier: {io.style(mode, fg=io.theme.success, bold=True)}")
                 io.secho(f"  Warning: Could not determine model - {e}", fg=io.theme.warning)

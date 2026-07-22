@@ -91,7 +91,7 @@ def create_context_state(ctx: Any) -> Dict[str, Any]:
         ctx: Click context object
 
     Returns:
-        Dict with all 7 standard configuration keys
+        Dict with all 6 standard configuration keys
     """
     obj = ctx.obj if ctx.obj is not None else {}
 
@@ -102,7 +102,6 @@ def create_context_state(ctx: Any) -> Dict[str, Any]:
         'resume': obj.get('resume', False),
         'auto_save': obj.get('auto_save', True),
         'show_providers': obj.get('show_providers', False),
-        'verbose_selection': obj.get('verbose_selection', False),
     }
 
 
@@ -124,7 +123,6 @@ def extract_context_options(ctx: Any) -> Dict[str, Any]:
         'brain': obj.get('brain'),
         'auto_explore': obj.get('auto_explore', False),
         'context_aware': obj.get('context_aware', True),
-        'verbose_selection': obj.get('verbose_selection', False),
         'show_provider_status': obj.get('show_providers', False),
     }
 
@@ -203,7 +201,6 @@ def create_cli_from_context(
         brain=options['brain'],
         auto_explore=options['auto_explore'],
         context_aware=options['context_aware'],
-        verbose_selection=options['verbose_selection'],
         show_provider_status=options['show_provider_status'],
         io=io,
         theme=theme
@@ -228,7 +225,6 @@ def create_cli(
             - brain: Provider to use as brain (default None)
             - auto_explore: Auto-explore on startup (default False)
             - context_aware: Enable context-aware prompts (default True)
-            - verbose_selection: Show verbose provider selection (default False)
             - show_provider_status: Show provider status on startup (default False)
         io: IO interface (creates if not provided)
         theme: Optional theme for styling. Defaults to DEFAULT_THEME.
@@ -247,7 +243,6 @@ def create_cli(
         brain=config.get('brain'),
         auto_explore=config.get('auto_explore', False),
         context_aware=config.get('context_aware', True),
-        verbose_selection=config.get('verbose_selection', False),
         show_provider_status=config.get('show_provider_status', False),
         io=io,
         theme=theme

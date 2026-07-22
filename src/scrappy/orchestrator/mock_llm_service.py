@@ -360,6 +360,17 @@ class MockModelSelectionService:
 
     MOCK_MODEL_ID = "mock/mock-model"
 
+    def __init__(self) -> None:
+        self._default_selection_type = ModelSelectionType.CHAT
+
+    def set_default_type(self, selection_type: ModelSelectionType) -> None:
+        """Track the default selection type like the real service."""
+        self._default_selection_type = selection_type
+
+    def get_default_type(self) -> ModelSelectionType:
+        """Return the tracked default selection type."""
+        return self._default_selection_type
+
     def select(
         self,
         selection_type: ModelSelectionType,

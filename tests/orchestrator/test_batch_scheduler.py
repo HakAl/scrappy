@@ -236,81 +236,6 @@ async def test_execute_batch_single_request():
     assert llm_service.call_count == 1
 
 
-@pytest.mark.asyncio
-async def test_execute_multi_provider_basic():
-    """Test multi-provider execution for same prompt."""
-    llm_service = MockLLMService()
-    output = MockOutput()
-    scheduler = BatchScheduler(llm_service=llm_service, output=output)
-
-    request = LLMRequest(prompt="Test prompt", provider="fast")
-    model_groups = ["fast", "chat", "instruct"]
-
-    results = await scheduler.execute_multi_provider(request, model_groups)
-
-    assert len(results) == 3
-    assert "fast" in results
-    assert "chat" in results
-    assert "instruct" in results
-
-    # Verify each model group got a response
-    for group, (response, metadata) in results.items():
-        assert response.content == "Response for: Test prompt"
-
-
-@pytest.mark.asyncio
-async def test_execute_multi_provider_excludes_failures():
-    """Test that failed model groups are excluded from results."""
-    llm_service = make_failing_llm_service()
-    output = MockOutput()
-    scheduler = BatchScheduler(llm_service=llm_service, output=output)
-
-    request = LLMRequest(prompt="Test prompt", provider="fast")
-    model_groups = ["fast", "chat", "instruct"]
-
-    results = await scheduler.execute_multi_provider(request, model_groups)
-
-    # All groups failed, so results should be empty
-    assert len(results) == 0
-
-    # Errors should be logged (one per model group)
-    assert len(output.errors) == 3
-
-
-
-@pytest.mark.asyncio
-async def test_execute_multi_provider_single_provider():
-    """Test multi-provider with single model group."""
-    llm_service = MockLLMService()
-    output = MockOutput()
-    scheduler = BatchScheduler(llm_service=llm_service, output=output)
-
-    request = LLMRequest(prompt="Test prompt", provider="fast")
-    model_groups = ["fast"]
-
-    results = await scheduler.execute_multi_provider(request, model_groups)
-
-    assert len(results) == 1
-    assert "fast" in results
-    assert results["fast"][0].content == "Response for: Test prompt"
-
-
-@pytest.mark.asyncio
-async def test_execute_multi_provider_disables_fallback():
-    """Test that multi-provider mode works with model groups."""
-    llm_service = MockLLMService()
-    output = MockOutput()
-    scheduler = BatchScheduler(llm_service=llm_service, output=output)
-
-    request = LLMRequest(prompt="Test prompt", provider="fast", auto_fallback=True)
-    model_groups = ["fast", "chat", "instruct"]
-
-    results = await scheduler.execute_multi_provider(request, model_groups)
-
-    # Should complete successfully (one result per model group)
-    assert len(results) == 3
-
-
 def test_batch_scheduler_requires_injected_dependencies():
     """Test that BatchScheduler requires dependencies to be injected."""
     llm_service = MockLLMService()
@@ -361,23 +286,3 @@ async def test_execute_batch_parallel_execution():
     # Allow some margin for overhead
     assert elapsed < 0.3, f"Took {elapsed}s, expected < 0.3s for parallel execution"
     assert len(results) == 5
-
-
-@pytest.mark.asyncio
-async def test_execute_multi_provider_parallel_execution():
-    """Test that multi-provider queries run in parallel."""
-    llm_service = MockLLMService(delay_ms=100)
-    output = MockOutput()
-    scheduler = BatchScheduler(llm_service=llm_service, output=output)
-
-    request = LLMRequest(prompt="Test prompt", provider="fast")
-    model_groups = ["fast", "chat", "instruct"]
-
-    import time
-    start = time.time()
-    results = await scheduler.execute_multi_provider(request, model_groups)
-    elapsed = time.time() - start
-
-    # If parallel, should take ~100ms. If sequential, would take ~300ms.
-    assert elapsed < 0.3, f"Took {elapsed}s, expected < 0.3s for parallel execution"
-    assert len(results) == 3

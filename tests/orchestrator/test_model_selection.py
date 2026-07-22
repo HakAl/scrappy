@@ -9,6 +9,7 @@ from scrappy.orchestrator.model_selection import (
     ModelSelectionType,
     MODEL_PRIORITIES,
     _build_selection_exhausted_suggestion,
+    selection_type_for_provider_hint,
 )
 
 
@@ -284,3 +285,61 @@ class TestSelectionExhaustedSuggestion:
             "Unavailable models: groq/llama-3.1-8b-instant (groq: network). "
             "Configure another provider or try again later."
         )
+
+
+class TestSelectionTypeForProviderHint:
+    """Tests for legacy provider/group hint mapping."""
+
+    @pytest.mark.parametrize(
+        ("hint", "expected"),
+        [
+            (None, ModelSelectionType.FAST),
+            ("fast", ModelSelectionType.FAST),
+            ("groq", ModelSelectionType.FAST),
+            ("cerebras", ModelSelectionType.FAST),
+            ("auto", ModelSelectionType.FAST),
+            ("mock", ModelSelectionType.FAST),
+            ("chat", ModelSelectionType.CHAT),
+            ("quality", ModelSelectionType.CHAT),
+            ("instruct", ModelSelectionType.INSTRUCT),
+            ("gemini", ModelSelectionType.INSTRUCT),
+        ],
+    )
+    def test_known_hints(self, hint, expected):
+        """Known hints map to their single selection type."""
+        assert selection_type_for_provider_hint(hint) == expected
+
+    def test_unknown_hint_defaults_to_chat_and_logs_debug(self, caplog):
+        """Unknown hints use CHAT while preserving a debug breadcrumb."""
+        with caplog.at_level("DEBUG"):
+            result = selection_type_for_provider_hint("unknown-provider")
+
+        assert result == ModelSelectionType.CHAT
+        assert "unknown-provider" in caplog.text
+
+
+class TestDefaultSelectionType:
+    """Tests for the session default selection type on the service."""
+
+    def test_default_type_is_chat_when_unspecified(self):
+        """A service built without an explicit default starts on CHAT."""
+        service = ModelSelectionService(configured_models=set())
+
+        assert service.get_default_type() == ModelSelectionType.CHAT
+
+    def test_constructor_default_type_is_honored(self):
+        """The constructor default seeds get_default_type."""
+        service = ModelSelectionService(
+            configured_models=set(),
+            default_selection_type=ModelSelectionType.FAST,
+        )
+
+        assert service.get_default_type() == ModelSelectionType.FAST
+
+    def test_set_default_type_flips_the_default(self):
+        """set_default_type replaces the value get_default_type reports."""
+        service = ModelSelectionService(configured_models=set())
+
+        service.set_default_type(ModelSelectionType.FAST)
+
+        assert service.get_default_type() == ModelSelectionType.FAST
