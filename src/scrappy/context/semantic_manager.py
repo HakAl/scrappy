@@ -24,7 +24,7 @@ from ..infrastructure.threading import (
     EventType,
 )
 from .protocols import (
-    SemanticSearchProtocol,
+    IndexingSearchProtocol,
     FileCollectorProtocol,
     SearchResult,
     IndexStateProtocol,
@@ -93,7 +93,7 @@ class SemanticSearchManager:
         self._staleness_checker = staleness_checker or self._create_default_staleness_checker()
 
         # Semantic search state
-        self._semantic_search: Optional[SemanticSearchProtocol] = None
+        self._semantic_search: Optional[IndexingSearchProtocol] = None
         self._initializer = initializer
         self._progress_callback: Optional[Callable[[str, int, int], None]] = None
         self._file_collector_callback: Optional[Callable[[], Optional[FileCollectorProtocol]]] = None
@@ -264,7 +264,7 @@ class SemanticSearchManager:
             return self._initializer.get_status()
         return None
 
-    def get_search_provider(self) -> Optional[SemanticSearchProtocol]:
+    def get_search_provider(self) -> Optional[IndexingSearchProtocol]:
         """
         Get the semantic search provider if available.
 
