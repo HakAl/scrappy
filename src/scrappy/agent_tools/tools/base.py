@@ -143,20 +143,24 @@ class WorkingSet:
             del self._files[oldest_path]
 
 
+class ToolWorkingMemoryProtocol(Protocol):
+    """Exactly the working-memory operations ToolContext performs.
+
+    Deliberately minimal and uniquely named: two unrelated protocols are both
+    named WorkingMemoryProtocol (graph vs orchestrator flavours, see
+    scrappy-x8up), and neither matches what the tool layer actually needs.
+    """
+
+    def remember_file_read(self, path: str, content: str, lines: int = 0) -> None: ...
+    def remember_search(self, query: str, results: list) -> None: ...
+    def remember_git_operation(self, operation: str, output: str) -> None: ...
+
+
 class MemoryProvider(Protocol):
-    """Protocol for memory operations in tools."""
+    """Protocol for the object ToolContext reaches working memory through."""
 
-    def remember_file_read(self, path: str, content: str, lines: int) -> None:
-        """Store file read in working memory."""
-        ...
-
-    def remember_search(self, query: str, results: list) -> None:
-        """Store search results in working memory."""
-        ...
-
-    def remember_git_operation(self, operation: str, result: str) -> None:
-        """Store git operation result in working memory."""
-        ...
+    @property
+    def working_memory(self) -> ToolWorkingMemoryProtocol: ...
 
 
 def _default_agent_config() -> "AgentConfig":

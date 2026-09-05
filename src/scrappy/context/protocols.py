@@ -5,11 +5,24 @@ Defines abstract interfaces for codebase context awareness, project detection,
 file scanning, and git history operations.
 """
 
-from typing import Callable, Protocol, Dict, Any, List, Optional, Set, runtime_checkable
+from typing import (
+    Callable,
+    Protocol,
+    Dict,
+    Any,
+    List,
+    Optional,
+    Set,
+    runtime_checkable,
+    TYPE_CHECKING,
+)
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
+
+if TYPE_CHECKING:
+    from scrappy.infrastructure.protocols import ProgressReporterProtocol
 
 
 @runtime_checkable
@@ -785,6 +798,11 @@ class FileCollectorProtocol(Protocol):
     """
     Protocol for collecting files for semantic search indexing.
 
+    Defined as the full indexing collector contract: file collection PLUS
+    file metadata (paths, content hashes, sizes). This is a deliberate design
+    choice made visible here at the definition rather than buried in a plan,
+    so consumers see that an indexing collector owns both responsibilities.
+
     Abstracts file collection to enable:
     - File size limits to prevent OOM
     - Binary file detection
@@ -830,6 +848,23 @@ class FileCollectorProtocol(Protocol):
             Dict[str, str]: Batch of file paths to content
         """
         ...
+
+    def collect_file_paths(self) -> List[Path]: ...
+    def get_file_hashes(self, files: List[Path]) -> Dict[str, str]: ...
+    def get_file_sizes(self, files: List[Path]) -> Dict[str, int]: ...
+
+
+@runtime_checkable
+class IndexingSearchProtocol(SemanticSearchProtocol, Protocol):
+    """Search provider that also owns index persistence and progress wiring.
+
+    Capability composite used by SemanticSearchManager only. General search
+    consumers depend on SemanticSearchProtocol and must not be forced to
+    implement persistence or progress reporting.
+    """
+
+    def save_index_state(self, state_manager: 'IndexStateProtocol') -> None: ...
+    def set_progress_reporter(self, progress_reporter: 'ProgressReporterProtocol') -> None: ...
 
 
 @runtime_checkable
@@ -978,6 +1013,8 @@ class SemanticSearchManagerProtocol(Protocol):
             timeout: Max seconds to wait for background threads to stop.
         """
         ...
+
+    def get_search_provider(self) -> Optional['SemanticSearchProtocol']: ...
 
 
 @runtime_checkable
@@ -1271,6 +1308,9 @@ class StalenessCheckerProtocol(Protocol):
         Should be called after successfully re-indexing changed files.
         """
         ...
+
+    def has_fingerprints(self) -> bool: ...
+    def quick_check(self) -> bool: ...
 
 
 # --- Re-index Operations ---

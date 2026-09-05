@@ -742,6 +742,8 @@ class BackgroundInitializerProtocol(Protocol):
         """
         ...
 
+    def shutdown(self, timeout: float = 5.0) -> bool: ...
+
 
 class ProgressReporterProtocol(Protocol):
     """
