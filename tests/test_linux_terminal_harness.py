@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.containment.env import ContainmentConflictError
 from tests.integration.linux_terminal_harness import (
     LinuxHarnessError,
     LinuxTerminalHarness,
@@ -13,6 +14,21 @@ from tests.integration.linux_terminal_harness import (
     _find_free_display_number,
     _parse_xdotool_shell_geometry,
 )
+
+
+def test_build_display_env_rejects_a_containment_key_in_extra_env():
+    """CONFLICT RULE (plan 3c): a containment key via extra_env is a hard error."""
+    harness = LinuxTerminalHarness()
+    with pytest.raises(ContainmentConflictError, match="HOME"):
+        harness._build_display_env({"HOME": "/outside/hostile"})
+
+
+def test_build_display_env_allows_non_containment_extra_env_past_the_guard():
+    """A non-containment key clears the guard; the missing session then fails, proving
+    the guard did not reject it."""
+    harness = LinuxTerminalHarness()
+    with pytest.raises(LinuxHarnessError):
+        harness._build_display_env({"SCRAPPY_MOCK_LLM": "1"})
 
 
 def test_parse_xdotool_shell_geometry_reads_required_fields():

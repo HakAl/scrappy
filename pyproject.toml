@@ -28,7 +28,12 @@ classifiers = [
 dependencies = [
     "instructor>=1.7.0",
     "litellm>=1.80.10,!=1.82.7,!=1.82.8",
-    "python-dotenv>=1.0.0",
+    # Floor raised from >=1.0.0 for the PYTHON_DOTENV_DISABLED switch, which is what
+    # the contained-pytest launcher relies on to keep the suite from loading a
+    # developer .env. Evidence: python-dotenv CHANGELOG (bundled in the 1.2.1 wheel
+    # METADATA) records the switch under "[1.2.0] - 2025-10-26"; 1.1.1 and earlier lack
+    # it, so >=1.0.0 could resolve to a version that silently loads .env anyway (S-4).
+    "python-dotenv>=1.2.0",
     "openai>=1.0.0",
     "click>=8.0.0",
     "rich>=14.2.0",

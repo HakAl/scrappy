@@ -46,6 +46,58 @@ def pytest_configure(config):
     if not config.option.basetemp:
         config.option.basetemp = pytest_temp
 
+
+# ---------------------------------------------------------------------------
+# Containment DISCLOSURE banner (scrappy-i2jo PR-1, plan 3e).
+#
+# This is DISCLOSURE, NOT CONTAINMENT. It does not redirect anything. A bare
+# `pytest` invocation still writes to the developer's REAL user profile until the
+# later routing PRs land; this banner only tells the developer so, and names the
+# launcher that does contain the run. The operator declined an in-process HOME
+# backstop (open decision O-1), so none is added here: an in-process assignment
+# cannot be ordered before the import-bound constants it would need to beat.
+# ---------------------------------------------------------------------------
+
+_TRUTHY = {"1", "true", "t", "yes", "y"}
+
+# Profile paths still expected to escape at PR-1, with the PR that routes each. This
+# is the current expected-escape list the banner discloses; it shrinks as PRs land.
+_EXPECTED_ESCAPES = (
+    "~/.scrappy/command_history (routed in PR-2)",
+    "~/.scrappy/model_cooldowns.json (routed in PR-2)",
+    "<user config>/scrappy/config.json (routed in PR-3)",
+    "<user data>/scrappy user directories and rate_limits.json (routed in PR-4)",
+    "<legacy>/.scrappy migration source (routed in PR-4)",
+    "~/.cache/huggingface population (unattributed; measured by PR-1)",
+)
+
+
+def _containment_active() -> bool:
+    """True when the run is inside scripts/contained-pytest.sh's environment.
+
+    The launcher roots HOME under a `.pytest_profile` region and sets the dotenv
+    switch; both together are the signal. Disclosure fires only when absent.
+    """
+    home = os.environ.get("HOME", "")
+    home_contained = ".pytest_profile" in Path(home).parts
+    dotenv_disabled = os.environ.get("PYTHON_DOTENV_DISABLED", "").casefold() in _TRUTHY
+    return home_contained and dotenv_disabled
+
+
+def pytest_report_header(config):
+    """Emit the disclosure banner in the session header when NOT contained."""
+    if _containment_active():
+        return None
+    lines = [
+        "containment DISCLOSURE (scrappy-i2jo PR-1): this run is NOT contained.",
+        "  A bare pytest writes to your REAL user profile. Run the suite through",
+        "  scripts/contained-pytest.sh to redirect it into a disposable profile.",
+        "  This message is disclosure, not containment; it does not redirect anything.",
+        "  Profile paths still expected to escape at this point in the sequence:",
+    ]
+    lines.extend(f"    - {escape}" for escape in _EXPECTED_ESCAPES)
+    return lines
+
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))

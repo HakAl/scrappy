@@ -7,6 +7,7 @@ import shlex
 
 import pytest
 
+from tests.containment.env import ContainmentConflictError
 from tests.integration.macos_terminal_harness import (
     MacOSHarnessError,
     MacOSTerminalHarness,
@@ -15,6 +16,36 @@ from tests.integration.macos_terminal_harness import (
     _parse_launch_identity,
 )
 from tests.integration.real_terminal_harness import RealTerminalSessionSpec
+
+
+def _session_with_env(env):
+    return RealTerminalSessionSpec(
+        title="title",
+        fixture_repo=Path("/fixture/repo"),
+        venv_python=Path("/venv/bin/python"),
+        debug_log_path=Path("/logs/log.jsonl"),
+        ready_file=Path("/logs/ready.signal"),
+        env=env,
+        entry_module="scrappy.cli.commands",
+    )
+
+
+def test_build_shell_command_rejects_a_containment_key_in_session_env():
+    """CONFLICT RULE (plan 3c): a containment key via session.env is a hard error."""
+    with pytest.raises(ContainmentConflictError, match="CLI_CONFIG_PATH"):
+        _build_shell_command(_session_with_env({"CLI_CONFIG_PATH": "/outside/cfg.json"}))
+
+
+def test_build_shell_command_forwards_the_containment_set(monkeypatch):
+    """The containment set from the environment is exported explicitly for the
+    independently-based iTerm2 child (plan S-5)."""
+    monkeypatch.setenv("HOME", "/contained/home")
+    monkeypatch.setenv("TMPDIR", "/contained/scratch/os")
+    monkeypatch.setenv("CLI_CONFIG_PATH", "/contained/home/absent.json")
+    command = _build_shell_command(_session_with_env({"SCRAPPY_MOCK_LLM": "1"}))
+    assert "export HOME=/contained/home" in command
+    assert "export TMPDIR=/contained/scratch/os" in command
+    assert "export CLI_CONFIG_PATH=/contained/home/absent.json" in command
 
 
 def test_escape_applescript_string_escapes_quotes_and_backslashes():
