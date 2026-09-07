@@ -1,5 +1,8 @@
 """Tests for the containment env key set and the CONFLICT RULE (plan 3b, 3c)."""
 
+import re
+from pathlib import Path
+
 import pytest
 
 from tests.containment.env import (
@@ -10,26 +13,28 @@ from tests.containment.env import (
 )
 
 
+LAUNCHER = Path(__file__).resolve().parents[2] / "scripts" / "contained-pytest.sh"
+
+
+def launcher_exported_keys() -> set[str]:
+    """Return the variables scripts/contained-pytest.sh actually exports (STEP D)."""
+    return set(re.findall(r"(?m)^export ([A-Za-z_][A-Za-z0-9_]*)=", LAUNCHER.read_text()))
+
+
 def test_key_set_matches_launcher_assignment():
-    """The forwarded key set is exactly what scripts/contained-pytest.sh assigns (3b)."""
-    assert CONTAINMENT_ENV_KEYS == {
-        "HOME",
-        "XDG_DATA_HOME",
-        "XDG_CONFIG_HOME",
-        "XDG_CACHE_HOME",
-        "HF_HOME",
-        "HUGGINGFACE_HUB_CACHE",
-        "HF_HUB_CACHE",
-        "HF_ASSETS_CACHE",
-        "FASTEMBED_CACHE_PATH",
-        "PYTHON_DOTENV_DISABLED",
-        "TMPDIR",
-        "TEMP",
-        "TMP",
-        "SCRAPPY_TEST_TEMP",
-        "SCRAPPY_TEST_SESSION_ID",
-        "CLI_CONFIG_PATH",
-    }
+    """The forwarded key set is exactly what scripts/contained-pytest.sh assigns (3b).
+
+    READ FROM THE LAUNCHER, not restated here. A hand-copied list drifts silently: it
+    would still pass after someone added an export to the launcher, and the macOS and
+    tmux harnesses would then stop forwarding a key the launcher owns, which is exactly
+    the S-5 failure this constant exists to prevent.
+    """
+    exported = launcher_exported_keys()
+    assert exported, f"no export lines found in {LAUNCHER}; the parser has drifted"
+    assert set(CONTAINMENT_ENV_KEYS) == exported, (
+        f"launcher exports {sorted(exported - set(CONTAINMENT_ENV_KEYS))} not in the key set; "
+        f"key set has {sorted(set(CONTAINMENT_ENV_KEYS) - exported)} the launcher does not export"
+    )
 
 
 def test_forward_env_selects_only_containment_keys():

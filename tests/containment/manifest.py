@@ -9,6 +9,11 @@ MANIFEST CONTRACT:
   - Full manifests are compared per path. Directory mtimes are NEVER consulted: the R1
     reproduction changed a file while its parent directory mtime did not.
 
+MEASURED-REGION GUARD (scrappy-aggp): assert_outside_measured_region() refuses a write
+the INSTRUMENT performs for its own purposes when that write would land inside the region
+being measured. Instrument artifacts in the escape set make the baseline permanently
+non-empty, and T-4 retires this instrument only when an EMPTY baseline is OBSERVED.
+
 DISPOSABLE-REGION GUARD: every function refuses a target that is not demonstrably a
 disposable region. A path is disposable when a ``.pytest_profile`` segment appears in
 it, OR it is not nested under the real home directory. That blocks the real profile
@@ -31,6 +36,18 @@ class RealProfileAccessError(RuntimeError):
     """Raised when a helper is pointed at anything that could be the real profile."""
 
 
+class MeasuredRegionContaminationError(RuntimeError):
+    """Raised when the INSTRUMENT itself would write inside the measured region.
+
+    See bead scrappy-aggp. The positive control originally wrote its marker into
+    ``Path.home()/.scrappy``, which under the launcher IS the measured region, so two
+    of the first run's four escape entries were the instrument's own writes. A baseline
+    that permanently contains instrument artifacts can never shrink to empty, and T-4
+    earns retirement only by OBSERVING an empty baseline. The instrument must therefore
+    be structurally incapable of entering the set it measures.
+    """
+
+
 def ensure_disposable(path: str | os.PathLike[str]) -> Path:
     """Return ``path`` resolved, or raise if it is not a disposable region.
 
@@ -44,6 +61,32 @@ def ensure_disposable(path: str | os.PathLike[str]) -> Path:
         raise RealProfileAccessError(
             f"refusing to touch {resolved}: it is under the real home {home} and is not "
             f"a {CONTAINMENT_MARKER} disposable region"
+        )
+    return resolved
+
+
+def assert_outside_measured_region(
+    path: str | os.PathLike[str],
+    *,
+    measured_root: str | os.PathLike[str],
+) -> Path:
+    """Return ``path`` resolved, or raise if it lies inside the measured region.
+
+    This is the scrappy-aggp guard. Every write the INSTRUMENT performs for its own
+    purposes (probe markers, positive-control artifacts) must pass through here, so an
+    instrument artifact cannot become an escape entry in the application baseline.
+
+    It is deliberately separate from ``ensure_disposable``: that guard answers "is this
+    safe to touch at all", this one answers "is this outside the thing being measured".
+    A path can be perfectly disposable and still contaminate the measurement.
+    """
+    resolved = Path(path).resolve()
+    root = Path(measured_root).resolve()
+    if resolved == root or root in resolved.parents:
+        raise MeasuredRegionContaminationError(
+            f"refusing to let the instrument write {resolved}: it is inside the measured "
+            f"region {root}. Instrument artifacts would enter the application escape "
+            f"baseline, which could then never shrink to empty (scrappy-aggp, T-4)."
         )
     return resolved
 

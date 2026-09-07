@@ -196,9 +196,26 @@ if [ "${PRINT_ONLY}" = "1" ]; then
         "TMP=${SCRATCH_OS_DIR}" \
         "SCRAPPY_TEST_TEMP=${SCRATCH_BASE}" \
         "SCRAPPY_TEST_SESSION_ID=${SESSION_ID}" \
-        "CLI_CONFIG_PATH=${CLI_CONFIG_ABSENT}"
+        "CLI_CONFIG_PATH=${CLI_CONFIG_ABSENT}" \
+        "PINNED_PYTEST_CONFIG=${REPO_ROOT}/pytest.ini"
     exit 0
 fi
 
 # --- STEP E: exec pytest with the caller's arguments ----------------------------
-exec "${VENV_PYTHON}" -m pytest "$@"
+# PIN THE CONFIG FILE. pytest otherwise DISCOVERS its config from the invocation CWD and
+# from test-path ancestors (_pytest/config/findpaths.py), so launching from another
+# project, or naming a test path under a nested config, would load a pytest.ini whose
+# addopts the preflight never validated -- including an outside-repo --basetemp, which
+# _pytest/tmpdir.py then removes and recreates. -c stops discovery outright, and the file
+# pinned here is exactly the one STEP A validated. The preflight has already REFUSED any
+# caller-supplied -c, so this cannot be overridden from outside.
+if [ -f "${REPO_ROOT}/pytest.ini" ]; then
+    PINNED_CONFIG="${REPO_ROOT}/pytest.ini"
+elif [ -f "${REPO_ROOT}/pyproject.toml" ]; then
+    PINNED_CONFIG="${REPO_ROOT}/pyproject.toml"
+else
+    echo "contained-pytest: no pytest config to pin at ${REPO_ROOT}" >&2
+    exit 6
+fi
+
+exec "${VENV_PYTHON}" -m pytest -c "${PINNED_CONFIG}" "$@"

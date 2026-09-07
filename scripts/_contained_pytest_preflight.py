@@ -37,6 +37,9 @@ except ModuleNotFoundError:  # pragma: no cover - defensive only
     tomllib = None  # type: ignore[assignment]
 
 
+PROFILE_MARKER = ".pytest_profile"
+
+
 def _fail(check: str, detail: str) -> None:
     print(f"[preflight] FAIL {check}: {detail}", file=sys.stderr)
     raise SystemExit(11)
@@ -84,6 +87,95 @@ def _scan_basetemp(tokens: list[str]) -> list[str]:
     return values
 
 
+def _scan_valued_flag(tokens: list[str], long: str, short: str | None = None) -> list[str]:
+    """Return every value given to a valued flag, in the UNCLUSTERED forms modelled here.
+
+    Supported contract, and nothing beyond it: ``--flag value``, ``--flag=value``,
+    ``-x value``, ``-xvalue`` and ``-x=value``, where ``-x`` is the flag's own short
+    option. THIS HELPER ALONE IS NOT SUFFICIENT: it returns no override for
+    ``-voaddopts=x``, which argparse does accept, and safety there depends on its caller
+    refusing that token first (see _unmodelled_short_clusters).
+    Written generically because the same shapes carry BOTH of the config channels the
+    original scanner missed (finding scrappy-f7l7): ``-o``/``--override-ini`` and ``-c``.
+
+    These are the ONLY short forms this scanner models. CLUSTERED short options such as
+    ``-voaddopts=...`` are NOT modelled here; they are refused outright before any scan
+    runs (see _unmodelled_short_clusters and finding scrappy-tnyy).
+
+    THE ``-x=value`` FORM IS NOT OPTIONAL (finding scrappy-wwm9). argparse strips the
+    separator, so ``-o=addopts=@args.txt`` reaches pytest as the override
+    ``addopts=@args.txt``. Returning the raw remainder ``=addopts=@args.txt`` instead put
+    an empty ini name in front of it, the override was discarded as unparseable, and the
+    response file behind it became invisible to every later check.
+    """
+    values: list[str] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok == long or (short is not None and tok == short):
+            if i + 1 < len(tokens):
+                values.append(tokens[i + 1])
+            i += 2
+            continue
+        if tok.startswith(long + "="):
+            values.append(tok.split("=", 1)[1])
+        elif short is not None and tok.startswith(short) and len(tok) > len(short):
+            remainder = tok[len(short):]
+            # argparse consumes a single separator between a short option and its value.
+            values.append(remainder[1:] if remainder.startswith("=") else remainder)
+        i += 1
+    return values
+
+
+# Short options whose ATTACHED form this scanner models: -o/-c plus their value.
+MODELLED_SHORT_OPTIONS = frozenset({"o", "c"})
+
+
+def _unmodelled_short_clusters(tokens: list[str]) -> list[str]:
+    """Return short-option tokens whose grammar this preflight does not model.
+
+    argparse (which pytest subclasses without changing cluster parsing) accepts CLUSTERED
+    short options, so ``-voaddopts=--basetemp=/outside`` is ``-v`` followed by ``-o`` with
+    a value. A scanner that looks for tokens beginning ``-o`` never sees it, and the same
+    trick hides ``-c`` and, through an addopts override, a response file (scrappy-tnyy).
+
+    Modelling clusters correctly would require knowing the arity of EVERY pytest short
+    option, including those added by plugins, and getting it wrong in the permissive
+    direction reopens the hole while getting it wrong in the restrictive direction breaks
+    ordinary use. Every previous attempt in this bead to model an argument grammar more
+    cleverly introduced a new gap, so this REFUSES instead.
+
+    Cost: combined short flags must be passed separately, ``-x -v -s`` rather than
+    ``-xvs``, and ``-k expr`` rather than ``-kexpr``. That is a small, clearly-reported
+    ergonomic cost, paid once at the launcher, in exchange for an argument surface that
+    can actually be analysed.
+    """
+    unmodelled: list[str] = []
+    for tok in tokens:
+        if not tok.startswith("-") or tok.startswith("--") or len(tok) <= 2:
+            continue
+        if tok[1] in MODELLED_SHORT_OPTIONS:
+            continue
+        unmodelled.append(tok)
+    return unmodelled
+
+
+def _override_addopts_tokens(tokens: list[str]) -> list[str]:
+    """Return addopts tokens injected via ``-o addopts=...`` / ``--override-ini``.
+
+    _pytest/config/__init__.py:1501-1503 reads override_ini and :1527-1529 prepends the
+    EFFECTIVE addopts, so an override reaches pytest exactly like a config file would.
+    The launcher forwards argv unchanged, so this channel must be scanned or a hostile
+    --basetemp hides behind a token that merely begins "addopts=" (finding scrappy-f7l7).
+    """
+    injected: list[str] = []
+    for override in _scan_valued_flag(tokens, "--override-ini", "-o"):
+        name, sep, value = override.partition("=")
+        if sep and name.strip() == "addopts":
+            injected.extend(shlex.split(value))
+    return injected
+
+
 def _pyproject_addopts_tokens(repo_root: Path) -> list[str]:
     pyproject = repo_root / "pyproject.toml"
     if tomllib is None or not pyproject.exists():
@@ -118,6 +210,19 @@ def _pytest_ini_addopts_tokens(repo_root: Path) -> list[str]:
     if not parser.has_option("pytest", "addopts"):
         return []
     return shlex.split(parser.get("pytest", "addopts"))
+
+
+def _pinned_config_file(repo_root: Path) -> Path | None:
+    """Return the config file the launcher will pin with -c, or None if there is none.
+
+    pytest.ini wins over pyproject.toml, matching what pytest itself honours (it reports
+    "ignoring pytest config in pyproject.toml" when both exist).
+    """
+    for name in ("pytest.ini", "pyproject.toml"):
+        candidate = repo_root / name
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _config_addopts_tokens(repo_root: Path) -> tuple[list[str], str]:
@@ -181,26 +286,141 @@ def main() -> int:
     profile_root = Path(args.profile_root).resolve()
     if not _is_inside(repo_root, profile_root):
         _fail("profile-under-repo", f"{profile_root} not under {repo_root}")
-    _ok("profile-under-repo", f"{profile_root} is under repo")
+    # IN-REPO IS NOT ENOUGH. A session id such as "../escape" or "sub/../../escape"
+    # traverses OUT of .pytest_profile/ while still resolving inside the repo, so the
+    # repo check alone passes. That profile is then (a) NOT covered by the
+    # ".pytest_profile/" .gitignore entry, so it can be committed, and (b) invisible to
+    # every marker-based guard: tests/containment/test_positive_control.py gates on
+    # ".pytest_profile" in Path.home().parts and would SILENTLY SKIP the entire positive
+    # control while the suite still reported green. Require the marker.
+    # The marker region is taken LITERALLY, never resolved. Resolving both sides would
+    # let the boundary move: a .pytest_profile symlink pointing at another in-repo
+    # directory resolves to that directory on BOTH sides, so every check passes while the
+    # launcher writes outside the region .gitignore actually ignores.
+    marker_root = repo_root / PROFILE_MARKER
+    if marker_root.is_symlink():
+        _fail(
+            "profile-under-marker",
+            f"{marker_root} is a symlink to {os.readlink(marker_root)!r}. The marker "
+            "region defines the containment boundary and the .gitignore entry that covers "
+            "it; it must be a real directory, not an indirection.",
+        )
+    if not _is_inside(marker_root, profile_root):
+        _fail(
+            "profile-under-marker",
+            f"{profile_root} is inside the repo but escapes {marker_root}; session id "
+            f"{args.session_id!r} traverses out of the {PROFILE_MARKER} region",
+        )
+    _ok("profile-under-marker", f"{profile_root} is under {marker_root}")
 
     home = Path(args.home).resolve()
     if not _is_inside(repo_root, home):
         _fail("home-contained", f"HOME {home} not under repo {repo_root}")
+    # Repo containment alone is not enough for HOME either: an existing session-home
+    # symlink pointing at another in-repo directory satisfies it while placing the
+    # measured region outside the ignored marker region.
+    if not _is_inside(marker_root, home):
+        _fail(
+            "home-contained",
+            f"HOME {home} is inside the repo but escapes the {PROFILE_MARKER} region "
+            f"{marker_root}; it resolves outside the disposable, ignored profile area",
+        )
     if args.original_home:
         original = Path(args.original_home).expanduser().resolve()
         if home == original:
             _fail("home-not-real", f"HOME still resolves to the real profile {original}")
     _ok("home-contained", f"HOME {home} is contained and distinct from the real profile")
 
+    # --- effective pytest CONFIG must be the repo's own (R2 finding 2) --------
+    # pytest discovers its config from the invocation CWD and from test-path ancestors
+    # (_pytest/config/findpaths.py). The launcher execs in the caller's CWD, so running
+    # it from ANOTHER project would have pytest load THAT project's config, whose addopts
+    # this preflight never scanned, while the preflight approved the scrappy root config.
+    # Two things close that: this check, and the launcher PINNING -c to the validated
+    # config file at exec (STEP E), which stops discovery entirely.
+    cwd = Path.cwd().resolve()
+    if not _is_inside(repo_root, cwd):
+        _fail(
+            "cwd-contained",
+            f"invoked from {cwd}, outside the repository {repo_root}. pytest would "
+            "discover configuration from there, and this preflight validates only the "
+            "repository's own config. Run the launcher from inside the repository.",
+        )
+    _ok("cwd-contained", f"invocation cwd {cwd} is inside the repo")
+
+    pinned_config = _pinned_config_file(repo_root)
+    if pinned_config is None:
+        _fail(
+            "config-pinned",
+            f"no pytest.ini or pyproject.toml at {repo_root} to pin. Without a pinned "
+            "config pytest would discover one, and an undiscovered config's addopts "
+            "cannot be validated. Refusing rather than running unpinned.",
+        )
+    _ok("config-pinned", f"launcher will pin -c {pinned_config}")
+
     # --- N2: effective --basetemp across argv, PYTEST_ADDOPTS, pyproject -------
     argv_tokens = list(args.pytest_args)
     addopts_env = shlex.split(os.environ.get("PYTEST_ADDOPTS", ""))
     config_tokens, config_source = _config_addopts_tokens(repo_root)
-    found = (
-        _scan_basetemp(argv_tokens)
-        + _scan_basetemp(addopts_env)
-        + _scan_basetemp(config_tokens)
+    # Tokens injected via -o/--override-ini addopts=..., from EVERY channel that can
+    # carry such an override. These are effective pytest arguments and must be validated
+    # exactly like literal argv (finding scrappy-9f74).
+    override_tokens = (
+        _override_addopts_tokens(argv_tokens)
+        + _override_addopts_tokens(addopts_env)
+        + _override_addopts_tokens(config_tokens)
     )
+    effective_tokens = argv_tokens + addopts_env + config_tokens + override_tokens
+
+    # FAIL CLOSED on ARGPARSE RESPONSE FILES, ACROSS EVERY EFFECTIVE CHANNEL.
+    # _pytest/config/argparsing.py:463 sets fromfile_prefix_chars="@", so a token like
+    # @args.txt is expanded BY PYTEST into arbitrary further arguments, recursively.
+    # Nothing scanned here would see a --basetemp or a -c inside it.
+    #
+    # CHECKING ONLY LITERAL ARGV IS NOT ENOUGH: `-o 'addopts=@args.txt'` contains no
+    # token beginning with @ and names no --basetemp, yet pytest applies the override,
+    # prepends the resulting addopts, and expands the response file. The refusal
+    # therefore runs over argv, PYTEST_ADDOPTS, the repository config addopts, AND the
+    # tokens extracted from every ini override.
+    # FAIL CLOSED on short-option CLUSTERS before anything is scanned: a cluster can
+    # carry -o, -c or a response file past every scanner below (finding scrappy-tnyy).
+    clusters = _unmodelled_short_clusters(effective_tokens)
+    if clusters:
+        _fail(
+            "no-short-clusters",
+            f"clustered or attached short option(s) {clusters} supplied. argparse accepts "
+            "these, so a cluster can carry -o, -c or an @response-file past every check "
+            "here. This preflight models only -o/-c with attached values. Pass short "
+            "options separately, for example '-x -v -s' rather than '-xvs' and "
+            "'-k expr' rather than '-kexpr'.",
+        )
+    _ok("no-short-clusters", "no unmodelled short-option cluster in any argument channel")
+
+    response_files = [token for token in effective_tokens if token.startswith("@")]
+    if response_files:
+        _fail(
+            "no-response-files",
+            f"argparse response file(s) {response_files} reachable from argv, "
+            "PYTEST_ADDOPTS, the repository config addopts or an -o addopts override. "
+            "pytest expands these recursively into arbitrary arguments, including "
+            "--basetemp and -c, none of which this preflight can see. Pass arguments "
+            "directly instead.",
+        )
+    _ok("no-response-files", "no @response-file token in any effective argument channel")
+
+    # FAIL CLOSED on an alternate config file. -c selects a config this preflight has
+    # not scanned, so its addopts (and any --basetemp inside them) are UNKNOWN. An
+    # unscanned channel must refuse, never approve by silence (finding scrappy-f7l7).
+    alternate_configs = _scan_valued_flag(effective_tokens, "--config-file", "-c")
+    if alternate_configs:
+        _fail(
+            "basetemp-contained",
+            f"alternate pytest config {alternate_configs} selected via -c/--config-file; "
+            "its addopts are not scanned by this preflight, so containment cannot be "
+            "established. Refusing rather than approving an unexamined channel.",
+        )
+
+    found = _scan_basetemp(effective_tokens)
     if found:
         for raw in found:
             resolved = (Path.cwd() / raw).resolve() if not Path(raw).is_absolute() else Path(raw).resolve()
@@ -208,7 +428,10 @@ def main() -> int:
                 _fail("basetemp-contained", f"--basetemp={raw!r} resolves to {resolved}, outside repo")
         _ok("basetemp-contained", f"effective --basetemp value(s) {found} resolve inside repo")
     else:
-        _ok("basetemp-contained", f"no effective --basetemp in argv/PYTEST_ADDOPTS/{config_source}")
+        _ok(
+            "basetemp-contained",
+            f"no effective --basetemp in argv/PYTEST_ADDOPTS/-o addopts/{config_source}",
+        )
 
     # --- S-4: python-dotenv honours PYTHON_DOTENV_DISABLED --------------------
     try:

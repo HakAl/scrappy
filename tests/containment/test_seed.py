@@ -27,7 +27,11 @@ def test_seed_writes_known_content_and_size(tmp_path, monkeypatch):
 
     config = seed.platform_config_file()
     assert config.read_bytes() == seed.CONFIG_JSON_BYTES
-    assert config.resolve() == config.resolve()  # config resolved under the contained home
+    # The seed must land INSIDE the measured region, otherwise the manifest never sees it
+    # and an application overwrite of the real config would go unnoticed.
+    assert home.resolve() in config.resolve().parents
+    rel_config = config.resolve().relative_to(home.resolve()).as_posix()
+    assert seeded[rel_config]["size"] == len(seed.CONFIG_JSON_BYTES)
 
 
 def test_seed_does_not_write_rate_limits(tmp_path, monkeypatch):

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.containment import manifest
+from tests.containment import instrument, manifest
 
 
 def _measured_region(tmp_path: Path) -> Path:
@@ -99,3 +99,77 @@ def test_ensure_disposable_allows_a_pytest_profile_region(tmp_path):
     region = tmp_path / ".pytest_profile" / "sid" / "home"
     region.mkdir(parents=True)
     assert manifest.ensure_disposable(region) == region.resolve()
+
+
+# ---------------------------------------------------------------------------
+# scrappy-aggp: the instrument must not be able to enter its own baseline.
+# ---------------------------------------------------------------------------
+
+
+def test_measured_region_guard_refuses_a_target_inside_the_measured_region(tmp_path):
+    """The guard is not vacuous: a profile-shaped path under the measured root is refused."""
+    measured = tmp_path / "home"
+    (measured / ".scrappy").mkdir(parents=True)
+    with pytest.raises(manifest.MeasuredRegionContaminationError):
+        manifest.assert_outside_measured_region(
+            measured / ".scrappy" / "probe_d_marker", measured_root=measured
+        )
+    # The measured root itself is refused too, not only paths beneath it.
+    with pytest.raises(manifest.MeasuredRegionContaminationError):
+        manifest.assert_outside_measured_region(measured, measured_root=measured)
+
+
+def test_measured_region_guard_allows_a_sibling_disposable_region(tmp_path):
+    measured = tmp_path / "home"
+    measured.mkdir()
+    sibling = tmp_path / "caches" / "probe_marker"
+    assert manifest.assert_outside_measured_region(
+        sibling, measured_root=measured
+    ) == sibling.resolve()
+
+
+def test_the_real_instrument_writes_produce_an_empty_measured_diff(tmp_path):
+    """scrappy-aggp regression: instrument artifacts CANNOT enter the application baseline.
+
+    Calls the ACTUAL instrument implementation (tests/containment/instrument.py, the same
+    functions the positive control uses) against a SYNTHETIC measured region, rather than
+    re-modelling the writes here. That coupling is the point: an earlier version of this
+    test reconstructed the writes, so moving a real probe back under the measured region
+    would have left it green. Now there is one implementation and moving it fails here.
+    """
+    measured = tmp_path / "home"
+    (measured / ".scrappy").mkdir(parents=True)
+    seeded = measured / ".scrappy" / "command_history"
+    seeded.write_bytes(b"seed-help\n")
+    rel = ".scrappy/command_history"
+
+    before = manifest.snapshot(measured, hashed={rel})
+
+    written = instrument.perform_probe_writes(
+        temp_dir=tmp_path / "scratch" / "system",
+        scratch_root=tmp_path / "scratch",
+        caches_root=tmp_path / "caches",
+        measured_root=measured,
+    )
+
+    after = manifest.snapshot(measured, hashed={rel})
+    assert manifest.diff(before, after) == []
+    assert manifest.escape_paths(manifest.diff(before, after)) == []
+    # The writes really happened; the empty diff is not vacuous.
+    assert written["profile_marker"].exists()
+    assert written["cache_marker"].exists()
+    assert ".scrappy" in written["profile_marker"].parts
+
+
+def test_the_real_instrument_refuses_when_pointed_at_the_measured_region(tmp_path):
+    """The coupling above only proves something if the guard can actually fail."""
+    measured = tmp_path / "home"
+    measured.mkdir()
+    with pytest.raises(manifest.MeasuredRegionContaminationError):
+        instrument.perform_probe_writes(
+            temp_dir=measured / "scratch",
+            scratch_root=measured / "scratch",
+            caches_root=measured / "caches",
+            measured_root=measured,
+        )
+    assert list(measured.iterdir()) == [], "refusal must leave the measured region untouched"
