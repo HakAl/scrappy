@@ -20,6 +20,7 @@ Covered refusals:
 
 from __future__ import annotations
 
+import os
 import shlex
 import shutil
 import subprocess
@@ -126,7 +127,13 @@ def test_profile_root_outside_the_repo_is_refused():
     """
     proc = run_preflight(profile_root=OUTSIDE_ROOT)
     assert_refused(proc, "S13-chosen-session-id")
-    assert OUTSIDE_ROOT in proc.stderr
+    # The launcher echoes the refused path in the PLATFORM'S OWN separator form: it
+    # resolves the root first, and Windows renders that as a drive-qualified path
+    # (D:\nonexistent-outside-root\escape). Asserting the POSIX spelling compared the
+    # argument against itself and held only where the two forms coincide. normpath gives
+    # the native spelling, which stays a substring of the drive-qualified report, so the
+    # refusal code and the named check above remain the load-bearing assertions.
+    assert os.path.normpath(OUTSIDE_ROOT) in proc.stderr, proc.stderr
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +288,16 @@ def test_a_repository_with_no_pytest_config_to_pin_is_refused(tmp_path):
     assert_refused(proc, "config-pinned")
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason=(
+        "Asserts SUCCESSFUL execution of scripts/contained-pytest.sh, a bash launcher that "
+        "refuses Windows BY DESIGN, via a stub interpreter that is itself a shell script. "
+        "Windows raises WinError 193 before any argv can be recorded, so the test can never "
+        "reach the property it exists to check. This skip claims NOTHING about Windows "
+        "containment; the preflight REFUSAL tests in this module still run on every platform."
+    ),
+)
 @pytest.mark.parametrize("subdir", ["plain", "dir with spaces"])
 def test_the_launcher_execs_pytest_with_the_pinned_config(tmp_path, subdir):
     """BEHAVIOURAL: capture the argv the launcher actually execs pytest with.

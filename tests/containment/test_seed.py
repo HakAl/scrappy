@@ -1,5 +1,6 @@
 """Tests for profile seeding (plan 3d, D-6)."""
 
+import sys
 from pathlib import Path
 
 from tests.containment import manifest, seed
@@ -13,6 +14,9 @@ def _contained_home(tmp_path: Path, monkeypatch) -> Path:
     so ensure_disposable()'s real-home test can never accept it: ``Path.home()`` resolves
     to exactly the path being guarded. The marker is the only route by which this region
     is disposable, which makes it independent of where the checkout lives.
+
+    HOME and XDG contain the lookup on POSIX only; see the Windows branch below for why
+    that platform needs the OS folder lookup itself mocked.
     """
     home = tmp_path / ".pytest_profile" / "sid" / "home"
     home.mkdir(parents=True)
@@ -20,6 +24,31 @@ def _contained_home(tmp_path: Path, monkeypatch) -> Path:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
     monkeypatch.setenv("XDG_DATA_HOME", str(home / ".local" / "share"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
+
+    if sys.platform == "win32":
+        # On Windows NONE of the assignments above reach platformdirs. It binds and
+        # lru_cache-wraps its folder resolver at IMPORT time (platformdirs/windows.py:274)
+        # and the implementation selected whenever ctypes.windll exists is
+        # get_win_folder_via_ctypes, which asks the OS through SHGetFolderPathW.
+        # LOCALAPPDATA is read only by get_win_folder_from_env_vars, the FALLBACK used when
+        # neither ctypes.windll nor winreg can be imported, so setting that variable would
+        # not contain anything on a real runner (scrappy-k5gy).
+        #
+        # Replacing the module-level callable is the seam that does contain it: the call
+        # sites resolve the global at call time (windows.py:75), so substituting the cached
+        # object sidesteps the lru_cache instead of fighting it, and every folder id is
+        # answered from the disposable region rather than only the one under test.
+        #
+        # ONLY the OS lookup is mocked. The seeding, the filesystem writes, the hashes and
+        # the manifest comparison all stay REAL, so Windows keeps genuine unit coverage.
+        from platformdirs import windows as platformdirs_windows
+
+        appdata = home / "AppData" / "Local"
+        appdata.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(
+            platformdirs_windows, "get_win_folder", lambda _csidl_name: str(appdata)
+        )
+
     return home
 
 
