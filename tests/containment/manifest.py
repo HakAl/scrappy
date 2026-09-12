@@ -15,11 +15,15 @@ MANIFEST CONTRACT:
     FIRST: os.walk() classifies each entry with DirEntry.is_dir(), which stats the
     target, so referent METADATA is consulted even though it never determines a recorded
     field. SECOND: this module walks by PATHNAME, so lstat and the later open are
-    separate operations. A final component swapped for a link between them is refused by
-    O_NOFOLLOW in hash_file and voids the measurement; an ANCESTOR DIRECTORY swapped for
-    a link mid-scan is NOT covered, and covering it would require descriptor-relative
-    traversal. CONCURRENT MUTATION OF THE MEASURED REGION IS OUT OF SCOPE, which is
-    consistent with the instrument being single-measurement by design.
+    separate operations. WHERE O_NOFOLLOW IS AVAILABLE, a final component swapped for a
+    link between them is refused by hash_file and voids the measurement; ON A PLATFORM
+    WITHOUT IT the flag degrades to zero and THAT RACE REMAINS OPEN, so such a swap would
+    be followed and the referent hashed. An ANCESTOR DIRECTORY swapped for a link
+    mid-scan is NOT covered on any platform, and covering it would require
+    descriptor-relative traversal. CONCURRENT MUTATION OF THE MEASURED REGION IS OUT OF
+    SCOPE, which is consistent with the instrument being single-measurement by design,
+    though single-measurement does NOT by itself establish that the tree is quiescent:
+    the caller must actually keep it stable for the duration of each scan.
   - CONTENT HASHES are recorded for SEEDED files only, where a stable expected value
     exists. Non-seeded output (cooldown JSON, logs) is matched at PATH granularity.
   - Full manifests are compared per path. Directory mtimes are NEVER consulted: the R1
@@ -206,11 +210,13 @@ def snapshot(root: str | os.PathLike[str], *, hashed: set[str] | None = None) ->
 
     AND IT HOLDS FOR A TREE THAT IS STABLE DURING THE SCAN. Traversal is by PATHNAME, so
     the lstat here and the open inside hash_file are separate operations on the same
-    name. A final component swapped for a symlink between them is refused by O_NOFOLLOW
-    and becomes a scan error, so the measurement is VOIDED rather than silently taken
-    from outside the region. An ancestor directory swapped for a link mid-scan is not
-    covered. This instrument is single-measurement by design and is not claimed to be
-    correct under concurrent mutation of the region it measures.
+    name. WHERE O_NOFOLLOW IS AVAILABLE, a final component swapped for a symlink between
+    them is refused and becomes a scan error, so the measurement is VOIDED rather than
+    silently taken from outside the region. WHERE IT IS NOT AVAILABLE the flag degrades
+    to zero and that race is NOT closed. An ancestor directory swapped for a link
+    mid-scan is not covered on any platform. This instrument is single-measurement by
+    design and is not claimed to be correct under concurrent mutation of the region it
+    measures.
     """
     base = ensure_disposable(root)
     hashed = hashed or set()
