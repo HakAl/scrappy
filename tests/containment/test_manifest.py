@@ -341,7 +341,8 @@ def test_a_link_whose_target_is_unreadable_is_not_reported_as_broken(tmp_path):
     therefore became a clean accepted entry, which is the scrappy-sqqc class of defect:
     a read failure turning into evidence (scrappy-ni4w).
 
-    Nothing probes the target now, so there is no failure left to misclassify.
+    Referent metadata does not determine the recorded symlink entry, so there is no
+    failure left to misclassify.
     """
     region = _measured_region(tmp_path)
     locked = tmp_path / "locked_parent"
