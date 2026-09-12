@@ -18,7 +18,7 @@ def _disposable_root(tmp_path: Path) -> Path:
     """A tmp subtree that carries the ``.pytest_profile`` marker segment.
 
     ensure_disposable() accepts a path only when a ``.pytest_profile`` segment appears in
-    it OR it is not nested under the real home. A bare ``tmp_path`` satisfies NEITHER when
+    it. A bare ``tmp_path`` does not carry one, which matters when
     the repository is checked out under the developer's home directory, which is the case
     on every CI runner (the checkout sits under the runner's own home). Under the launcher
     these regions inherited the marker from the contained basetemp, so they passed for a
@@ -267,12 +267,13 @@ def test_an_unreadable_subtree_voids_the_measurement(tmp_path):
     sys.platform == "win32",
     reason="creating symlinks on Windows needs a privilege the runner does not hold",
 )
-def test_a_dangling_symlink_stays_visible_rather_than_vanishing(tmp_path):
+def test_a_broken_symlink_stays_visible_rather_than_vanishing(tmp_path):
     """A broken link is a real state of the region, so it is recorded, not dropped.
 
-    It is the one stat failure that must NOT void the measurement: treating it as a read
-    error would abort legitimate runs, and skipping it would reintroduce exactly the
-    silent disappearance this bead is about. It is recorded from lstat instead.
+    Skipping it would reintroduce exactly the silent disappearance scrappy-sqqc is about.
+    It is now recorded like any other link, from lstat and readlink, WITHOUT the target
+    being probed at all: the manifest says "this path is a link to X" and claims nothing
+    about whether X resolves (scrappy-ni4w).
     """
     region = _measured_region(tmp_path)
     link = region / ".scrappy" / "dangling"
@@ -281,4 +282,181 @@ def test_a_dangling_symlink_stays_visible_rather_than_vanishing(tmp_path):
     entries = manifest.snapshot(region)
 
     assert ".scrappy/dangling" in entries, entries
-    assert entries[".scrappy/dangling"]["kind"] == "dangling_symlink"
+    assert entries[".scrappy/dangling"]["kind"] == "symlink"
+    assert entries[".scrappy/dangling"]["target"].endswith("no-such-target")
+
+
+_NO_SYMLINKS_ON_WINDOWS = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="creating symlinks on Windows needs a privilege the runner does not hold",
+)
+
+
+@_NO_SYMLINKS_ON_WINDOWS
+def test_snapshot_never_follows_a_symlink_out_of_the_measured_region(tmp_path):
+    """A link out of the region must not be followed, sized, or hashed (scrappy-f2uw).
+
+    snapshot() used to stat() and open() through the link, so a seeded path replaced by
+    a link into the ORIGINAL profile made the manifest record that external file's size
+    and sha256 as though they belonged to the region. Two failures in one: the
+    measurement describes a file that is not in the region, and the instrument reads a
+    profile it must never touch. Validating the root says nothing about its descendants.
+
+    The outside file here is SYNTHETIC. The real profile is never involved.
+    """
+    region = _measured_region(tmp_path)
+    outside = tmp_path / "outside_the_region"
+    outside.mkdir()
+    external = outside / "original_command_history"
+    external.write_bytes(b"OUTSIDE-CONTENT-" * 8)  # 128 bytes, unlike any seed
+
+    rel = ".scrappy/command_history"
+    link = region / rel
+    link.symlink_to(external)
+
+    entries = manifest.snapshot(region, hashed={rel})
+
+    assert entries[rel]["kind"] == "symlink"
+    assert entries[rel]["target"] == str(external)
+    # The recorded size is the length of the link text, NOT the external file's size.
+    assert entries[rel]["size"] != external.stat().st_size
+    assert entries[rel]["size"] == len(str(external))
+    # The seeded path was requested as hashed, and STILL nothing outside was read.
+    assert entries[rel]["sha256"] is None
+
+
+@_NO_SYMLINKS_ON_WINDOWS
+@pytest.mark.skipif(
+    _IS_ROOT,
+    reason="root traverses unreadable directories, so the read failure cannot be provoked",
+)
+def test_a_link_whose_target_is_unreadable_is_not_reported_as_broken(tmp_path):
+    """An unreadable target is not a missing one, and must not be recorded as such.
+
+    The old branch caught EVERY OSError from stat() and, on finding the path was a
+    symlink, declared it dangling. is_symlink() proves only that the path IS a link; it
+    never proved the target was absent. A permission error, an I/O error or a link loop
+    therefore became a clean accepted entry, which is the scrappy-sqqc class of defect:
+    a read failure turning into evidence (scrappy-ni4w).
+
+    Nothing probes the target now, so there is no failure left to misclassify.
+    """
+    region = _measured_region(tmp_path)
+    locked = tmp_path / "locked_parent"
+    locked.mkdir()
+    target = locked / "present_and_readable_but_for_the_parent"
+    target.write_bytes(b"this target EXISTS")
+    link = region / ".scrappy" / "link_into_locked"
+    link.symlink_to(target)
+    locked.chmod(0o000)
+    try:
+        entries = manifest.snapshot(region)
+
+        assert entries[".scrappy/link_into_locked"]["kind"] == "symlink"
+        assert entries[".scrappy/link_into_locked"]["target"] == str(target)
+    finally:
+        # Restore before pytest's own cleanup, which cannot remove an unreadable dir.
+        locked.chmod(0o700)
+
+
+@_NO_SYMLINKS_ON_WINDOWS
+def test_a_seed_replaced_by_a_same_size_link_is_still_an_operation(tmp_path):
+    """Destroying a seed must produce a diff even when the size is unchanged.
+
+    diff() compared size and hashes only, and hash_changed required BOTH hashes to
+    exist. Replacing the 32-byte seeded command_history with a dangling link whose
+    target string is ALSO 32 bytes left the size equal and the new hash None, so the
+    destroyed seed generated NO operation at all (scrappy-st0h). That seed's growth is
+    this instrument's entire measured signal.
+    """
+    region = _measured_region(tmp_path)
+    rel = ".scrappy/command_history"
+    seed = region / rel
+    seed.write_bytes(b"A" * 32)
+
+    before = manifest.snapshot(region, hashed={rel})
+    assert before[rel]["size"] == 32
+
+    target_of_equal_length = "B" * 32
+    seed.unlink()
+    seed.symlink_to(target_of_equal_length)
+
+    after = manifest.snapshot(region, hashed={rel})
+    assert after[rel]["size"] == before[rel]["size"], "the size must be UNCHANGED"
+    assert after[rel]["sha256"] is None
+
+    ops = manifest.diff(before, after)
+
+    assert [op["path"] for op in ops] == [rel], ops
+    assert ops[0]["op"] == "modified"
+    assert ops[0]["before"]["kind"] == "file"
+    assert ops[0]["after"]["kind"] == "symlink"
+
+
+@_NO_SYMLINKS_ON_WINDOWS
+def test_a_retargeted_link_of_equal_length_is_an_operation(tmp_path):
+    """Same kind, same size, different referent. Only the target tells them apart."""
+    region = _measured_region(tmp_path)
+    rel = ".scrappy/link"
+    link = region / rel
+    link.symlink_to("aaaa")
+
+    before = manifest.snapshot(region)
+
+    link.unlink()
+    link.symlink_to("bbbb")
+
+    after = manifest.snapshot(region)
+    assert before[rel]["size"] == after[rel]["size"]
+
+    ops = manifest.diff(before, after)
+
+    assert [op["path"] for op in ops] == [rel], ops
+    assert ops[0]["after"]["target"] == "bbbb"
+
+
+@_NO_SYMLINKS_ON_WINDOWS
+def test_a_symlinked_directory_is_recorded_and_never_traversed(tmp_path):
+    """A directory link out of the region used to leave NO trace whatsoever.
+
+    os.walk() does not follow directory links by default, and a linked directory never
+    appears in ``filenames``, so it was absent from every manifest AND raised no error.
+    The link and everything behind it simply did not exist as far as the instrument was
+    concerned: another route to a baseline forged out of silence.
+
+    The link is now recorded as an object. It is still not traversed, so nothing behind
+    it is read.
+    """
+    region = _measured_region(tmp_path)
+    outside = tmp_path / "outside_the_region"
+    outside.mkdir()
+    (outside / "leaked").write_bytes(b"content behind the link")
+
+    (region / ".scrappy" / "linked_dir").symlink_to(outside, target_is_directory=True)
+
+    entries = manifest.snapshot(region)
+
+    assert entries[".scrappy/linked_dir"]["kind"] == "symlink"
+    assert entries[".scrappy/linked_dir"]["target"] == str(outside)
+    # Recorded, but NOT descended into: nothing behind the link was read.
+    assert not [rel for rel in entries if rel.startswith(".scrappy/linked_dir/")], entries
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="os.mkfifo is not available on Windows",
+)
+def test_a_fifo_is_recorded_without_being_opened(tmp_path):
+    """A non-regular file is recorded by kind and never read.
+
+    Only a REGULAR file is opened. Hashing a fifo would block the measurement forever,
+    and classifying one as an ordinary file would hide the substitution from diff().
+    """
+    region = _measured_region(tmp_path)
+    rel = ".scrappy/command_history"
+    os.mkfifo(region / rel)
+
+    entries = manifest.snapshot(region, hashed={rel})
+
+    assert entries[rel]["kind"] == "special"
+    assert entries[rel]["sha256"] is None

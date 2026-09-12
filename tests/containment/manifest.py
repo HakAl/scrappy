@@ -4,6 +4,12 @@ MANIFEST CONTRACT:
   - MEASURED REGION is the application-profile root (the launcher's ``home/``) ONLY.
     The third-party caches sibling is never passed to these helpers.
   - ENTRY GRANULARITY is per path, with an operation class: created, modified, deleted.
+    Every entry carries a KIND (file, symlink, special), and kind is COMPARED: a seed
+    replaced by a same-size link is a change, not a match (scrappy-st0h).
+  - NO SYMLINK IS EVER FOLLOWED. Paths are classified from lstat and only a REGULAR
+    file is opened, so the instrument cannot be led outside the region by a link it
+    finds inside it (scrappy-f2uw), and a symlink is recorded as an object rather than
+    probed for whether its target resolves (scrappy-ni4w).
   - CONTENT HASHES are recorded for SEEDED files only, where a stable expected value
     exists. Non-seeded output (cooldown JSON, logs) is matched at PATH granularity.
   - Full manifests are compared per path. Directory mtimes are NEVER consulted: the R1
@@ -30,6 +36,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -132,12 +139,37 @@ def hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def snapshot(root: str | os.PathLike[str], *, hashed: set[str] | None = None) -> dict[str, dict[str, Any]]:
-    """Manifest every file under ``root`` (the measured application-profile region).
+def _symlink_entry(link_path: Path, info: os.stat_result) -> dict[str, Any]:
+    """Describe a symlink as an OBJECT, without ever resolving or reading its target.
 
-    Records file size for every path and a content hash for the relative paths named
-    in ``hashed`` (the seeded files). Directories are represented only by the files
-    they contain; no directory mtime is ever recorded.
+    ``size`` is the length of the stored target string (from lstat), not the size of
+    whatever the link points at, and ``target`` is the raw link text. Nothing here
+    touches the referent, so a link out of the measured region cannot draw the
+    instrument outside it (scrappy-f2uw) and an unreadable referent cannot be
+    misreported as a missing one (scrappy-ni4w).
+    """
+    return {
+        "kind": "symlink",
+        "size": info.st_size,
+        "sha256": None,
+        "target": os.readlink(link_path),
+    }
+
+
+def snapshot(root: str | os.PathLike[str], *, hashed: set[str] | None = None) -> dict[str, dict[str, Any]]:
+    """Manifest every path under ``root`` (the measured application-profile region).
+
+    Records size for every path and a content hash for the relative paths named in
+    ``hashed`` (the seeded files). Directories are represented only by the entries they
+    contain; no directory mtime is ever recorded.
+
+    NOTHING HERE FOLLOWS A SYMLINK (scrappy-f2uw). Every path is classified from
+    ``lstat``, and only a REGULAR file is ever opened. ``stat`` used to be the primary
+    call, so a seeded path replaced by a link into the original profile was followed:
+    the manifest then recorded the EXTERNAL file's size and sha256 as though they were
+    the region's own, and the instrument read a profile it must never touch. Validating
+    the root says nothing about its descendants, which is the same lesson scrappy-31k9
+    taught about the launcher's creation destinations.
     """
     base = ensure_disposable(root)
     hashed = hashed or set()
@@ -153,26 +185,48 @@ def snapshot(root: str | os.PathLike[str], *, hashed: set[str] | None = None) ->
     def _record_walk_error(error: OSError) -> None:
         scan_errors.append(f"walk {getattr(error, 'filename', base)}: {error}")
 
-    for dirpath, _dirnames, filenames in os.walk(base, onerror=_record_walk_error):
+    for dirpath, dirnames, filenames in os.walk(base, onerror=_record_walk_error):
+        # A SYMLINKED DIRECTORY is never descended into (os.walk does not follow links
+        # by default) and never appears in ``filenames``, so it used to leave NO TRACE
+        # AT ALL: the link and everything behind it were absent from both manifests and
+        # no error was raised. That is another route to a baseline forged out of
+        # silence, so the link itself is recorded here. It is still not traversed.
+        for name in dirnames:
+            dir_path = Path(dirpath) / name
+            rel = dir_path.relative_to(base).as_posix()
+            try:
+                info = dir_path.lstat()
+                if stat.S_ISLNK(info.st_mode):
+                    entries[rel] = _symlink_entry(dir_path, info)
+            except OSError as error:
+                scan_errors.append(f"lstat {dir_path}: {error}")
+
         for name in filenames:
             file_path = Path(dirpath) / name
             rel = file_path.relative_to(base).as_posix()
             try:
-                size = file_path.stat().st_size
+                info = file_path.lstat()
             except OSError as error:
-                # A DANGLING SYMLINK is a real, observable state of the region, not a
-                # failure to read it. Record it from lstat so it stays VISIBLE in the
-                # manifest: neither vanishing silently nor aborting a legitimate run.
-                if file_path.is_symlink():
-                    entries[rel] = {
-                        "kind": "dangling_symlink",
-                        "size": file_path.lstat().st_size,
-                        "sha256": None,
-                    }
-                    continue
-                scan_errors.append(f"stat {file_path}: {error}")
+                scan_errors.append(f"lstat {file_path}: {error}")
                 continue
-            entry: dict[str, Any] = {"kind": "file", "size": size, "sha256": None}
+
+            if stat.S_ISLNK(info.st_mode):
+                # Recorded whether or not the target resolves. A broken link is a real
+                # observable state of the region and stays VISIBLE; a link whose target
+                # merely cannot be read is no longer mistaken for one (scrappy-ni4w).
+                try:
+                    entries[rel] = _symlink_entry(file_path, info)
+                except OSError as error:
+                    scan_errors.append(f"readlink {file_path}: {error}")
+                continue
+
+            if not stat.S_ISREG(info.st_mode):
+                # A fifo, socket or device node. Recorded, never opened: reading a fifo
+                # would block the measurement forever.
+                entries[rel] = {"kind": "special", "size": info.st_size, "sha256": None}
+                continue
+
+            entry: dict[str, Any] = {"kind": "file", "size": info.st_size, "sha256": None}
             if rel in hashed:
                 try:
                     entry["sha256"] = hash_file(file_path)
@@ -196,8 +250,16 @@ def diff(
 ) -> list[dict[str, Any]]:
     """Return per-path operations between two manifests, sorted by path.
 
-    A path is ``modified`` when its size changes, or when a recorded seed hash changes.
-    Directory mtimes are never consulted.
+    A path is ``modified`` when its size changes, when its KIND changes, when a symlink
+    retargets, or when a recorded seed hash changes or is LOST. Directory mtimes are
+    never consulted.
+
+    KIND AND TARGET ARE LOAD-BEARING, not decoration (scrappy-st0h). Comparing size and
+    hash alone let a destroyed seed pass as unchanged: replacing the 32-byte seeded
+    command_history with a DANGLING LINK whose target string is also 32 bytes left the
+    size equal and the hash None, and ``hash_changed`` requires BOTH hashes to exist, so
+    the diff was empty. The seeded file whose growth is this instrument's entire
+    measured signal could be destroyed without generating a single operation.
     """
     ops: list[dict[str, Any]] = []
     before_paths = set(before)
@@ -210,12 +272,17 @@ def diff(
     for rel in sorted(before_paths & after_paths):
         prior, current = before[rel], after[rel]
         size_changed = prior["size"] != current["size"]
+        kind_changed = prior.get("kind") != current.get("kind")
+        target_changed = prior.get("target") != current.get("target")
         hash_changed = (
             prior.get("sha256") is not None
             and current.get("sha256") is not None
             and prior["sha256"] != current["sha256"]
         )
-        if size_changed or hash_changed:
+        # Losing a hash that was recorded before is LOSS OF EVIDENCE, not an absence of
+        # change, and absence proves nothing (L-4).
+        hash_lost = prior.get("sha256") is not None and current.get("sha256") is None
+        if size_changed or kind_changed or target_changed or hash_changed or hash_lost:
             ops.append({"op": "modified", "path": rel, "before": prior, "after": current})
     return ops
 
