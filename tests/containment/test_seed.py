@@ -6,9 +6,16 @@ from tests.containment import manifest, seed
 
 
 def _contained_home(tmp_path: Path, monkeypatch) -> Path:
-    """A disposable home with HOME/XDG pointed at it so platformdirs resolves inside it."""
-    home = tmp_path / "home"
-    home.mkdir()
+    """A disposable home with HOME/XDG pointed at it so platformdirs resolves inside it.
+
+    The ``.pytest_profile`` segment is LOAD-BEARING and must be built here rather than
+    inherited from the launcher's basetemp. This helper points HOME at the region itself,
+    so ensure_disposable()'s real-home test can never accept it: ``Path.home()`` resolves
+    to exactly the path being guarded. The marker is the only route by which this region
+    is disposable, which makes it independent of where the checkout lives.
+    """
+    home = tmp_path / ".pytest_profile" / "sid" / "home"
+    home.mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
     monkeypatch.setenv("XDG_DATA_HOME", str(home / ".local" / "share"))
@@ -51,3 +58,24 @@ def test_seeded_manifest_matches_snapshot(tmp_path, monkeypatch):
     for rel, expected in seeded.items():
         assert observed[rel]["size"] == expected["size"]
         assert observed[rel]["sha256"] == expected["sha256"]
+
+
+def test_the_contained_home_carries_its_own_marker(tmp_path, monkeypatch):
+    """CI regression: the seed home must CONTRIBUTE the marker, not inherit it.
+
+    This helper points HOME at the region itself, so ensure_disposable()'s real-home branch
+    matches it EXACTLY and can never accept it. The marker is therefore the only route by
+    which the seed region is disposable, and without it these three tests fail on every
+    platform once pytest runs outside the launcher, as CI showed.
+
+    The assertion is on the path RELATIVE to ``tmp_path`` because under the launcher every
+    absolute path already sits inside a ``.pytest_profile`` region; an absolute check would
+    pass vacuously here and still fail in CI.
+    """
+    home = _contained_home(tmp_path, monkeypatch)
+    relative = home.relative_to(tmp_path)
+    assert manifest.CONTAINMENT_MARKER in relative.parts, (
+        f"the helper must place the seed home under a {manifest.CONTAINMENT_MARKER} segment "
+        f"of its own; got {relative}, which is disposable only by inheritance"
+    )
+    assert manifest.ensure_disposable(home) == home.resolve()

@@ -13,8 +13,26 @@ import pytest
 from tests.containment import instrument, manifest
 
 
+def _disposable_root(tmp_path: Path) -> Path:
+    """A tmp subtree that carries the ``.pytest_profile`` marker segment.
+
+    ensure_disposable() accepts a path only when a ``.pytest_profile`` segment appears in
+    it OR it is not nested under the real home. A bare ``tmp_path`` satisfies NEITHER when
+    the repository is checked out under the developer's home directory, which is the case
+    on every CI runner (the checkout sits under the runner's own home). Under the launcher
+    these regions inherited the marker from the contained basetemp, so they passed for a
+    reason they never stated; run directly, the guard refused every one of them.
+
+    Constructing the marker here makes the disposability EXPLICIT and independent of the
+    ambient HOME and basetemp. Disposability is not inheritable state.
+    """
+    root = tmp_path / ".pytest_profile" / "sid"
+    root.mkdir(parents=True)
+    return root
+
+
 def _measured_region(tmp_path: Path) -> Path:
-    region = tmp_path / "home"
+    region = _disposable_root(tmp_path) / "home"
     (region / ".scrappy").mkdir(parents=True)
     return region
 
@@ -101,6 +119,29 @@ def test_ensure_disposable_allows_a_pytest_profile_region(tmp_path):
     assert manifest.ensure_disposable(region) == region.resolve()
 
 
+def test_the_measured_region_carries_its_own_marker(tmp_path):
+    """CI regression: the helper must CONTRIBUTE the marker, not inherit it from basetemp.
+
+    Under the launcher ``tmp_path`` already sits inside a ``.pytest_profile`` region, so a
+    region built as ``tmp_path / "home"`` is accepted for a reason the helper never supplied
+    and the dependency is invisible. Run directly, pytest's basetemp is repo-local, the
+    checkout on a CI runner is nested under the runner's home, and ensure_disposable()
+    refused every such region. Seven tests failed in CI while passing here.
+
+    Asserting on the path RELATIVE to ``tmp_path`` is what makes this test ambient-
+    independent: every absolute path available to a contained test inherits the launcher's
+    marker, so an absolute assertion, or a monkeypatched ``Path.home()``, passes vacuously.
+    The relative segment can only come from the helper itself.
+    """
+    region = _measured_region(tmp_path)
+    relative = region.relative_to(tmp_path)
+    assert manifest.CONTAINMENT_MARKER in relative.parts, (
+        f"the helper must place its region under a {manifest.CONTAINMENT_MARKER} segment "
+        f"of its own; got {relative}, which is disposable only by inheritance"
+    )
+    assert manifest.ensure_disposable(region) == region.resolve()
+
+
 # ---------------------------------------------------------------------------
 # scrappy-aggp: the instrument must not be able to enter its own baseline.
 # ---------------------------------------------------------------------------
@@ -137,8 +178,8 @@ def test_the_real_instrument_writes_produce_an_empty_measured_diff(tmp_path):
     test reconstructed the writes, so moving a real probe back under the measured region
     would have left it green. Now there is one implementation and moving it fails here.
     """
-    measured = tmp_path / "home"
-    (measured / ".scrappy").mkdir(parents=True)
+    measured = _measured_region(tmp_path)
+    root = measured.parent
     seeded = measured / ".scrappy" / "command_history"
     seeded.write_bytes(b"seed-help\n")
     rel = ".scrappy/command_history"
@@ -146,9 +187,9 @@ def test_the_real_instrument_writes_produce_an_empty_measured_diff(tmp_path):
     before = manifest.snapshot(measured, hashed={rel})
 
     written = instrument.perform_probe_writes(
-        temp_dir=tmp_path / "scratch" / "system",
-        scratch_root=tmp_path / "scratch",
-        caches_root=tmp_path / "caches",
+        temp_dir=root / "scratch" / "system",
+        scratch_root=root / "scratch",
+        caches_root=root / "caches",
         measured_root=measured,
     )
 
