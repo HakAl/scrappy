@@ -106,10 +106,26 @@ CLI_CONFIG_ABSENT="${HOME_DIR}/.config/scrappy/contained-cli-config.absent.json"
     --inherited-test-temp "${_inherited_scratch_root}" \
     --inherited-session-id "${_inherited_session_id}" \
     --dotenv-floor "1.2.0" \
+    --destination "${HOME_DIR}/.config" \
+    --destination "${HOME_DIR}/.local/share" \
+    --destination "${HOME_DIR}/.cache" \
+    --destination "${CACHES_DIR}" \
+    --destination "${CACHES_DIR}/huggingface" \
+    --destination "${CACHES_DIR}/huggingface/hub" \
+    --destination "${CACHES_DIR}/huggingface/assets" \
+    --destination "${CACHES_DIR}/fastembed" \
+    --destination "${SCRATCH_BASE}" \
+    --destination "${SCRATCH_OS_DIR}" \
+    --destination "${SCRATCH_PYTEST_DIR}" \
+    --destination "${CLI_CONFIG_ABSENT}" \
     -- "$@"
 
 # --- STEP B: create the disposable destinations before exec ---------------------
 # So the redirected scratch and cache roots exist inside the repo before pytest runs.
+# EVERY path created here MUST also appear as a --destination above: mkdir -p follows an
+# existing symlink, so a destination the preflight never resolved can create directories
+# outside containment before pytest starts (scrappy-31k9). The lists are kept in step by
+# test_every_created_destination_is_declared_to_the_preflight.
 mkdir -p \
     "${HOME_DIR}/.config" \
     "${HOME_DIR}/.local/share" \

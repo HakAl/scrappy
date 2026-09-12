@@ -6,6 +6,7 @@ directory-mtime guard would have missed.
 """
 
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -96,9 +97,15 @@ def test_escape_paths_reduces_ops_to_sorted_paths(tmp_path):
     assert manifest.escape_paths(manifest.diff(before, after)) == [".scrappy/a", ".scrappy/b"]
 
 
-def test_ensure_disposable_refuses_a_path_under_the_real_home(monkeypatch):
-    """The guard blocks the real profile: a path under home without a .pytest_profile
-    segment is refused, so the instrument can never read or hash the real profile.
+def test_ensure_disposable_refuses_the_real_profile_whatever_home_says(monkeypatch):
+    """The guard blocks the real profile, and does so WITHOUT consulting Path.home().
+
+    Renamed from ..._refuses_a_path_under_the_real_home: the guard no longer has a
+    real-home branch to exercise (scrappy-641n), so the old name described a mechanism
+    that had been deleted. What is asserted now is stronger, and the monkeypatched home
+    is what makes it so. Path.home() is pointed AT the real profile's own parent, the
+    single arrangement under which an ambient rule would be most tempted to allow it,
+    and the refusal still lands purely because the path carries no marker.
 
     A marker-free absolute home is used deliberately: under the launcher, ``tmp_path``
     itself lives beneath ``.pytest_profile``, which would short-circuit the guard's
@@ -214,3 +221,64 @@ def test_the_real_instrument_refuses_when_pointed_at_the_measured_region(tmp_pat
             measured_root=measured,
         )
     assert list(measured.iterdir()) == [], "refusal must leave the measured region untouched"
+
+
+# ---------------------------------------------------------------------------
+# scrappy-sqqc: an incomplete scan must never become clean baseline evidence.
+# ---------------------------------------------------------------------------
+
+_IS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX permission bits do not restrict directory traversal on Windows",
+)
+@pytest.mark.skipif(
+    _IS_ROOT,
+    reason="root traverses unreadable directories, so the read failure cannot be provoked",
+)
+def test_an_unreadable_subtree_voids_the_measurement(tmp_path):
+    """A scan that cannot read everything must raise, not return a subset.
+
+    os.walk() SWALLOWS traversal errors by default and snapshot() used to swallow stat
+    errors on top of that, so an unreadable subtree vanished from the BEFORE and AFTER
+    manifests alike. diff() then had nothing to report for it and the publication gate
+    accepted the remaining diff as evidence of a clean run: an empty baseline forged out
+    of SILENCE and indistinguishable from a genuinely empty one. T-4 retires this
+    instrument on OBSERVING an empty baseline, so that distinction is the whole point.
+    """
+    region = _measured_region(tmp_path)
+    (region / ".scrappy" / "visible").write_bytes(b"seen")
+    blocked = region / ".scrappy" / "blocked"
+    blocked.mkdir()
+    (blocked / "hidden").write_bytes(b"written-but-unreadable")
+    blocked.chmod(0o000)
+    try:
+        with pytest.raises(manifest.IncompleteScanError) as excinfo:
+            manifest.snapshot(region)
+        assert "blocked" in str(excinfo.value), str(excinfo.value)
+    finally:
+        # Restore before pytest's own cleanup, which cannot remove an unreadable dir.
+        blocked.chmod(0o700)
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="creating symlinks on Windows needs a privilege the runner does not hold",
+)
+def test_a_dangling_symlink_stays_visible_rather_than_vanishing(tmp_path):
+    """A broken link is a real state of the region, so it is recorded, not dropped.
+
+    It is the one stat failure that must NOT void the measurement: treating it as a read
+    error would abort legitimate runs, and skipping it would reintroduce exactly the
+    silent disappearance this bead is about. It is recorded from lstat instead.
+    """
+    region = _measured_region(tmp_path)
+    link = region / ".scrappy" / "dangling"
+    link.symlink_to(region / ".scrappy" / "no-such-target")
+
+    entries = manifest.snapshot(region)
+
+    assert ".scrappy/dangling" in entries, entries
+    assert entries[".scrappy/dangling"]["kind"] == "dangling_symlink"

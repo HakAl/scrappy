@@ -21,6 +21,7 @@ Covered refusals:
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -39,6 +40,29 @@ OUTSIDE_ROOT = "/nonexistent-outside-root/escape"
 PREFLIGHT_FAIL_RC = 11
 
 
+def launcher_destinations(profile_root: str, session_id: str) -> tuple[str, ...]:
+    """The exact --destination set scripts/contained-pytest.sh declares at STEP A.
+
+    Mirrored here so run_preflight keeps its promise to invoke the preflight EXACTLY as
+    the launcher does. test_every_created_destination_is_declared_to_the_preflight holds
+    this in step with the launcher's own mkdir block.
+    """
+    return (
+        f"{profile_root}/home/.config",
+        f"{profile_root}/home/.local/share",
+        f"{profile_root}/home/.cache",
+        f"{profile_root}/caches",
+        f"{profile_root}/caches/huggingface",
+        f"{profile_root}/caches/huggingface/hub",
+        f"{profile_root}/caches/huggingface/assets",
+        f"{profile_root}/caches/fastembed",
+        f"{profile_root}/scratch",
+        f"{profile_root}/scratch/{session_id}/system",
+        f"{profile_root}/scratch/{session_id}/pytest",
+        f"{profile_root}/home/.config/scrappy/contained-cli-config.absent.json",
+    )
+
+
 def run_preflight(
     *,
     session_id: str = "unit-probe",
@@ -51,10 +75,12 @@ def run_preflight(
     env_addopts: str | None = None,
     repo_root: Path | None = None,
     cwd: Path | None = None,
+    destinations: tuple[str, ...] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Invoke the preflight exactly as scripts/contained-pytest.sh does."""
     repo = repo_root or REPO_ROOT
     root = profile_root if profile_root is not None else f"{repo}/.pytest_profile/{session_id}"
+    declared = launcher_destinations(root, session_id) if destinations is None else destinations
     env = {"PATH": "/usr/bin:/bin", "HOME": original_home}
     if env_addopts is not None:
         env["PYTEST_ADDOPTS"] = env_addopts
@@ -70,6 +96,7 @@ def run_preflight(
             "--inherited-test-temp", inherited_test_temp,
             "--inherited-session-id", inherited_session_id,
             "--dotenv-floor", "1.2.0",
+            *[arg for dest in declared for arg in ("--destination", dest)],
             "--", *pytest_args,
         ],
         cwd=str(cwd or repo),
@@ -576,3 +603,81 @@ def test_the_scanner_matches_argparse_on_the_modelled_forms(flag_short, flag_lon
     spec.loader.exec_module(preflight)
 
     assert preflight._scan_valued_flag(tokens, flag_long, flag_short) == expected_values, tokens
+
+
+# ---------------------------------------------------------------------------
+# scrappy-31k9: validating the ROOTS says nothing about what is created beneath them.
+# ---------------------------------------------------------------------------
+
+
+def test_a_symlinked_destination_below_the_profile_root_is_refused(tmp_path):
+    """A reused session whose caches/ points outside the repo must be refused.
+
+    The launcher builds its tree with a single `mkdir -p`, and mkdir FOLLOWS an existing
+    symlink rather than refusing it. Every check that existed before this one resolves
+    only the profile root and HOME, both of which are perfectly in-repo here, so the
+    escape rode in on a DESCENDANT and the directories were created outside containment
+    BEFORE pytest started.
+    """
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    profile = repo / ".pytest_profile" / "unit-probe"
+    profile.mkdir(parents=True)
+    outside = tmp_path / "outside-the-repo"
+    outside.mkdir()
+    (profile / "caches").symlink_to(outside, target_is_directory=True)
+
+    proc = run_preflight(repo_root=repo, profile_root=str(profile))
+    assert_refused(proc, "destinations-contained")
+    assert "caches" in proc.stderr, proc.stderr
+    # The refusal must come BEFORE anything is created through the link.
+    assert list(outside.iterdir()) == [], "refusal must leave the outside target untouched"
+
+
+def test_a_symlinked_config_destination_under_home_is_refused(tmp_path):
+    """The same gap under HOME: home/ resolves in-repo while .config/ does not.
+
+    home-contained resolves HOME itself, which says nothing about its children, and
+    XDG_CONFIG_HOME is assigned to exactly this path.
+    """
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    profile = repo / ".pytest_profile" / "unit-probe"
+    (profile / "home").mkdir(parents=True)
+    outside = tmp_path / "outside-the-repo"
+    outside.mkdir()
+    (profile / "home" / ".config").symlink_to(outside, target_is_directory=True)
+
+    proc = run_preflight(repo_root=repo, profile_root=str(profile))
+    assert_refused(proc, "destinations-contained")
+    assert ".config" in proc.stderr, proc.stderr
+
+
+def test_the_legitimate_destination_set_is_accepted():
+    """The destinations gate is not vacuous: the launcher's own set still passes."""
+    proc = run_preflight()
+    assert proc.returncode == 0, proc.stderr
+    assert "ok   destinations-contained" in proc.stderr, proc.stderr
+
+
+def test_every_created_destination_is_declared_to_the_preflight():
+    """The mkdir list and the --destination list must not drift apart.
+
+    scrappy-31k9 was possible because STEP B created paths STEP A had never been shown.
+    Parsing both lists out of the launcher stops that returning silently: a destination
+    added to the mkdir block without a matching --destination fails here rather than in a
+    later measurement.
+    """
+    source = (REPO_ROOT / "scripts" / "contained-pytest.sh").read_text(encoding="utf-8")
+    declared = set(re.findall(r'--destination "([^"]+)"', source))
+    assert declared, "no --destination arguments parsed; this test would be vacuous"
+
+    _, _, after_mkdir = source.partition("mkdir -p \\\n")
+    mkdir_block, _, _ = after_mkdir.partition("\n\n")
+    created = set(re.findall(r'"([^"]+)"', mkdir_block))
+    assert created, "no mkdir targets parsed; this test would be vacuous"
+
+    undeclared = created - declared
+    assert not undeclared, (
+        f"created by STEP B but never resolved by the preflight: {sorted(undeclared)}"
+    )

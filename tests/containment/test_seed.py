@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 from tests.containment import manifest, seed
 
 
@@ -108,3 +110,38 @@ def test_the_contained_home_carries_its_own_marker(tmp_path, monkeypatch):
         f"of its own; got {relative}, which is disposable only by inheritance"
     )
     assert manifest.ensure_disposable(home) == home.resolve()
+
+
+# A path that CANNOT exist and carries no marker, standing in for the developer's real
+# home. Never created: the assertions below prove the guard refuses before any mkdir.
+ORIGINAL_HOME = Path("/nonexistent-original-home-for-guard-test")
+
+
+def test_the_guard_refuses_the_original_home_after_redirection(tmp_path, monkeypatch):
+    """scrappy-641n: the ORIGINAL home stays refused once HOME has been redirected.
+
+    The guard used to accept any path not nested under the CURRENT Path.home(). Under the
+    launcher that inverts, and the launcher is the only place the guard matters: HOME is
+    by then the DISPOSABLE home, so the original home is not nested under it and was
+    ACCEPTED. The guard protected the disposable profile from the real one, exactly
+    backwards, and seed_profile(original_home) would have overwritten the developer's own
+    ~/.scrappy/command_history, which is the R1 damage this instrument exists to measure.
+
+    The two homes are kept SEPARATE and SYNTHETIC, per the finding. Asserting the original
+    is still absent afterwards is what proves the refusal landed BEFORE any creation
+    rather than after it.
+    """
+    redirected = _contained_home(tmp_path, monkeypatch)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: redirected))
+
+    # Not vacuous: the redirected home IS disposable and is still accepted.
+    assert manifest.ensure_disposable(redirected) == redirected.resolve()
+
+    # The original home is refused even though it lies nowhere near the redirected one,
+    # which is precisely the case the old ambient rule let through.
+    with pytest.raises(manifest.RealProfileAccessError):
+        manifest.ensure_disposable(ORIGINAL_HOME)
+    with pytest.raises(manifest.RealProfileAccessError):
+        seed.seed_profile(ORIGINAL_HOME)
+
+    assert not ORIGINAL_HOME.exists(), "the guard must refuse BEFORE creating anything"

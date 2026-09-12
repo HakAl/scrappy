@@ -248,6 +248,7 @@ def main() -> int:
     parser.add_argument("--inherited-test-temp", default="")
     parser.add_argument("--inherited-session-id", default="")
     parser.add_argument("--dotenv-floor", default="1.2.0")
+    parser.add_argument("--destination", action="append", default=[])
     parser.add_argument("pytest_args", nargs="*")
     args = parser.parse_args()
 
@@ -330,6 +331,36 @@ def main() -> int:
         if home == original:
             _fail("home-not-real", f"HOME still resolves to the real profile {original}")
     _ok("home-contained", f"HOME {home} is contained and distinct from the real profile")
+
+    # --- every destination the launcher CREATES, resolved (scrappy-31k9) ------
+    # The checks above resolve the profile root and HOME and nothing else. The launcher
+    # then runs one `mkdir -p` over the destinations BENEATH those roots, and mkdir
+    # FOLLOWS an existing symlink instead of refusing it. So a REUSED session id whose
+    # caches/, scratch/ or home/.config entry already points outside the repository
+    # satisfies every check above, and the directories are created outside containment
+    # BEFORE pytest starts. Validating a root says nothing about its descendants: a
+    # boundary only holds if every destination is resolved on its own, which is why the
+    # launcher now declares the whole set and this runs before STEP B creates any of it.
+    destinations = args.destination or []
+    for raw in destinations:
+        destination = Path(raw).resolve()
+        if not _is_inside(repo_root, destination):
+            _fail(
+                "destinations-contained",
+                f"destination {raw} resolves to {destination}, outside the repository "
+                f"{repo_root}; an existing symlink on that path would place the "
+                f"launcher's mkdir there",
+            )
+        if not _is_inside(marker_root, destination):
+            _fail(
+                "destinations-contained",
+                f"destination {raw} resolves to {destination}, which is inside the repo "
+                f"but escapes the {PROFILE_MARKER} region {marker_root}",
+            )
+    _ok(
+        "destinations-contained",
+        f"{len(destinations)} creation destinations resolve inside {marker_root}",
+    )
 
     # --- effective pytest CONFIG must be the repo's own (R2 finding 2) --------
     # pytest discovers its config from the invocation CWD and from test-path ancestors
