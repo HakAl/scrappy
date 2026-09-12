@@ -6,13 +6,20 @@ MANIFEST CONTRACT:
   - ENTRY GRANULARITY is per path, with an operation class: created, modified, deleted.
     Every entry carries a KIND (file, symlink, special), and kind is COMPARED: a seed
     replaced by a same-size link is a change, not a match (scrappy-st0h).
-  - NO SYMLINK REFERENT IS EVER READ, AND NO LINKED DIRECTORY IS EVER ENTERED. Entries
-    are classified from lstat and only a REGULAR file is opened, so the instrument
-    cannot be led outside the region by a link it finds inside it (scrappy-f2uw), and a
-    symlink is recorded as an object rather than probed for whether its target resolves
-    (scrappy-ni4w). This is NOT the stronger claim that nothing touches a referent:
-    os.walk() classifies each entry with DirEntry.is_dir(), which stats the target. See
-    snapshot() for the exact boundary (scrappy-tban).
+  - NO SYMLINK REFERENT IS EVER READ, AND NO LINKED DIRECTORY IS EVER ENTERED, FOR A
+    TREE THAT IS STABLE DURING THE SCAN. Entries are classified from lstat and only a
+    REGULAR file is opened, so the instrument cannot be led outside the region by a link
+    it finds inside it (scrappy-f2uw), and a symlink is recorded as an object rather
+    than probed for whether its target resolves (scrappy-ni4w).
+    TWO QUALIFICATIONS, because the unqualified sentence would be false (scrappy-tban).
+    FIRST: os.walk() classifies each entry with DirEntry.is_dir(), which stats the
+    target, so referent METADATA is consulted even though it never determines a recorded
+    field. SECOND: this module walks by PATHNAME, so lstat and the later open are
+    separate operations. A final component swapped for a link between them is refused by
+    O_NOFOLLOW in hash_file and voids the measurement; an ANCESTOR DIRECTORY swapped for
+    a link mid-scan is NOT covered, and covering it would require descriptor-relative
+    traversal. CONCURRENT MUTATION OF THE MEASURED REGION IS OUT OF SCOPE, which is
+    consistent with the instrument being single-measurement by design.
   - CONTENT HASHES are recorded for SEEDED files only, where a stable expected value
     exists. Non-seeded output (cooldown JSON, logs) is matched at PATH granularity.
   - Full manifests are compared per path. Directory mtimes are NEVER consulted: the R1
@@ -134,9 +141,22 @@ def assert_outside_measured_region(
 
 
 def hash_file(path: Path) -> str:
-    """Return the sha256 of a file's contents (streamed, so large files are fine)."""
+    """Return the sha256 of a file's contents (streamed, so large files are fine).
+
+    OPENED WITH ``O_NOFOLLOW`` where the platform has it. snapshot() only calls this
+    after ``lstat`` reported a REGULAR file, but the lstat and the open are two separate
+    pathname operations, so a path replaced by a symlink BETWEEN them would otherwise be
+    followed by the open and its referent hashed. With O_NOFOLLOW that race raises
+    OSError instead, which snapshot() collects into IncompleteScanError: the measurement
+    is voided rather than quietly describing a file outside the region.
+
+    This closes the FINAL component only. An ancestor directory swapped for a link during
+    the scan is still resolved at open time; covering that needs descriptor-relative
+    traversal, which is not implemented here. See the module docstring.
+    """
     digest = hashlib.sha256()
-    with open(path, "rb") as handle:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    with os.fdopen(os.open(path, flags), "rb") as handle:
         for chunk in iter(lambda: handle.read(65536), b""):
             digest.update(chunk)
     return digest.hexdigest()
@@ -183,6 +203,14 @@ def snapshot(root: str | os.PathLike[str], *, hashed: set[str] | None = None) ->
     recorded field is ever taken from a referent. Both classifications converge on the
     same ``symlink`` entry built from lstat and readlink, so the sorting cannot change
     what is measured.
+
+    AND IT HOLDS FOR A TREE THAT IS STABLE DURING THE SCAN. Traversal is by PATHNAME, so
+    the lstat here and the open inside hash_file are separate operations on the same
+    name. A final component swapped for a symlink between them is refused by O_NOFOLLOW
+    and becomes a scan error, so the measurement is VOIDED rather than silently taken
+    from outside the region. An ancestor directory swapped for a link mid-scan is not
+    covered. This instrument is single-measurement by design and is not claimed to be
+    correct under concurrent mutation of the region it measures.
     """
     base = ensure_disposable(root)
     hashed = hashed or set()

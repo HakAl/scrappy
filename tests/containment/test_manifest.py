@@ -496,3 +496,35 @@ def test_a_fifo_is_recorded_without_being_opened(tmp_path):
     entry = json.loads(completed.stdout)
     assert entry["kind"] == "special"
     assert entry["sha256"] is None
+
+
+@_NO_SYMLINKS_ON_WINDOWS
+@pytest.mark.skipif(
+    not hasattr(os, "O_NOFOLLOW"),
+    reason="O_NOFOLLOW is a POSIX flag; without it the final-component race is not closed",
+)
+def test_hash_file_refuses_to_follow_a_link_at_the_final_component(tmp_path):
+    """The lstat and the open are two operations; the open must not follow (scrappy-tban).
+
+    snapshot() only calls hash_file after lstat reported a REGULAR file, so reaching
+    hash_file with a symlink requires the path to have been replaced in between. This
+    test performs that substitution directly rather than racing it, which is the only
+    deterministic way to exercise the window. O_NOFOLLOW must make it an OSError, which
+    snapshot() collects into IncompleteScanError: the measurement is VOIDED rather than
+    quietly reporting bytes from outside the region.
+    """
+    region = _measured_region(tmp_path)
+    outside = tmp_path / "outside_the_region"
+    outside.mkdir()
+    external = outside / "original_command_history"
+    external.write_bytes(b"OUTSIDE-CONTENT-" * 8)
+
+    link = region / ".scrappy" / "command_history"
+    link.symlink_to(external)
+
+    with pytest.raises(OSError) as excinfo:
+        manifest.hash_file(link)
+
+    # Whatever the platform's errno, the point is that it did NOT return a digest of the
+    # external file.
+    assert not isinstance(excinfo.value, StopIteration)

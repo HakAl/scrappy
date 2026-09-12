@@ -20,7 +20,7 @@ not hand-authored in advance (plan PR-1 EXPECTED DELTAS). The first baseline is 
 by the architect-owned first contained suite run (brief section 6).
 
 `escape-baseline.darwin.default.json` is that first measurement, taken on this branch at
-the TRUE DEFAULT SELECTION with the instrument included: 5347 selected, 5339 passed, 8
+the TRUE DEFAULT SELECTION with the instrument included: 5350 selected, 5342 passed, 8
 skipped, 0 failures, 0 errors, 106 deselected. Six of the eight skips are the differential
 scanner cases in `test_launcher_validation.py` that argparse rejects outright; the other
 two pre-date this branch. It records TWO escapes, both U-2 and both routed in PR-2:

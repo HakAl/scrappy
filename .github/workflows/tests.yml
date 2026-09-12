@@ -151,4 +151,4 @@ jobs:
       if: always()
       run: |
         .venv/bin/python scripts/assert_positive_control.py \
-          .pytest_profile/positive-control/junit.xml 6
+          .pytest_profile/positive-control/junit.xml
