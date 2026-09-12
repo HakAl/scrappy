@@ -5,7 +5,9 @@ changed while its PARENT DIRECTORY MTIME did not, which is precisely the escape 
 directory-mtime guard would have missed.
 """
 
+import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -442,6 +444,15 @@ def test_a_symlinked_directory_is_recorded_and_never_traversed(tmp_path):
     assert not [rel for rel in entries if rel.startswith(".scrappy/linked_dir/")], entries
 
 
+_FIFO_CHILD = """
+import json, sys
+from tests.containment import manifest
+region, rel = sys.argv[1], sys.argv[2]
+entries = manifest.snapshot(region, hashed={rel})
+print(json.dumps(entries[rel]))
+"""
+
+
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason="os.mkfifo is not available on Windows",
@@ -449,14 +460,38 @@ def test_a_symlinked_directory_is_recorded_and_never_traversed(tmp_path):
 def test_a_fifo_is_recorded_without_being_opened(tmp_path):
     """A non-regular file is recorded by kind and never read.
 
-    Only a REGULAR file is opened. Hashing a fifo would block the measurement forever,
-    and classifying one as an ordinary file would hide the substitution from diff().
+    Only a REGULAR file is opened. Classifying a fifo as an ordinary file would hide the
+    substitution from diff(), and HASHING one blocks forever: open() on a fifo waits for
+    a writer that never comes.
+
+    THE SNAPSHOT RUNS IN A BOUNDED CHILD PROCESS, and that is the whole point of the test
+    (scrappy-gdqg). Restoring the defect does not make an in-process version of this test
+    fail, it makes it HANG, taking the run with it: the first falsification run of this
+    fix hung for over seven minutes here before it was killed. A regression must produce
+    a FAILURE, not a stall, so the bound cannot live in the assertion. It lives in the
+    process boundary, which holds even if the blocked call ignores signals.
     """
     region = _measured_region(tmp_path)
     rel = ".scrappy/command_history"
     os.mkfifo(region / rel)
 
-    entries = manifest.snapshot(region, hashed={rel})
+    repo_root = Path(__file__).resolve().parents[2]
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", _FIFO_CHILD, str(region), rel],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail(
+            "snapshot() BLOCKED on a fifo and had to be killed. A non-regular file was "
+            "opened for hashing, and open() on a fifo waits forever for a writer, so "
+            "the whole measurement stalls instead of failing (scrappy-gdqg)."
+        )
 
-    assert entries[rel]["kind"] == "special"
-    assert entries[rel]["sha256"] is None
+    assert completed.returncode == 0, completed.stderr
+    entry = json.loads(completed.stdout)
+    assert entry["kind"] == "special"
+    assert entry["sha256"] is None

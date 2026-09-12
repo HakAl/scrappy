@@ -6,10 +6,13 @@ MANIFEST CONTRACT:
   - ENTRY GRANULARITY is per path, with an operation class: created, modified, deleted.
     Every entry carries a KIND (file, symlink, special), and kind is COMPARED: a seed
     replaced by a same-size link is a change, not a match (scrappy-st0h).
-  - NO SYMLINK IS EVER FOLLOWED. Paths are classified from lstat and only a REGULAR
-    file is opened, so the instrument cannot be led outside the region by a link it
-    finds inside it (scrappy-f2uw), and a symlink is recorded as an object rather than
-    probed for whether its target resolves (scrappy-ni4w).
+  - NO SYMLINK REFERENT IS EVER READ, AND NO LINKED DIRECTORY IS EVER ENTERED. Entries
+    are classified from lstat and only a REGULAR file is opened, so the instrument
+    cannot be led outside the region by a link it finds inside it (scrappy-f2uw), and a
+    symlink is recorded as an object rather than probed for whether its target resolves
+    (scrappy-ni4w). This is NOT the stronger claim that nothing touches a referent:
+    os.walk() classifies each entry with DirEntry.is_dir(), which stats the target. See
+    snapshot() for the exact boundary (scrappy-tban).
   - CONTENT HASHES are recorded for SEEDED files only, where a stable expected value
     exists. Non-seeded output (cooldown JSON, logs) is matched at PATH granularity.
   - Full manifests are compared per path. Directory mtimes are NEVER consulted: the R1
@@ -163,13 +166,23 @@ def snapshot(root: str | os.PathLike[str], *, hashed: set[str] | None = None) ->
     ``hashed`` (the seeded files). Directories are represented only by the entries they
     contain; no directory mtime is ever recorded.
 
-    NOTHING HERE FOLLOWS A SYMLINK (scrappy-f2uw). Every path is classified from
-    ``lstat``, and only a REGULAR file is ever opened. ``stat`` used to be the primary
-    call, so a seeded path replaced by a link into the original profile was followed:
-    the manifest then recorded the EXTERNAL file's size and sha256 as though they were
-    the region's own, and the instrument read a profile it must never touch. Validating
-    the root says nothing about its descendants, which is the same lesson scrappy-31k9
-    taught about the launcher's creation destinations.
+    NO REFERENT IS EVER READ (scrappy-f2uw). Every entry is classified from ``lstat``,
+    and only a REGULAR file is ever opened. ``stat`` used to be the primary call, so a
+    seeded path replaced by a link into the original profile was followed: the manifest
+    then recorded the EXTERNAL file's size and sha256 as though they were the region's
+    own, and the instrument read a profile it must never touch. Validating the root says
+    nothing about its descendants, which is the same lesson scrappy-31k9 taught about
+    the launcher's creation destinations.
+
+    THE EXACT BOUNDARY, because the looser claim would be false (scrappy-tban).
+    ``os.walk()`` classifies each entry with ``DirEntry.is_dir()``, which STATS THE
+    REFERENT: that is why a link to a directory arrives in ``dirnames`` and a broken one
+    arrives in ``filenames``. So referent METADATA is consulted, by os.walk, to sort
+    entries. What is guaranteed here is narrower and is what the defect needed: no
+    referent's CONTENT is ever read, no linked directory is ever descended into, and no
+    recorded field is ever taken from a referent. Both classifications converge on the
+    same ``symlink`` entry built from lstat and readlink, so the sorting cannot change
+    what is measured.
     """
     base = ensure_disposable(root)
     hashed = hashed or set()
