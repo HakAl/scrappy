@@ -19,17 +19,29 @@ A baseline is written by `baseline.publish_baseline(...)` from an actual contain
 not hand-authored in advance (plan PR-1 EXPECTED DELTAS). The first baseline is produced
 by the architect-owned first contained suite run (brief section 6).
 
-`escape-baseline.darwin.default.json` is that first measurement, taken on this branch at
-the TRUE DEFAULT SELECTION with the instrument included: 5350 selected, 5342 passed, 8
+`escape-baseline.darwin.default.json` is the CURRENT measurement, taken at the TRUE
+DEFAULT SELECTION with the instrument included after the command-history and model-cooldown
+consumers were routed through the injected path provider: 5362 selected, 5354 passed, 8
 skipped, 0 failures, 0 errors, 106 deselected. Six of the eight skips are the differential
-scanner cases in `test_launcher_validation.py` that argparse rejects outright; the other
-two pre-date this branch. It records TWO escapes, both U-2 and both routed in PR-2:
+scanner cases in `test_launcher_validation.py` that argparse rejects outright; the other two
+pre-date the instrument. It records ONE escape:
 
-- `.scrappy/command_history` MODIFIED, 32 -> 122 bytes with a changed hash. The growth on
-  a SEEDED file is the R1 damage reproduced, and it is why seeding with known bytes
-  rather than measuring an empty profile is load-bearing: an overwrite of an empty
-  profile is indistinguishable from a create.
-- `Library/Application Support/scrappy/command_history` CREATED at 101 bytes.
+- `Library/Application Support/scrappy/command_history` CREATED at 32 bytes, with a sha256
+  IDENTICAL to the seeded `.scrappy/command_history`. This is the legacy migration in
+  `infrastructure/paths.py` copying the seed into the platform data directory, reached by
+  tests that still construct an orchestrator without an injected provider. The seed itself
+  is UNCHANGED, which is the point: nothing in the suite appends to it any more. The copy
+  is a faithful byte-for-byte reproduction of the seed, and its hash is recorded here so
+  that claim rests on the measurement, not on the size. Routing the migration itself is a
+  later slice in the sequence.
+
+The PREVIOUS measurement, taken before the routing change, recorded TWO escapes: the same
+copy at 101 bytes (the seed as it stood mid-run, already grown by test input) and
+`.scrappy/command_history` MODIFIED from 32 to 122 bytes with a changed hash. That
+modification was the reproduced R1 damage, and it is why seeding with known bytes rather
+than measuring an empty profile is load-bearing: an overwrite of an empty profile is
+indistinguishable from a create. Its disappearance is the routing change's acceptance
+delta; the surviving copy is expected and explained, not forced away.
 
 There is no `linux` baseline and no `integration` baseline. Neither has been measured, and
 per L-4 an unmeasured baseline is not an empty one.
