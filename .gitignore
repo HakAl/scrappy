@@ -52,6 +52,7 @@ Thumbs.db
 # Testing
 .pytest_cache/
 .pytest_tmp/
+.pytest_profile/
 /.tmp/
 /.tmp_*/
 /.tmp_terminal_spike_logs/

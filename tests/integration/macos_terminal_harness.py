@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import shlex
 import shutil
@@ -13,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from tests.containment.env import assert_no_containment_conflict, forward_env
 from .real_terminal_harness import (
     LaunchLiveness,
     RealTerminalHarnessProtocol,
@@ -35,9 +37,18 @@ def _escape_applescript_string(value: str) -> str:
 
 
 def _build_shell_command(session: RealTerminalSessionSpec) -> str:
-    """Build the shell command that iTerm2 should run in its new session."""
+    """Build the shell command that iTerm2 should run in its new session.
+
+    The iTerm2 window's base environment is the login session, NOT the pytest process
+    (plan S-5), so the containment set is exported EXPLICITLY here, including the scratch
+    variables and an always-assigned CLI_CONFIG_PATH (whichever of these the launcher
+    set land in forward_env(os.environ)). CONFLICT RULE (plan 3c): a containment key
+    arriving through session.env is a HARD ERROR, not a silent override.
+    """
+    assert_no_containment_conflict(session.env, channel="session.env")
     parts = [f"cd {shlex.quote(str(session.fixture_repo))}"]
     env_pairs = {
+        **forward_env(os.environ),
         "SCRAPPY_INTEGRATION_LOG_PATH": str(session.debug_log_path),
         "SCRAPPY_READY_FILE": str(session.ready_file),
         **dict(session.env),

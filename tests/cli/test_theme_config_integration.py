@@ -6,6 +6,7 @@ verifying that user theme configuration works end-to-end.
 """
 
 import json
+import os
 import pytest
 from pathlib import Path
 
@@ -21,6 +22,56 @@ from scrappy.infrastructure.theme import (
 
 
 
+# ---------------------------------------------------------------------------
+# CWD-DISCOVERY tests (scrappy-psjw).
+#
+# CLIConfigFactory.create_with_detection() resolves a config file in three ordered
+# branches (cli/config_factory.py:146-159): an explicit path, then CLI_CONFIG_PATH from
+# the environment, then a scan of Path.cwd() for DEFAULT_CONFIG_FILES. The tests in this
+# file whose PURPOSE is the third branch write .scrappy.yaml/.json into a tmp_path and
+# chdir there.
+#
+# scripts/contained-pytest.sh ALWAYS assigns CLI_CONFIG_PATH (deliberately: an ambient
+# value outranks the CWD scan and reaches a real parser, and absence is not inheritable
+# state, so unsetting a parent copy would leave a hostile value intact in an
+# independently-based child). Branch 2 then wins unconditionally and branch 3 becomes
+# unreachable, so these tests silently received defaults.
+#
+# The fix is an EXPLICIT, OPT-IN fixture requested by name in each CWD-discovery test.
+# It is NOT autouse and NOT global: removing the variable for the whole session would
+# hand the rest of the suite back the real-profile config discovery that PR-1 exists to
+# displace. Containment is preserved because monkeypatch restores the launcher's value at
+# teardown, and because the only directory this fixture exposes to the scan is a
+# disposable tmp_path whose discovery inputs it verifies are empty first.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def cwd_discovery_root(tmp_path: Path, monkeypatch):
+    """A disposable CWD with controlled discovery inputs and no CLI_CONFIG_PATH.
+
+    Yields the directory the test should write its config file into. Guarantees, in order:
+      1. CLI_CONFIG_PATH is EXPLICITLY removed for this test only (branch 2 cannot win).
+      2. The disposable directory contains NONE of DEFAULT_CONFIG_FILES, so whatever the
+         test writes is the ONLY discovery input and a stale file cannot fake a pass.
+      3. The process CWD is that disposable directory, so the branch-3 scan can only ever
+         see controlled inputs and never the developer's real working tree.
+    """
+    monkeypatch.delenv('CLI_CONFIG_PATH', raising=False)
+    assert 'CLI_CONFIG_PATH' not in os.environ, (
+        "CLI_CONFIG_PATH must be absent for a CWD-discovery test, otherwise "
+        "config_factory branch 2 wins and branch 3 is never exercised"
+    )
+
+    preexisting = [name for name in CLIConfigFactory.DEFAULT_CONFIG_FILES
+                   if (tmp_path / name).exists()]
+    assert not preexisting, f"disposable CWD must start with no discovery inputs, found {preexisting}"
+
+    monkeypatch.chdir(tmp_path)
+    assert Path.cwd().resolve() == tmp_path.resolve()
+    return tmp_path
+
+
 @pytest.fixture(autouse=True)
 def reset_global_config():
     """Reset global config before and after each test."""
@@ -32,10 +83,10 @@ def reset_global_config():
 class TestEndToEndThemeLoading:
     """Tests for complete end-to-end theme loading flow."""
 
-    def test_yaml_config_to_theme_protocol(self, tmp_path: Path, monkeypatch):
+    def test_yaml_config_to_theme_protocol(self, cwd_discovery_root: Path):
         """Complete flow: .scrappy.yaml → CLIConfig → ThemeProtocol."""
         # Create config file
-        config_file = tmp_path / ".scrappy.yaml"
+        config_file = cwd_discovery_root / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: dark
@@ -43,8 +94,6 @@ theme:
   accent: "#e5c07b"
   success: "#98c379"
 """)
-        monkeypatch.chdir(tmp_path)
-
         # Load config using factory
         config = get_config()
 
@@ -61,9 +110,9 @@ theme:
         # Verify defaults from dark preset
         assert config.theme.text == "#ffffff"
 
-    def test_json_config_to_theme_protocol(self, tmp_path: Path, monkeypatch):
+    def test_json_config_to_theme_protocol(self, cwd_discovery_root: Path):
         """Complete flow: .scrappy.json → CLIConfig → ThemeProtocol."""
-        config_file = tmp_path / ".scrappy.json"
+        config_file = cwd_discovery_root / ".scrappy.json"
         config_file.write_text(json.dumps({
             "theme": {
                 "preset": "light",
@@ -71,8 +120,6 @@ theme:
                 "error": "#ff0000"
             }
         }))
-        monkeypatch.chdir(tmp_path)
-
         config = get_config()
 
         assert isinstance(config.theme, CustomTheme)
@@ -80,11 +127,9 @@ theme:
         assert config.theme.error == "#ff0000"
         assert config.theme.text == "#000000"  # from light preset (hex code)
 
-    def test_no_config_file_uses_default_theme(self, tmp_path: Path, monkeypatch):
+    def test_no_config_file_uses_default_theme(self, cwd_discovery_root: Path):
         """When no config file exists, uses DEFAULT_THEME."""
         # Empty directory
-        monkeypatch.chdir(tmp_path)
-
         config = get_config()
 
         assert isinstance(config.theme, ScrappyTheme)
@@ -106,9 +151,9 @@ theme:
         # Other config values load correctly
         assert config.temperature_default == 0.8
 
-    def test_theme_properties_are_accessible(self, tmp_path: Path, monkeypatch):
+    def test_theme_properties_are_accessible(self, cwd_discovery_root: Path):
         """All ThemeProtocol properties are accessible from loaded theme."""
-        config_file = tmp_path / ".scrappy.yaml"
+        config_file = cwd_discovery_root / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: dark
@@ -123,8 +168,6 @@ theme:
   surface: "#1a1a1a"
   surface_alt: "#2a2a2a"
 """)
-        monkeypatch.chdir(tmp_path)
-
         config = get_config()
         theme = config.theme
 
@@ -215,15 +258,13 @@ class TestGlobalConfigTheme:
     """Tests for global config getter with theme."""
 
 
-    def test_get_config_caches_theme(self, tmp_path: Path, monkeypatch):
+    def test_get_config_caches_theme(self, cwd_discovery_root: Path):
         """get_config() returns same config instance on repeated calls."""
-        config_file = tmp_path / ".scrappy.yaml"
+        config_file = cwd_discovery_root / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: dark
 """)
-        monkeypatch.chdir(tmp_path)
-
         config1 = get_config()
         config2 = get_config()
 
@@ -232,15 +273,13 @@ theme:
         # Theme should be the same type
         assert type(config1.theme) is type(config2.theme)
 
-    def test_get_config_reload_creates_new_theme(self, tmp_path: Path, monkeypatch):
+    def test_get_config_reload_creates_new_theme(self, cwd_discovery_root: Path):
         """get_config(reload=True) creates new theme instance."""
-        config_file = tmp_path / ".scrappy.yaml"
+        config_file = cwd_discovery_root / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: dark
 """)
-        monkeypatch.chdir(tmp_path)
-
         config1 = get_config()
         config2 = get_config(reload=True)
 
@@ -314,9 +353,9 @@ dashboard_enabled: false
 class TestRealWorldScenarios:
     """Real-world usage scenarios for theme configuration."""
 
-    def test_one_dark_pro_theme_config(self, tmp_path: Path, monkeypatch):
+    def test_one_dark_pro_theme_config(self, cwd_discovery_root: Path):
         """User configures One Dark Pro theme (real-world example)."""
-        config_file = tmp_path / ".scrappy.yaml"
+        config_file = cwd_discovery_root / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: dark
@@ -331,8 +370,6 @@ theme:
   surface: "#282c34"
   surface_alt: "#3e4451"
 """)
-        monkeypatch.chdir(tmp_path)
-
         config = get_config()
 
         # Verify all One Dark Pro colors loaded
@@ -347,15 +384,13 @@ theme:
         assert config.theme.surface == "#282c34"
         assert config.theme.surface_alt == "#3e4451"
 
-    def test_minimal_theme_override(self, tmp_path: Path, monkeypatch):
+    def test_minimal_theme_override(self, cwd_discovery_root: Path):
         """User overrides just one color (real-world minimal config)."""
-        config_file = tmp_path / ".scrappy.yaml"
+        config_file = cwd_discovery_root / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   accent: "#ff00ff"
 """)
-        monkeypatch.chdir(tmp_path)
-
         config = get_config()
 
         # Only accent overridden
@@ -364,15 +399,13 @@ theme:
         assert config.theme.primary == "#00ffff"
         assert config.theme.success == "#00ff00"
 
-    def test_switch_to_light_theme(self, tmp_path: Path, monkeypatch):
+    def test_switch_to_light_theme(self, cwd_discovery_root: Path):
         """User switches from dark to light preset (real-world scenario)."""
-        config_file = tmp_path / ".scrappy.yaml"
+        config_file = cwd_discovery_root / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: light
 """)
-        monkeypatch.chdir(tmp_path)
-
         config = get_config()
 
         # Light theme loaded (hex codes)
@@ -381,16 +414,14 @@ theme:
         assert config.theme.surface == "#ffffff"
         assert config.theme.surface_alt == "#f0f0f0"
 
-    def test_light_theme_with_custom_accent(self, tmp_path: Path, monkeypatch):
+    def test_light_theme_with_custom_accent(self, cwd_discovery_root: Path):
         """User uses light theme with custom accent color."""
-        config_file = tmp_path / ".scrappy.yaml"
+        config_file = cwd_discovery_root / ".scrappy.yaml"
         config_file.write_text("""
 theme:
   preset: light
   accent: "#ff6600"
 """)
-        monkeypatch.chdir(tmp_path)
-
         config = get_config()
 
         # Light theme with override (hex codes)
@@ -398,3 +429,94 @@ theme:
         assert config.theme.accent == "#ff6600"
         assert config.theme.text == "#000000"  # from light preset
         assert config.theme.surface == "#ffffff"  # from light preset
+
+
+class TestConfigDiscoveryPrecedence:
+    """The scrappy-psjw mechanism, asserted directly rather than left implicit.
+
+    Every test above named ``cwd_discovery_root`` depends on branch 3 of
+    CLIConfigFactory.create_with_detection() being reachable. These four tests pin the
+    precedence rule itself, in BOTH directions, so a future change to the launcher's
+    CLI_CONFIG_PATH assignment or to config_factory's branch order fails loudly here
+    rather than silently converting ten discovery tests into defaults-only tests.
+    """
+
+    SENTINEL_ACCENT = "#123456"
+
+    def _write_cwd_config(self, directory: Path, accent: str) -> Path:
+        config_file = directory / ".scrappy.yaml"
+        config_file.write_text(f"theme:\n  accent: \"{accent}\"\n")
+        return config_file
+
+    def test_cwd_scan_is_reached_when_the_config_path_var_is_absent(self, cwd_discovery_root: Path):
+        """Branch 3 (the Path.cwd() scan) genuinely runs. DISCOVERY COVERAGE IS PRESERVED.
+
+        If this fails, the ten CWD-discovery tests above are no longer testing discovery.
+        """
+        self._write_cwd_config(cwd_discovery_root, self.SENTINEL_ACCENT)
+
+        config = get_config()
+
+        assert config.theme.accent == self.SENTINEL_ACCENT
+
+    def test_config_path_var_outranks_the_cwd_scan(self, tmp_path: Path, monkeypatch):
+        """Branch 2 beats branch 3. THIS IS THE CONTAINMENT PROPERTY the launcher relies on.
+
+        The launcher assigns CLI_CONFIG_PATH precisely so a contained run cannot pick up a
+        real config file the CWD scan would have found.
+        """
+        cwd_dir = tmp_path / "cwd"
+        cwd_dir.mkdir()
+        self._write_cwd_config(cwd_dir, self.SENTINEL_ACCENT)
+
+        env_config = tmp_path / "from_env.yaml"
+        env_config.write_text("theme:\n  accent: \"#abcdef\"\n")
+        monkeypatch.setenv('CLI_CONFIG_PATH', str(env_config))
+        monkeypatch.chdir(cwd_dir)
+
+        config = get_config()
+
+        assert config.theme.accent == "#abcdef"
+
+    def test_absent_config_path_var_still_suppresses_the_cwd_scan(self, tmp_path: Path, monkeypatch):
+        """The exact scrappy-psjw regression, reproduced as a permanent test.
+
+        The launcher assigns a contained path that DOES NOT EXIST. config_factory.py:163
+        gates the load on ``file_to_load.exists()``, so the load is skipped and defaults
+        are returned, while branch 3 remains unreachable because branch 2 already matched.
+        A caller that wants the CWD scan must remove the variable explicitly; it cannot
+        rely on the assigned path being absent.
+        """
+        cwd_dir = tmp_path / "cwd"
+        cwd_dir.mkdir()
+        self._write_cwd_config(cwd_dir, self.SENTINEL_ACCENT)
+
+        contained_absent = tmp_path / "contained-cli-config.absent.json"
+        assert not contained_absent.exists()
+        monkeypatch.setenv('CLI_CONFIG_PATH', str(contained_absent))
+        monkeypatch.chdir(cwd_dir)
+
+        config = get_config()
+
+        assert config.theme.accent != self.SENTINEL_ACCENT
+        assert config.theme.accent == DEFAULT_THEME.accent
+
+    @pytest.mark.skipif(
+        ".pytest_profile" not in Path.home().parts,
+        reason="the launcher's assignment only exists inside scripts/contained-pytest.sh",
+    )
+    def test_tests_not_requesting_the_fixture_keep_the_launcher_assignment(self):
+        """THE REMOVAL IS NOT GLOBAL. CONTAINMENT IS PRESERVED FOR EVERYONE ELSE.
+
+        This test deliberately does NOT request cwd_discovery_root. Under the launcher it
+        must still see the assigned CLI_CONFIG_PATH, pointing inside the contained
+        profile. If the fixture were autouse, or if its teardown failed to restore, this
+        fails: every other test in the suite would have regained the real-profile config
+        discovery that PR-1 exists to displace.
+
+        Asserted from the ambient environment rather than by inspecting the fixture, so it
+        measures the effect rather than the intent.
+        """
+        assigned = os.environ.get('CLI_CONFIG_PATH')
+        assert assigned, "the launcher must assign CLI_CONFIG_PATH for non-discovery tests"
+        assert ".pytest_profile" in Path(assigned).parts

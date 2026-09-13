@@ -16,11 +16,15 @@ protocol rather than a second implementation of it.
 
 from __future__ import annotations
 
+import os
+import shlex
 import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+from tests.containment.env import forward_env
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -59,8 +63,14 @@ class TmuxTerminal:
             "new-session", "-d", "-s", self.session,
             "-x", str(self.width), "-y", str(self.height),
         )
+        # The tmux pane inherits the tmux SERVER's environment, NOT the pytest process
+        # (plan S-5), so the containment set is prefixed onto the launch string here.
+        # tmux has no caller env mapping today, so there is nothing to guard yet (3c).
+        containment_prefix = " ".join(
+            f"{key}={shlex.quote(value)}" for key, value in forward_env(os.environ).items()
+        )
         launch = (
-            f"cd {self.repo_root} && SCRAPPY_MOCK_LLM=1 "
+            f"cd {self.repo_root} && {containment_prefix} SCRAPPY_MOCK_LLM=1 "
             f"{self.python} -m scrappy.cli.commands"
         )
         self._tmux("send-keys", "-t", self.session, "-l", launch)

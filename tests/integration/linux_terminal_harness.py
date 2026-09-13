@@ -14,6 +14,7 @@ from typing import Mapping
 
 import pytest
 
+from tests.containment.env import assert_no_containment_conflict
 from .real_terminal_harness import (
     CapturedStream,
     LaunchLiveness,
@@ -373,7 +374,14 @@ class LinuxTerminalHarness(RealTerminalHarnessProtocol):
         return f"\ncaptured stderr tail:\n{tail}"
 
     def _build_display_env(self, extra_env: Mapping[str, str] | None = None) -> dict[str, str]:
-        """Build the environment for processes that run inside the nested display."""
+        """Build the environment for processes that run inside the nested display.
+
+        The child inherits os.environ, which already carries the launcher's containment
+        assignments. CONFLICT RULE (plan 3c): a containment key supplied through the
+        caller's extra_env is a HARD ERROR, not a silent override, so it is rejected
+        before it can shadow the launcher's value.
+        """
+        assert_no_containment_conflict(extra_env, channel="extra_env")
         session = self._require_session()
         env = dict(os.environ)
         env["DISPLAY"] = self._display

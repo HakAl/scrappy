@@ -112,3 +112,43 @@ jobs:
         pip install -e .
         safety check || true
       continue-on-error: true
+
+  contained-linux:
+    # THE ONLY JOB IN THIS WORKFLOW THAT VERIFIES CONTAINMENT AT RUNTIME.
+    # Every other job runs `python -m pytest` directly, where the positive control
+    # SKIPS ITSELF: its pytestmark keys on `.pytest_profile` appearing in Path.home(),
+    # which only scripts/contained-pytest.sh establishes. Those jobs therefore prove the
+    # tests pass, and say nothing about whether the launcher contains anything.
+    name: Contained Linux Positive Control
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Build the virtualenv the launcher requires
+      # scripts/contained-pytest.sh execs ${REPO_ROOT}/.venv/bin/python BY DESIGN, so it
+      # cannot be pointed at the runner's interpreter. The venv is part of the contract.
+      run: |
+        python -m venv .venv
+        .venv/bin/python -m pip install --upgrade pip
+        .venv/bin/pip install -e .[dev]
+
+    - name: Run the positive control THROUGH THE LAUNCHER
+      run: |
+        ./scripts/contained-pytest.sh tests/containment/test_positive_control.py \
+          -p no:randomly -v \
+          --junit-xml=.pytest_profile/positive-control/junit.xml
+
+    - name: Require all six positive controls to have EXECUTED and passed
+      # A skipped positive control is GREEN to pytest and proves nothing, so the exit
+      # code alone cannot gate this. The report is checked for skips, for an absent
+      # file, and for a shrunken selection. See scripts/assert_positive_control.py.
+      if: always()
+      run: |
+        .venv/bin/python scripts/assert_positive_control.py \
+          .pytest_profile/positive-control/junit.xml
