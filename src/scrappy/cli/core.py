@@ -5,6 +5,7 @@ Main entry point and command routing for the Scrappy CLI.
 
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 
@@ -20,12 +21,14 @@ from .state_manager import PlanStateManager
 from .session_context import SessionContext
 from .command_router import CommandRouter
 from .textual_interactive import TextualInteractiveMode
-from .command_history import CommandHistory, get_default_history_path
+from .command_history import CommandHistory
 from .utils.session_utils import display_previous_session_detected
 from .utils.cli_factory import initialize_cli_handlers, create_conversation_store
 from .error_recovery import graceful_degrade
 from .logging import get_logger
 from scrappy.infrastructure.persistence import ConversationStoreProtocol
+from scrappy.infrastructure.protocols import PathProviderProtocol
+from scrappy.infrastructure.paths import ScrappyPathProvider
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 
@@ -42,7 +45,8 @@ class CLI:
         orchestrator: Optional[AgentOrchestrator] = None,
         state_manager: Optional[PlanStateManager] = None,
         theme: Optional[ThemeProtocol] = None,
-        conversation_store: Optional[ConversationStoreProtocol] = None
+        conversation_store: Optional[ConversationStoreProtocol] = None,
+        path_provider: Optional[PathProviderProtocol] = None
     ):
         """
         Initialize CLI with orchestrator and component handlers.
@@ -79,6 +83,15 @@ class CLI:
         self._context_aware = context_aware
         self._show_provider_status = show_provider_status
         self._theme = theme or DEFAULT_THEME
+
+        # Path provider is resolved once and threaded to the default orchestrator
+        # (and thence to the cooldown file) and to the file-backed command history.
+        # Use an explicit is-None check: a Protocol-typed provider with a falsy
+        # __bool__/__len__ must not trigger a silent default. Assigned BEFORE
+        # _create_default_orchestrator() runs so the orchestrator is built with it.
+        self._path_provider = (
+            path_provider if path_provider is not None else ScrappyPathProvider(Path("."))
+        )
 
         # Initialize dependencies using factory methods
         self.io = io or self._create_default_io()
@@ -196,7 +209,9 @@ class CLI:
 
         Deferred out of __init__; until called, an in-memory history is used.
         """
-        self.command_history = CommandHistory(history_file=get_default_history_path())
+        self.command_history = CommandHistory(
+            history_file=self._path_provider.command_history_file()
+        )
         self.input_handler = InputHandler(self.io, history=self.command_history)
 
     # Factory methods for default dependencies
@@ -223,6 +238,7 @@ class CLI:
             project_path=".",
             context_aware=self._context_aware,
             enable_semantic_search=True,  # Enable for CLI usage
+            path_provider=self._path_provider,
         )
 
     def _initialize_orchestrator(self) -> None:
@@ -294,7 +310,8 @@ class CLI:
             tasks=self.tasks,
             logger=self.logger,
             io=self.io,  # Pass existing TextualIO created before initialize()
-            cli=self  # Pass CLI reference for handler reinitialization with bridge
+            cli=self,  # Pass CLI reference for handler reinitialization with bridge
+            path_provider=self._path_provider,
         )
 
     def _show_semantic_search_progress(self):

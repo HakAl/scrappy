@@ -26,6 +26,8 @@ from scrappy.cli.protocols import (
     MouseReportingPolicyProtocol,
 )
 from scrappy.infrastructure.output_mode import OutputModeContext
+from scrappy.infrastructure.paths import ScrappyPathProvider
+from scrappy.infrastructure.protocols import PathProviderProtocol
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 from scrappy.orchestrator.api_key_composition import create_api_key_service
 
@@ -98,6 +100,7 @@ class ScrappyApp(App):
         clipboard: Optional[ClipboardProtocol] = None,
         mouse_policy: Optional[MouseReportingPolicyProtocol] = None,
         now: Optional[Callable[[], float]] = None,
+        path_provider: Optional[PathProviderProtocol] = None,
     ):
         """Initialize the Textual app controller.
 
@@ -122,9 +125,19 @@ class ScrappyApp(App):
             mouse_policy: Terminal mouse reporting policy
             now: Monotonic-ish clock for double-tap timing (injectable for
                 tests); defaults to time.time
+            path_provider: Path provider threaded to the main screen's command
+                history. If None, falls back to the production default. Tests that
+                mount the app MUST inject a TempPathProvider to isolate history.
         """
         super().__init__()
         self._theme = theme or DEFAULT_THEME
+        # Resolve the provider once at this composition root and thread it to the
+        # main screen. Explicit is-None check: a Protocol-typed provider with a
+        # falsy __bool__/__len__ must not trigger a silent default.
+        self._path_provider = (
+            path_provider if path_provider is not None
+            else self._create_default_path_provider()
+        )
         self._shutdown_requested = False
         self._clipboard_service = clipboard or self._create_default_clipboard()
         self._mouse_policy = mouse_policy or self._create_default_mouse_policy()
@@ -168,6 +181,15 @@ class ScrappyApp(App):
         self._integration_log_path = os.getenv("SCRAPPY_INTEGRATION_LOG_PATH")
         self._integration_ready_file = os.getenv("SCRAPPY_READY_FILE")
         self._integration_ready_signaled = False
+
+    def _create_default_path_provider(self) -> PathProviderProtocol:
+        """Create the default path provider (production location).
+
+        Mirrors OrchestratorFactory's default: project_root is irrelevant to the
+        command-history member (it resolves from Path.home()), so Path(".") is
+        chosen for consistency with the orchestrator default, not for effect.
+        """
+        return ScrappyPathProvider(Path("."))
 
     def _create_default_clipboard(self) -> ClipboardProtocol:
         """Create the default clipboard service."""
@@ -695,6 +717,7 @@ class ScrappyApp(App):
             bridge=self.bridge,
             theme=self._theme,
             clipboard=self._clipboard_service,
+            path_provider=self._path_provider,
         )
         self.push_screen(screen)
         self.call_later(self._drain_main_transcript_buffer)

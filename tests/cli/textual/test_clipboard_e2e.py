@@ -17,8 +17,12 @@ from unittest.mock import MagicMock, patch
 
 os.environ["SCRAPPY_MOCK_LLM"] = "1"
 
+import tempfile
+from pathlib import Path
+
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.widgets.selectable_log import SelectableLog
+from scrappy.infrastructure.paths import TempPathProvider
 
 
 def create_mock_cli():
@@ -31,7 +35,12 @@ def create_mock_cli():
 
 
 def create_test_app():
-    return ScrappyApp(cli_factory=create_mock_cli)
+    # Mounted by run_test(); inject a disposable provider so command history
+    # stays off the home profile.
+    return ScrappyApp(
+        cli_factory=create_mock_cli,
+        path_provider=TempPathProvider(Path(tempfile.mkdtemp())),
+    )
 
 
 def get_output_log(app) -> SelectableLog:

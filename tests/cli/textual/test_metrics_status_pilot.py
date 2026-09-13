@@ -14,10 +14,14 @@ os.environ["SCRAPPY_MOCK_TOKENS"] = "64"
 os.environ["SCRAPPY_MOCK_LATENCY_MS"] = "0"
 os.environ["SCRAPPY_MOCK_RESPONSE"] = "Mock response"
 
+import tempfile
+from pathlib import Path
+
 from scrappy.cli.core import CLI
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.screens import MainAppScreen, SetupWizardScreen
 from scrappy.cli.screens.chat_surface import ChatSurface
+from scrappy.infrastructure.paths import TempPathProvider
 
 
 def create_test_app() -> ScrappyApp:
@@ -29,8 +33,19 @@ def create_test_app() -> ScrappyApp:
     orchestrator with no mock brain configured, so the metrics line would stay
     stuck at "provider: --". Production factories (create_cli_from_context) call
     initialize() for exactly this reason.
+
+    This test mounts the app and submits input, which loads AND writes history
+    (and the CLI reaches the cooldown file through its orchestrator). It bypasses the cli_factory
+    composition entirely, so inject ONE disposable provider object into BOTH the
+    CLI and the app to isolate history and cooldown onto the same disposable root.
     """
-    return ScrappyApp(cli_factory=lambda: CLI().initialize(offer_session_restore=False))
+    path_provider = TempPathProvider(Path(tempfile.mkdtemp()))
+    return ScrappyApp(
+        cli_factory=lambda: CLI(path_provider=path_provider).initialize(
+            offer_session_restore=False
+        ),
+        path_provider=path_provider,
+    )
 
 
 class TestMetricsStatusPilot:

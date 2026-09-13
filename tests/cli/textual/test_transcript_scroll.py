@@ -8,6 +8,8 @@ were unbound). These tests cover both layers, headless and cross-platform.
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -15,6 +17,7 @@ from textual.app import App, ComposeResult
 
 from scrappy.cli.screens.main_screen import MainAppScreen
 from scrappy.cli.widgets.selectable_log import SelectableLog
+from scrappy.infrastructure.paths import TempPathProvider
 
 
 class _LogApp(App):
@@ -138,6 +141,8 @@ def _screen_with_real_output() -> tuple[MainAppScreen, Mock]:
         bridge=Mock(),
         theme=Mock(),
         clipboard=Mock(),
+        # Disposable provider: keep the screen's history off the home profile.
+        path_provider=TempPathProvider(Path(tempfile.mkdtemp())),
     )
     surface = Mock()
     screen._surface = surface

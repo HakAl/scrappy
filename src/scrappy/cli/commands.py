@@ -53,16 +53,26 @@ def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
 
     Shows the TUI skeleton instantly while CLI/orchestrator loads in background.
     """
+    from pathlib import Path
+
     from .textual.app import ScrappyApp
     from .textual.output_adapter import TextualOutputAdapter
     from .unified_io import UnifiedIO
+    from scrappy.infrastructure.paths import ScrappyPathProvider
 
     output_adapter = TextualOutputAdapter()
     io = UnifiedIO(output_sink=output_adapter, theme=theme)
 
+    # Resolve ONE provider at this composition root and share the SAME object
+    # between the CLI (built later on a background thread) and the app that owns
+    # the main screen, so history/cooldowns resolve through a single provider.
+    path_provider = ScrappyPathProvider(Path("."))
+
     def cli_factory():
         """Factory function called in background thread."""
-        cli_instance = create_cli_from_context(ctx, io=io, theme=theme)
+        cli_instance = create_cli_from_context(
+            ctx, io=io, theme=theme, path_provider=path_provider
+        )
         cli_instance.auto_save = ctx.obj.get('auto_save', True)
 
         if resume:
@@ -74,6 +84,7 @@ def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
         cli_factory=cli_factory,
         output_adapter=output_adapter,
         theme=theme,
+        path_provider=path_provider,
     )
     app.run()
 

@@ -23,7 +23,11 @@ from unittest.mock import MagicMock
 
 os.environ["SCRAPPY_MOCK_LLM"] = "1"
 
+import tempfile
+from pathlib import Path
+
 from scrappy.cli.textual.app import ScrappyApp
+from scrappy.infrastructure.paths import TempPathProvider
 
 
 def create_mock_cli():
@@ -68,7 +72,10 @@ class TestNoRawStdoutDuringAppLifecycle:
     @pytest.mark.asyncio
     async def test_app_startup_no_stdout_writes(self):
         """App startup (mount, banner, CLI ready) should not touch stdout."""
-        app = ScrappyApp(cli_factory=create_mock_cli)
+        app = ScrappyApp(
+            cli_factory=create_mock_cli,
+            path_provider=TempPathProvider(Path(tempfile.mkdtemp())),
+        )
 
         stdout_sentinel = StdoutSentinel("stdout")
         stderr_sentinel = StdoutSentinel("stderr")
@@ -112,7 +119,10 @@ class TestNoRawStdoutDuringAppLifecycle:
     @pytest.mark.asyncio
     async def test_chat_input_no_stdout_writes(self):
         """Processing a chat message should not touch stdout."""
-        app = ScrappyApp(cli_factory=create_mock_cli)
+        app = ScrappyApp(
+            cli_factory=create_mock_cli,
+            path_provider=TempPathProvider(Path(tempfile.mkdtemp())),
+        )
 
         stdout_sentinel = StdoutSentinel("stdout")
         stderr_sentinel = StdoutSentinel("stderr")
@@ -157,7 +167,10 @@ class TestNoRawStdoutDuringAppLifecycle:
     @pytest.mark.asyncio
     async def test_help_command_no_stdout_writes(self):
         """/help command should not touch stdout."""
-        app = ScrappyApp(cli_factory=create_mock_cli)
+        app = ScrappyApp(
+            cli_factory=create_mock_cli,
+            path_provider=TempPathProvider(Path(tempfile.mkdtemp())),
+        )
 
         stdout_sentinel = StdoutSentinel("stdout")
         stderr_sentinel = StdoutSentinel("stderr")

@@ -107,6 +107,24 @@ class ScrappyPathProvider:
         """Get path to context.json."""
         return self._data_dir / "context.json"
 
+    def command_history_file(self) -> Path:
+        """Get path to command_history (user-level, under ~/.scrappy).
+
+        Resolved from Path.home() AT CALL TIME so that relocating HOME after
+        construction is followed, preserving today's production location
+        (~/.scrappy/command_history). Deliberately not derived from the
+        import-bound _data_dir (which is the project-level .scrappy/).
+        """
+        return Path.home() / ".scrappy" / "command_history"
+
+    def model_cooldowns_file(self) -> Path:
+        """Get path to model_cooldowns.json (user-level, under ~/.scrappy).
+
+        Resolved from Path.home() AT CALL TIME, preserving today's production
+        location (~/.scrappy/model_cooldowns.json).
+        """
+        return Path.home() / ".scrappy" / "model_cooldowns.json"
+
     def todo_file(self) -> Path:
         """Get path to .todo.md (agent task list)."""
         return self._data_dir / ".todo.md"
@@ -231,6 +249,18 @@ class TempPathProvider:
     def context_file(self) -> Path:
         """Get path to test context file."""
         return self._data_dir / "context.json"
+
+    def command_history_file(self) -> Path:
+        """Get path to test command_history (under the injected temp dir).
+
+        Derived from the injected temp_dir like every other member; sending it
+        back to HOME would defeat the provider's isolation contract.
+        """
+        return self._data_dir / "command_history"
+
+    def model_cooldowns_file(self) -> Path:
+        """Get path to test model_cooldowns.json (under the injected temp dir)."""
+        return self._data_dir / "model_cooldowns.json"
 
     def todo_file(self) -> Path:
         """Get path to test todo file."""

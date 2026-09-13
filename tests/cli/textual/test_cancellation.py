@@ -17,7 +17,11 @@ from unittest.mock import MagicMock
 # Set mock mode for testing
 os.environ["SCRAPPY_MOCK_LLM"] = "1"
 
+import tempfile
+from pathlib import Path
+
 from scrappy.cli.textual.app import ScrappyApp
+from scrappy.infrastructure.paths import TempPathProvider
 
 
 def create_mock_cli():
@@ -30,8 +34,15 @@ def create_mock_cli():
 
 
 def create_test_app():
-    """Create a ScrappyApp instance for testing."""
-    return ScrappyApp(cli_factory=create_mock_cli)
+    """Create a ScrappyApp instance for testing.
+
+    Mounted by run_test(); inject a disposable provider so command history
+    stays off the home profile.
+    """
+    return ScrappyApp(
+        cli_factory=create_mock_cli,
+        path_provider=TempPathProvider(Path(tempfile.mkdtemp())),
+    )
 
 
 class TestEscapeKeyCancellation:

@@ -49,7 +49,6 @@ from .model_selection import (
     ModelSelectionService,
     ModelSelectionServiceProtocol,
     ModelSelectionType,
-    default_model_cooldowns_path,
 )
 from .manager_protocols import (
     ContextManagerProtocol,
@@ -420,7 +419,9 @@ class OrchestratorFactory:
         Persists cooldown state so known-bad models stay suppressed across
         restart until their cooldown expires.
         """
-        return ModelAvailabilityTracker(persist_path=default_model_cooldowns_path())
+        return ModelAvailabilityTracker(
+            persist_path=self._path_provider.model_cooldowns_file()
+        )
 
     def create_model_selector(self) -> ModelSelectionServiceProtocol:
         """

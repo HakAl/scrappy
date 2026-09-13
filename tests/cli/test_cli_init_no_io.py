@@ -14,7 +14,6 @@ persistence/history seam this PR owns.
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from scrappy.cli.command_history import get_default_history_path
 from scrappy.cli.core import CLI
 from scrappy.orchestrator import AgentOrchestrator
 from scrappy.infrastructure.persistence import ConversationStoreProtocol
@@ -86,8 +85,15 @@ def test_initialize_creates_default_store_and_loads_history():
                         assert cli.session_context.conversation_history == [
                             {"role": "user", "content": "hi"}
                         ]
-                        # Command history rebuilt against the real default path.
-                        mock_cmd_history.assert_any_call(history_file=get_default_history_path())
+                        # Command history rebuilt against the CLI's OWN path
+                        # provider (not a module-level default). With no injected
+                        # provider the CLI holds a default ScrappyPathProvider,
+                        # whose command_history_file() resolves to the production
+                        # location, so this still pins the production default while
+                        # proving the value flows through the provider seam.
+                        mock_cmd_history.assert_any_call(
+                            history_file=cli._path_provider.command_history_file()
+                        )
 
 
 def test_init_does_not_initialize_default_orchestrator():

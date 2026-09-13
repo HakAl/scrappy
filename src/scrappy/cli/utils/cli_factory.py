@@ -21,6 +21,7 @@ from ..rate_limiter import RateLimiter
 from ..persistence import SessionPersistence
 from ..user_interaction import get_user_interaction
 from scrappy.infrastructure.persistence import ConversationStore
+from scrappy.infrastructure.protocols import PathProviderProtocol
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
@@ -179,7 +180,8 @@ def initialize_cli_handlers(
 def create_cli_from_context(
     ctx: Any,
     io: Optional[CLIIOProtocol] = None,
-    theme: Optional[ThemeProtocol] = None
+    theme: Optional[ThemeProtocol] = None,
+    path_provider: Optional[PathProviderProtocol] = None
 ) -> "CLI":
     """
     Create CLI instance from Click context object.
@@ -188,6 +190,7 @@ def create_cli_from_context(
         ctx: Click context object with configuration in ctx.obj
         io: IO interface
         theme: Optional theme for styling. Defaults to DEFAULT_THEME.
+        path_provider: Path provider threaded to the CLI (default: CLI builds one).
 
     Returns:
         CLI instance configured from context
@@ -203,7 +206,8 @@ def create_cli_from_context(
         context_aware=options['context_aware'],
         show_provider_status=options['show_provider_status'],
         io=io,
-        theme=theme
+        theme=theme,
+        path_provider=path_provider
     )
     cli.initialize()
     return cli
@@ -212,7 +216,8 @@ def create_cli_from_context(
 def create_cli(
     config: Dict[str, Any],
     io: Optional[CLIIOProtocol] = None,
-    theme: Optional[ThemeProtocol] = None
+    theme: Optional[ThemeProtocol] = None,
+    path_provider: Optional[PathProviderProtocol] = None
 ) -> "CLI":
     """
     Create CLI instance from a simple dictionary configuration.
@@ -245,7 +250,8 @@ def create_cli(
         context_aware=config.get('context_aware', True),
         show_provider_status=config.get('show_provider_status', False),
         io=io,
-        theme=theme
+        theme=theme,
+        path_provider=path_provider
     )
     cli.initialize()
     return cli

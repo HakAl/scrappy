@@ -1,5 +1,7 @@
 """Tests for MainAppScreen command processing safeguards."""
 
+import tempfile
+from pathlib import Path
 from unittest.mock import Mock
 
 from textual.message_pump import active_app
@@ -7,6 +9,7 @@ from textual.message_pump import active_app
 from scrappy.cli.screens.main_screen import MainAppScreen
 from scrappy.cli.textual.output_adapter import TextualOutputAdapter
 from scrappy.cli.textual.tui_events import TranscriptAppendRenderable, TranscriptAppendText
+from scrappy.infrastructure.paths import TempPathProvider
 
 
 class MockTheme:
@@ -15,17 +18,25 @@ class MockTheme:
     error = "red"
 
 
-def create_screen(interactive_mode=None):
-    """Create a MainAppScreen with lightweight mocked dependencies."""
+def create_screen(interactive_mode=None, path_provider=None):
+    """Create a MainAppScreen with lightweight mocked dependencies.
+
+    Injects a TempPathProvider over a fresh disposable directory so the screen's
+    command history never touches the home profile (the required parameter forces
+    a disposition here; these tests exercise command processing, not history I/O).
+    """
     output_adapter = TextualOutputAdapter()
     bridge = Mock()
     clipboard = Mock()
+    if path_provider is None:
+        path_provider = TempPathProvider(Path(tempfile.mkdtemp()))
     screen = MainAppScreen(
         interactive_mode=interactive_mode,
         output_adapter=output_adapter,
         bridge=bridge,
         theme=MockTheme(),
         clipboard=clipboard,
+        path_provider=path_provider,
     )
     app = Mock()
     app.interactive_mode = interactive_mode

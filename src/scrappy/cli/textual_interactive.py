@@ -4,8 +4,9 @@ Textual-based interactive mode for Scrappy CLI.
 Provides a clean TUI interface using Textual framework.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
+from scrappy.infrastructure.protocols import PathProviderProtocol
 from .textual.app import ScrappyApp
 from .unified_io import UnifiedIO
 from .output_bridge import OutputBridge
@@ -53,7 +54,8 @@ class TextualInteractiveMode:
         logger: "CLILogger",
         io: UnifiedIO,
         cli: "CLI" = None,
-        config: "CLIConfig" = None
+        config: "CLIConfig" = None,
+        path_provider: Optional[PathProviderProtocol] = None
     ):
         """Initialize TextualInteractiveMode with all dependencies.
 
@@ -69,6 +71,9 @@ class TextualInteractiveMode:
             io: UnifiedIO instance (created before CLI.initialize() ran)
             cli: Optional CLI instance for handler reinitialization with bridge
             config: Optional CLI config (loads from default locations if not provided)
+            path_provider: Path provider threaded to ScrappyApp (and thence the
+                main screen's history). If None, ScrappyApp uses its production
+                default; acceptable for production, never for a test that mounts.
         """
         self.orchestrator = orchestrator
         self.session_context = session_context
@@ -80,6 +85,7 @@ class TextualInteractiveMode:
         self.logger = logger
         self.io = io
         self._cli = cli
+        self._path_provider = path_provider
         # Load config from parameter or default locations
         self._config = config or get_config()
 
@@ -111,7 +117,12 @@ class TextualInteractiveMode:
         )
 
         # Create ScrappyApp with InteractiveMode, output adapter, and user theme
-        app = ScrappyApp(interactive_mode, output_adapter, theme=self._config.theme)
+        app = ScrappyApp(
+            interactive_mode,
+            output_adapter,
+            theme=self._config.theme,
+            path_provider=self._path_provider,
+        )
 
         wire_textual_runtime(
             app=app,

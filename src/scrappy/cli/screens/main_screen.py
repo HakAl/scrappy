@@ -19,7 +19,7 @@ from .chat_surface import (
 )
 from ..widgets import SelectableLog
 from ..input_capture import InputCaptureManager, InputRequest
-from ..command_history import CommandHistory, get_default_history_path
+from ..command_history import CommandHistory
 from ..textual import (
     ProgressIndicator,
     MetricsStatus,
@@ -32,6 +32,7 @@ from ..textual.tui_events import ActivityChanged, MetricsUpdated
 from ..textual.tui_events import TranscriptAppendRenderable, TranscriptAppendText
 
 from scrappy.infrastructure.theme import ThemeProtocol
+from scrappy.infrastructure.protocols import PathProviderProtocol
 from ..protocols import ActivityState, ClipboardProtocol
 
 if TYPE_CHECKING:
@@ -106,6 +107,7 @@ class MainAppScreen(Screen):
         bridge: "ThreadSafeAsyncBridge",
         theme: ThemeProtocol,
         clipboard: ClipboardProtocol,
+        path_provider: PathProviderProtocol,
     ):
         """Initialize main screen with dependencies.
 
@@ -117,6 +119,10 @@ class MainAppScreen(Screen):
             bridge: Bridge for blocking prompts/confirms from worker threads
             theme: Theme for consistent styling
             clipboard: Clipboard service for OS clipboard integration
+            path_provider: Path provider for the file-backed command history.
+                REQUIRED (no default) so that every direct construction is a
+                compile-time disposition rather than a silent load of the home
+                history.
         """
         super().__init__()
         self.interactive_mode = interactive_mode
@@ -134,7 +140,9 @@ class MainAppScreen(Screen):
         self.capture_manager = InputCaptureManager(self.bridge)
 
         # Command history for up/down arrow navigation
-        self._history = CommandHistory(history_file=get_default_history_path())
+        self._history = CommandHistory(
+            history_file=path_provider.command_history_file()
+        )
         self._history_temp_input: str = ""
 
         # Shared chat surface (set on mount)
