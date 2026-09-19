@@ -526,9 +526,9 @@ class PathProviderProtocol(Protocol):
     and to centralize all file path configuration in one place.
 
     Implementations:
-    - ScrappyPathProvider: Uses .scrappy/ directory in project root
-    - TestPathProvider: Uses temporary directories for testing
-    - InMemoryPathProvider: Returns paths that point to in-memory storage
+    - ScrappyPathProvider: Uses .scrappy/ directory in project root and
+      platform-appropriate user directories.
+    - TempPathProvider: Uses a single injected temporary directory for testing.
 
     Example:
         def save_session(paths: PathProviderProtocol, data: dict) -> None:
@@ -539,7 +539,7 @@ class PathProviderProtocol(Protocol):
         save_session(ScrappyPathProvider(project_root), data)
 
         # In tests
-        save_session(TestPathProvider(tmp_path), data)
+        save_session(TempPathProvider(tmp_path), data)
     """
 
     def data_dir(self) -> Path:
@@ -604,6 +604,24 @@ class PathProviderProtocol(Protocol):
 
         Returns:
             Path to context file
+        """
+        ...
+
+    def command_history_file(self) -> Path:
+        """
+        Get path to the CLI command history file.
+
+        Returns:
+            Path to command history file
+        """
+        ...
+
+    def model_cooldowns_file(self) -> Path:
+        """
+        Get path to the model cooldown persistence file.
+
+        Returns:
+            Path to model cooldowns file
         """
         ...
 

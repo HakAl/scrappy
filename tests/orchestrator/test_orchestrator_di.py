@@ -7,11 +7,19 @@ After LiteLLM integration (Phase 3):
 - Factory now creates LiteLLMService which requires API keys
 - Tests must inject delegation_manager or mock API keys
 - Tests use mock delegation_manager to avoid API key requirements
+
+Every construction here is PARTIAL injection, so each one enters the factory
+branch of AgentOrchestrator.__init__. Outside mock mode that branch builds the
+persisted model-cooldown tracker, whose store is read and can be rewritten on
+construction alone, so every construction injects a TempPathProvider(tmp_path):
+the tracker, the user-directory creation and the cache all resolve under the
+test's own root instead of the developer's profile (scrappy-i2jo).
 """
 
 import pytest
 from unittest.mock import Mock
 
+from scrappy.infrastructure.paths import TempPathProvider
 from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.cache import ResponseCache
 from scrappy.orchestrator.rate_limiting import RateLimitTracker
@@ -58,6 +66,7 @@ class TestDependencyInjection:
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            path_provider=TempPathProvider(tmp_path),
             cache=mock_cache,
             delegation_manager=mock_delegation,
             output=NullOutput()
@@ -72,6 +81,7 @@ class TestDependencyInjection:
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            path_provider=TempPathProvider(tmp_path),
             rate_tracker=mock_tracker,
             delegation_manager=mock_delegation,
             output=NullOutput()
@@ -86,6 +96,7 @@ class TestDependencyInjection:
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            path_provider=TempPathProvider(tmp_path),
             working_memory=mock_memory,
             delegation_manager=mock_delegation,
             output=NullOutput()
@@ -100,6 +111,7 @@ class TestDependencyInjection:
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            path_provider=TempPathProvider(tmp_path),
             session_manager=mock_session,
             delegation_manager=mock_delegation,
             output=NullOutput()
@@ -116,6 +128,7 @@ class TestDependencyInjection:
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            path_provider=TempPathProvider(tmp_path),
             background_manager=mock_manager,
             delegation_manager=mock_delegation,
             output=NullOutput()
@@ -147,6 +160,7 @@ class TestDependencyInjection:
         # Create orchestrator with all mocks
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            path_provider=TempPathProvider(tmp_path),
             cache=mock_cache,
             rate_tracker=mock_tracker,
             working_memory=mock_memory,
@@ -182,6 +196,7 @@ class TestDependencyInjection:
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            path_provider=TempPathProvider(tmp_path),
             cache=mock_cache,
             usage_reporter=usage_reporter,
             delegation_manager=mock_delegation,
@@ -202,6 +217,7 @@ class TestDependencyInjection:
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            path_provider=TempPathProvider(tmp_path),
             working_memory=mock_memory,
             delegation_manager=mock_delegation,
             output=NullOutput()
@@ -233,6 +249,7 @@ class TestDependencyInjection:
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            path_provider=TempPathProvider(tmp_path),
             session_manager=mock_session,
             delegation_manager=mock_delegation,
             output=NullOutput()
@@ -254,6 +271,7 @@ class TestDependencyInjectionEdgeCases:
 
         orch = AgentOrchestrator(
             project_path=str(tmp_path),
+            path_provider=TempPathProvider(tmp_path),
             delegation_manager=mock_delegation,
             output=mock_output
         )

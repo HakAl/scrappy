@@ -25,6 +25,7 @@ from .model_selection import (
     SELECTION_TYPE_TO_GROUP,
     selection_type_for_provider_hint,
 )
+from ..infrastructure.protocols import PathProviderProtocol
 from .manager_protocols import (
     ContextManagerProtocol,
     BackgroundTaskManagerProtocol,
@@ -116,6 +117,7 @@ class AgentOrchestrator:
         llm_service: Optional[LLMServiceProtocol] = None,
         provider_status_tracker: Optional[ProviderStatusTrackerProtocol] = None,
         model_selector: Optional[ModelSelectionServiceProtocol] = None,
+        path_provider: Optional[PathProviderProtocol] = None,
     ):
         """
         Initialize orchestrator (dependencies only - NO side effects).
@@ -175,6 +177,7 @@ class AgentOrchestrator:
                 cache_ttl_hours=cache_ttl_hours,
                 context_aware=context_aware,
                 created_at=self.created_at,
+                path_provider=path_provider,
                 enable_semantic_search=enable_semantic_search
             )
 

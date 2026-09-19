@@ -8,9 +8,13 @@ This tests the data flow from langgraph_bridge to the status bar.
 import pytest
 from unittest.mock import MagicMock, Mock
 
+import tempfile
+from pathlib import Path
+
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.textual.tui_events import MetricsUpdated
 from scrappy.cli.textual.status_components import MetricsStatus
+from scrappy.infrastructure.paths import TempPathProvider
 
 
 @pytest.fixture(autouse=True)
@@ -32,8 +36,15 @@ def create_mock_cli():
 
 
 def create_test_app():
-    """Create a ScrappyApp instance for testing."""
-    return ScrappyApp(cli_factory=create_mock_cli)
+    """Create a ScrappyApp instance for testing.
+
+    Mounted by run_test(); inject a disposable provider so command history
+    stays off the home profile.
+    """
+    return ScrappyApp(
+        cli_factory=create_mock_cli,
+        path_provider=TempPathProvider(Path(tempfile.mkdtemp())),
+    )
 
 
 class TestMetricsStatusComponent:

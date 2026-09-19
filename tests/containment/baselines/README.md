@@ -9,30 +9,53 @@ in the scrappy-i2jo PR sequence.
     escape-baseline.<platform>.<selection>.json
 
 - `<platform>`: `sys.platform`, e.g. `darwin`, `linux`. Separate per platform because
-  plan S-1 (path resolution) and S-5 (child forwarding) make them genuinely different.
+  profile path resolution and child-process forwarding differ per platform, so the
+  escape sets are genuinely different.
 - `<selection>`: `default` for the default suite, `integration` for the integration
   subset that exercises the iTerm2 and tmux child paths.
 
 ## These contents are a MEASUREMENT, never a prediction
 
-A baseline is written by `baseline.publish_baseline(...)` from an actual contained run,
-not hand-authored in advance (plan PR-1 EXPECTED DELTAS). The first baseline is produced
-by the architect-owned first contained suite run (brief section 6).
+A baseline is written by `baseline.publish_baseline(...)` from a completed contained run
+of the selection it names, never hand-authored in advance.
 
-`escape-baseline.darwin.default.json` is that first measurement, taken on this branch at
-the TRUE DEFAULT SELECTION with the instrument included: 5350 selected, 5342 passed, 8
-skipped, 0 failures, 0 errors, 106 deselected. Six of the eight skips are the differential
-scanner cases in `test_launcher_validation.py` that argparse rejects outright; the other
-two pre-date this branch. It records TWO escapes, both U-2 and both routed in PR-2:
+`escape-baseline.darwin.default.json` is the CURRENT measurement, taken at the TRUE
+DEFAULT SELECTION with the instrument included after the command-history and model-cooldown
+consumers were routed through the injected path provider and every direct partial-injection
+orchestrator construction in the tests was given a disposable provider: 5364 selected, 5356
+passed, 8 skipped, 0 failures, 0 errors, 106 deselected. Six of the eight skips are the
+differential scanner cases in `test_launcher_validation.py` that argparse rejects outright;
+the other two pre-date the instrument. It records ONE escape:
 
-- `.scrappy/command_history` MODIFIED, 32 -> 122 bytes with a changed hash. The growth on
-  a SEEDED file is the R1 damage reproduced, and it is why seeding with known bytes
-  rather than measuring an empty profile is load-bearing: an overwrite of an empty
-  profile is indistinguishable from a create.
-- `Library/Application Support/scrappy/command_history` CREATED at 101 bytes.
+- `Library/Application Support/scrappy/command_history` CREATED at 32 bytes, with a sha256
+  IDENTICAL to the seeded `.scrappy/command_history`. This is the legacy migration in
+  `infrastructure/paths.py` copying the seed into the platform data directory. Its
+  remaining trigger in this selection is the production `create_orchestrator()` helper in
+  `orchestrator/core.py`, which takes no provider and is exercised by the mock-mode
+  selection tests; it builds the factory's default provider, whose `ensure_user_dir`
+  runs the migration. That attribution was probed per file under a seeded contained
+  HOME: the mock-mode selection file alone produces the copy, while the orchestrator
+  dependency-injection file and the routing file, both of which inject a disposable
+  provider, do not. The seed itself is UNCHANGED, which is the point: nothing in the suite
+  appends to it any more. The copy is a faithful byte-for-byte reproduction of the seed,
+  and its hash is recorded here so that claim rests on the measurement, not on the size.
+  Routing the migration itself (and giving that helper a provider) is a later slice in
+  the sequence. No `model_cooldowns.json` appears anywhere in the measured region: the
+  persisted cooldown tracker, which reads and can rewrite its store on construction
+  alone, is bound to the injected provider at every construction that reaches it.
+
+The PREVIOUS measurement, taken before the routing change, recorded TWO escapes: the same
+copy at 101 bytes and `.scrappy/command_history` MODIFIED from 32 to 122 bytes with a
+changed hash. The 101-byte copy is CONSISTENT with the seed as it stood mid-run, already
+grown by test input, but that reading is NOT PROVEN: the old copy was never hashed, and
+a size alone does not identify content. That modification was the reproduced
+command-history damage, and it is why seeding with known bytes rather than measuring an
+empty profile is load-bearing: an overwrite of an empty profile is indistinguishable from
+a create. Its disappearance is the routing change's acceptance delta; the surviving copy
+is expected and explained, not forced away.
 
 There is no `linux` baseline and no `integration` baseline. Neither has been measured, and
-per L-4 an unmeasured baseline is not an empty one.
+an unmeasured baseline is not an empty one.
 
 ## The publication gate (bead scrappy-jxh4)
 
@@ -59,5 +82,5 @@ Refusal and failed/interrupted execution are covered by `tests/containment/test_
 ## Lifecycle
 
 The set SHRINKS as PR-2 through PR-7 route each escaping write to an injected path, and
-is empty when routing is complete. Per plan T-4, `HOME`'s boundary role ends when the
+is empty when routing is complete. `HOME`'s boundary role ends when the
 baseline is OBSERVED empty, not when any particular PR number lands.

@@ -12,9 +12,9 @@ persistence/history seam this PR owns.
 """
 
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from scrappy.cli.command_history import get_default_history_path
 from scrappy.cli.core import CLI
 from scrappy.orchestrator import AgentOrchestrator
 from scrappy.infrastructure.persistence import ConversationStoreProtocol
@@ -58,9 +58,13 @@ def test_init_performs_no_persistence_or_file_history_io():
                         assert cli.session_context.conversation_history == []
 
 
-def test_initialize_creates_default_store_and_loads_history():
+def test_initialize_creates_default_store_and_loads_history(tmp_path, monkeypatch):
     """initialize() must create the default store, load token-budgeted history into
-    the session context, and switch command history to the file-backed path."""
+    the session context, and switch command history to the file-backed path at the
+    PRODUCTION default location."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
     store = _loaded_store()
     with patch.object(CLI, "_create_default_orchestrator", return_value=MagicMock()):
         with patch.object(CLI, "_create_default_io", return_value=MagicMock()):
@@ -86,8 +90,16 @@ def test_initialize_creates_default_store_and_loads_history():
                         assert cli.session_context.conversation_history == [
                             {"role": "user", "content": "hi"}
                         ]
-                        # Command history rebuilt against the real default path.
-                        mock_cmd_history.assert_any_call(history_file=get_default_history_path())
+                        # With no injected provider the file-backed history must
+                        # land at the production default, ~/.scrappy/command_history
+                        # under a disposable HOME. The expectation is computed
+                        # INDEPENDENTLY of the CLI's provider: asking the CLI's own
+                        # provider for the path would be satisfied by any default,
+                        # including a swapped-in TempPathProvider. Routing through an
+                        # INJECTED provider is pinned in test_path_provider_routing.py.
+                        mock_cmd_history.assert_any_call(
+                            history_file=home / ".scrappy" / "command_history"
+                        )
 
 
 def test_init_does_not_initialize_default_orchestrator():

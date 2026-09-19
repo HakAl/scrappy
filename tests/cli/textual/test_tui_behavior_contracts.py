@@ -4,6 +4,8 @@ These tests pin user-visible behavior described in docs/behavior/TUI.md.
 Future PRs remove strict xfail markers as each behavior lands.
 """
 
+import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -17,13 +19,22 @@ from scrappy.cli.screens.main_screen import MainAppScreen
 from scrappy.cli.screens.wizard_screen import SetupWizardScreen
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.widgets.selectable_log import SelectableLog
+from scrappy.infrastructure.paths import TempPathProvider
 
 
 def create_test_app() -> ScrappyApp:
-    """Create a ScrappyApp instance for contract tests."""
+    """Create a ScrappyApp instance for contract tests.
+
+    This is an immediate-mode app that pilot tests mount, so it reaches
+    _show_main_screen and loads home history unless isolated; inject a disposable
+    provider to keep that history off the home profile.
+    """
     interactive_mode = MagicMock()
     interactive_mode.command_router.set_setup_wizard_callback = MagicMock()
-    return ScrappyApp(interactive_mode=interactive_mode)
+    return ScrappyApp(
+        interactive_mode=interactive_mode,
+        path_provider=TempPathProvider(Path(tempfile.mkdtemp())),
+    )
 
 
 def force_main_screen(monkeypatch) -> None:
@@ -75,6 +86,7 @@ def create_main_screen(clipboard) -> MainAppScreen:
         bridge=MagicMock(),
         theme=MagicMock(),
         clipboard=clipboard,
+        path_provider=TempPathProvider(Path(tempfile.mkdtemp())),
     )
 
 

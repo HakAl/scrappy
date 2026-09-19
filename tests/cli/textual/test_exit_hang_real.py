@@ -58,12 +58,17 @@ def log(msg):
 log(f"Working in: {tmpdir}")
 log("Script starting")
 
+from pathlib import Path
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.core import CLI
 from scrappy.cli.screens import MainAppScreen
+from scrappy.infrastructure.paths import TempPathProvider
 
-cli = CLI()
-app = ScrappyApp(cli_factory=lambda: cli)
+# One disposable provider shared by the CLI and the app so this (unmeasured)
+# integration script never writes command history into the home profile.
+path_provider = TempPathProvider(Path(tempfile.mkdtemp()))
+cli = CLI(path_provider=path_provider)
+app = ScrappyApp(cli_factory=lambda: cli, path_provider=path_provider)
 
 log("App created")
 
@@ -249,11 +254,16 @@ def log(msg):
 
 log("Script starting")
 
+from pathlib import Path
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.core import CLI
+from scrappy.infrastructure.paths import TempPathProvider
 
-cli = CLI()
-app = ScrappyApp(cli_factory=lambda: cli)
+# This script owns no tmpdir of its own, so allocate one here and share ONE
+# provider between the CLI and the app to keep history off the home profile.
+path_provider = TempPathProvider(Path(tempfile.mkdtemp()))
+cli = CLI(path_provider=path_provider)
+app = ScrappyApp(cli_factory=lambda: cli, path_provider=path_provider)
 
 log("App created")
 

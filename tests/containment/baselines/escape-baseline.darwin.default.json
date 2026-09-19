@@ -3,22 +3,8 @@
     {
       "after": {
         "kind": "file",
-        "sha256": "b7b444c290884331a1920ea4177bc541f68b02fc682ee80ef4d3cf01e83ccc93",
-        "size": 122
-      },
-      "before": {
-        "kind": "file",
         "sha256": "83d0d6148a6463e93fa1267e297daaefc368866f1d889dac982e4714dffac7f2",
         "size": 32
-      },
-      "op": "modified",
-      "path": ".scrappy/command_history"
-    },
-    {
-      "after": {
-        "kind": "file",
-        "sha256": null,
-        "size": 101
       },
       "op": "created",
       "path": "Library/Application Support/scrappy/command_history"
@@ -34,15 +20,15 @@
     ],
     "errors": 0,
     "failures": 0,
-    "non_skipped": 5342,
-    "passed": 5342,
+    "non_skipped": 5356,
+    "passed": 5356,
     "report_path": ".pytest_profile/baseline-default/junit-default.xml",
-    "report_sha256": "4fcb0ae9c88f8ce0efec38420392bf0a1ca1c38255bf795b780e535c5056192d",
+    "report_sha256": "c2faa5123d201c2c9faee0add673ea2bd5e006901d886269cc500788e912d52b",
     "returncode": 0,
     "selection": "default",
     "skipped": 8,
-    "started_at": 1789233580.951524,
-    "tests": 5350
+    "started_at": 1789824574.5644748,
+    "tests": 5364
   },
   "selection": "default"
 }

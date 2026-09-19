@@ -8,16 +8,7 @@ Uses platformdirs for cross-platform XDG-compliant paths.
 """
 
 import os
-from pathlib import Path
 from typing import List, Set
-
-from platformdirs import user_data_dir
-
-# User directories (platform-appropriate via platformdirs)
-USER_DATA_DIR = Path(user_data_dir("scrappy"))
-
-# Legacy path (for reference/migration)
-LEGACY_USER_DIR = Path.home() / '.scrappy'
 
 # Session and tracking files (now in .scrappy/ directory)
 SESSION_FILE = '.scrappy/session.json'
