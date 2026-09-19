@@ -145,13 +145,15 @@ class TestRealLLMService:
 class TestOrchestratorLLMService:
     """Test that orchestrator's llm_service works through the graph."""
 
-    def test_orchestrator_llm_service_through_graph(self):
+    def test_orchestrator_llm_service_through_graph(self, tmp_path):
         """Test using orchestrator.llm_service like the TUI does."""
+        from scrappy.infrastructure.paths import TempPathProvider
         from scrappy.orchestrator.core import AgentOrchestrator
         from scrappy.graph.agent import run_agent
 
-        # Create orchestrator (like CLI does)
-        orchestrator = AgentOrchestrator()
+        # Create orchestrator (like CLI does), with its user-level files
+        # (cooldowns, rate limits, cache) routed to a disposable root.
+        orchestrator = AgentOrchestrator(path_provider=TempPathProvider(tmp_path))
 
         # Get llm_service like textual_interactive.py does
         llm_service = getattr(orchestrator, 'llm_service', None)

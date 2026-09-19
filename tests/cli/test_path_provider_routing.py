@@ -18,10 +18,14 @@ Consumers and their construction sites:
                                 via OrchestratorFactory(path_provider=...)
 
 The composition tests additionally drive create_cli_from_context, create_cli
-and ScrappyApp._show_main_screen.
+and ScrappyApp._show_main_screen, and the cooldown tests drive the REAL
+CLI -> AgentOrchestrator -> OrchestratorFactory -> tracker composition (mock
+mode off, so the persisted tracker is actually built), stubbing only the
+CLI's unrelated I/O and the semantic-search background loader.
 """
 
 import contextlib
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -32,13 +36,16 @@ from scrappy.cli.core import CLI
 from scrappy.cli.screens.main_screen import MainAppScreen
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.utils.cli_factory import create_cli_from_context, create_cli
+from scrappy.context.codebase_context import CodebaseContext
 from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
 from scrappy.infrastructure.paths import TempPathProvider
+from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.factory import OrchestratorFactory
 from scrappy.orchestrator.model_selection import (
     ModelAvailabilityTracker,
     ModelHealthState,
 )
+from scrappy.orchestrator.output import NullOutput
 
 HISTORY_SENTINEL = b"SENTINEL-HISTORY-do-not-touch"
 COOLDOWN_SENTINEL = b"SENTINEL-COOLDOWN-do-not-touch"
@@ -64,12 +71,44 @@ def _assert_home_sentinels_untouched(history: Path, cooldown: Path) -> None:
     assert cooldown.read_bytes() == COOLDOWN_SENTINEL
 
 
+def _two_roots(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
+    """Create a disposable HOME and a DISTINCT provider root; point Path.home at HOME."""
+    home = tmp_path / "home"
+    provider_root = tmp_path / "provider"
+    home.mkdir()
+    provider_root.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    return home, provider_root
+
+
+def _expired_cooldown_store(model: str) -> bytes:
+    """A persisted cooldown store holding ONE entry that expired long ago.
+
+    Loading such a store prunes the entry and REWRITES the file, so it turns
+    tracker construction into an observable write.
+    """
+    return json.dumps(
+        {model: {"expires_at": 1.0, "failure_kind": "rate_limit", "retry_after": None}}
+    ).encode("utf-8")
+
+
+class _FalsyProvider(TempPathProvider):
+    """A real provider that is falsy, to pin the explicit is-None rule."""
+
+    def __bool__(self) -> bool:
+        return False
+
+
 @contextlib.contextmanager
-def _isolated_cli_env():
-    """Patch the CLI's unrelated I/O (orchestrator, io, handlers, store).
+def _isolated_cli_env(*, real_orchestrator: bool = False):
+    """Patch the CLI's unrelated I/O (io, handlers, store, and by default the
+    orchestrator).
 
     Leaves the command-history seam REAL so the routing under test is exercised
-    end to end; only orchestrator/provider/persistence I/O is stubbed.
+    end to end. With real_orchestrator=True the default orchestrator is built for
+    real too (CLI -> AgentOrchestrator -> OrchestratorFactory -> tracker); only
+    the semantic-search background loader is stubbed, because it would spawn a
+    model-loading thread that is unrelated to path routing.
     """
     store = MagicMock()
     store.get_recent.return_value = []
@@ -80,8 +119,13 @@ def _isolated_cli_env():
         "tasks": MagicMock(),
         "agent_mgr": MagicMock(),
     }
+    orchestrator_patch = (
+        patch.object(CodebaseContext, "start_background_initialization", lambda self: None)
+        if real_orchestrator
+        else patch.object(CLI, "_create_default_orchestrator", return_value=MagicMock())
+    )
     with (
-        patch.object(CLI, "_create_default_orchestrator", return_value=MagicMock()),
+        orchestrator_patch,
         patch.object(CLI, "_create_default_io", return_value=MagicMock()),
         patch("scrappy.cli.core.initialize_cli_handlers", return_value=handlers),
         patch("scrappy.cli.core.create_conversation_store", return_value=store),
@@ -184,39 +228,137 @@ class TestCooldownRouting:
         assert "groq/model-a" in target.read_text(encoding="utf-8")
         _assert_home_sentinels_untouched(history_sentinel, cooldown_sentinel)
 
-    def test_orchestrator_forwards_provider_to_factory(self):
-        """AgentOrchestrator threads path_provider to OrchestratorFactory.
+    def test_orchestrator_construction_binds_cooldowns_to_provider_not_home(
+        self, tmp_path, monkeypatch
+    ):
+        """AgentOrchestrator(path_provider=...) -> factory -> tracker, mock mode OFF.
 
-        Without this passthrough the provider the CLI holds could never reach
-        the cooldown file. Asserted at the seam so it does not depend on
-        selector internals or mock mode.
+        Construction alone is a cooldown WRITE path: the persisted tracker loads
+        its store when built and rewrites it after pruning expired entries. So
+        an expired entry is seeded at BOTH roots, and a partial-injection
+        construction (the shape most orchestrator tests use; it enters the
+        factory branch) must prune the PROVIDER store and leave the HOME store
+        byte-identical. A tracker bound to the default provider inverts both.
         """
-        provider = MagicMock(name="path_provider")
-        from scrappy.orchestrator import core as orchestrator_core
+        monkeypatch.delenv("SCRAPPY_MOCK_LLM", raising=False)
+        home, provider_root = _two_roots(tmp_path, monkeypatch)
+        project = tmp_path / "project"
+        project.mkdir()
+        provider = TempPathProvider(provider_root)
+        expired = _expired_cooldown_store("groq/model-a")
+        home_store = home / ".scrappy" / "model_cooldowns.json"
+        home_store.parent.mkdir(parents=True)
+        home_store.write_bytes(expired)
+        provider_store = provider.model_cooldowns_file()
+        provider_store.parent.mkdir(parents=True, exist_ok=True)
+        provider_store.write_bytes(expired)
 
-        with patch.object(orchestrator_core, "OrchestratorFactory") as mock_factory:
-            orchestrator_core.AgentOrchestrator(
-                project_path=".", path_provider=provider
+        AgentOrchestrator(
+            project_path=str(project),
+            delegation_manager=MagicMock(),
+            output=NullOutput(),
+            path_provider=provider,
+        )
+
+        # Provider store: loaded, pruned, rewritten as an empty object.
+        assert json.loads(provider_store.read_text(encoding="utf-8")) == {}
+        # HOME store: never read for pruning, never rewritten.
+        assert home_store.read_bytes() == expired
+
+    def test_orchestrator_cooldown_persists_and_reloads_through_provider(
+        self, tmp_path, monkeypatch
+    ):
+        """A cooldown marked through one orchestrator's REAL selector is persisted
+        under the provider root and is live again in a second orchestrator built
+        with the same provider (mock mode OFF so the real selector and tracker
+        are composed)."""
+        monkeypatch.delenv("SCRAPPY_MOCK_LLM", raising=False)
+        home, provider_root = _two_roots(tmp_path, monkeypatch)
+        history_sentinel, cooldown_sentinel = _seed_home_sentinels(home)
+        project = tmp_path / "project"
+        project.mkdir()
+        provider = TempPathProvider(provider_root)
+
+        def build() -> AgentOrchestrator:
+            return AgentOrchestrator(
+                project_path=str(project),
+                delegation_manager=MagicMock(),
+                output=NullOutput(),
+                path_provider=provider,
             )
 
-        mock_factory.assert_called_once()
-        assert mock_factory.call_args.kwargs["path_provider"] is provider
+        first = build()
+        first.model_selector.mark_unhealthy(
+            "groq/model-a", FailureKind.RATE_LIMIT, retry_after=3600.0
+        )
 
-    def test_cli_forwards_provider_to_orchestrator(self):
-        """CLI._create_default_orchestrator passes its provider onward."""
-        provider = MagicMock(name="path_provider")
-        with (
-            patch.object(CLI, "_create_default_io", return_value=MagicMock()),
-            patch("scrappy.cli.core.initialize_cli_handlers", return_value={
-                "display": MagicMock(), "session_mgr": MagicMock(),
-                "codebase": MagicMock(), "tasks": MagicMock(), "agent_mgr": MagicMock(),
-            }),
-            patch("scrappy.cli.core.AgentOrchestrator") as mock_orch,
-        ):
-            CLI(path_provider=provider)
+        target = provider.model_cooldowns_file()
+        assert target.is_relative_to(provider_root)
+        assert target.exists()
+        assert "groq/model-a" in target.read_text(encoding="utf-8")
+        _assert_home_sentinels_untouched(history_sentinel, cooldown_sentinel)
 
-        mock_orch.assert_called_once()
-        assert mock_orch.call_args.kwargs["path_provider"] is provider
+        # Reload: a fresh orchestrator on the same provider sees the cooldown.
+        # Both models are configured so the difference is the persisted state.
+        second = build()
+        second.model_selector.update_configured({"groq/model-a", "groq/model-b"})
+        assert second.model_selector.is_available("groq/model-b") is True
+        assert second.model_selector.is_available("groq/model-a") is False
+
+    def test_cli_default_orchestrator_persists_cooldowns_under_provider_root(
+        self, tmp_path, monkeypatch
+    ):
+        """CLI(path_provider=...) -> _create_default_orchestrator -> AgentOrchestrator
+        -> OrchestratorFactory -> tracker: the CLI's provider reaches the cooldown
+        file with the orchestrator built for real (mock mode OFF)."""
+        monkeypatch.delenv("SCRAPPY_MOCK_LLM", raising=False)
+        home, provider_root = _two_roots(tmp_path, monkeypatch)
+        history_sentinel, cooldown_sentinel = _seed_home_sentinels(home)
+        project = tmp_path / "project"
+        project.mkdir()
+        # The default orchestrator uses project_path="."; point it at a disposable dir.
+        monkeypatch.chdir(project)
+        provider = TempPathProvider(provider_root)
+
+        with _isolated_cli_env(real_orchestrator=True):
+            cli = CLI(path_provider=provider)
+        assert isinstance(cli.orchestrator, AgentOrchestrator)
+        cli.orchestrator.model_selector.mark_unhealthy(
+            "groq/model-a", FailureKind.RATE_LIMIT, retry_after=3600.0
+        )
+
+        target = provider.model_cooldowns_file()
+        assert target.is_relative_to(provider_root)
+        assert target.exists()
+        assert "groq/model-a" in target.read_text(encoding="utf-8")
+        _assert_home_sentinels_untouched(history_sentinel, cooldown_sentinel)
+
+    def test_falsy_provider_is_kept_and_routed(self, tmp_path, monkeypatch):
+        """The explicit is-None rule: a Protocol-typed provider that is FALSY must
+        not trigger a silent default at the CLI, the app, or the orchestrator
+        factory. The falsy provider is retained by identity and its cooldown
+        member is still the one written."""
+        monkeypatch.delenv("SCRAPPY_MOCK_LLM", raising=False)
+        home, provider_root = _two_roots(tmp_path, monkeypatch)
+        history_sentinel, cooldown_sentinel = _seed_home_sentinels(home)
+        project = tmp_path / "project"
+        project.mkdir()
+        monkeypatch.chdir(project)
+        provider = _FalsyProvider(provider_root)
+        assert not provider
+
+        with _isolated_cli_env(real_orchestrator=True):
+            cli = CLI(path_provider=provider)
+        assert cli._path_provider is provider
+        assert ScrappyApp(cli_factory=MagicMock, path_provider=provider)._path_provider is provider
+
+        cli.orchestrator.model_selector.mark_unhealthy(
+            "groq/model-a", FailureKind.RATE_LIMIT, retry_after=3600.0
+        )
+        target = provider.model_cooldowns_file()
+        assert target.is_relative_to(provider_root)
+        assert "groq/model-a" in target.read_text(encoding="utf-8")
+        _assert_home_sentinels_untouched(history_sentinel, cooldown_sentinel)
 
 
 # ---------------------------------------------------------------------------

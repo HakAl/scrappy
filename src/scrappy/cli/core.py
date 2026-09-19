@@ -90,7 +90,8 @@ class CLI:
         # __bool__/__len__ must not trigger a silent default. Assigned BEFORE
         # _create_default_orchestrator() runs so the orchestrator is built with it.
         self._path_provider = (
-            path_provider if path_provider is not None else ScrappyPathProvider(Path("."))
+            path_provider if path_provider is not None
+            else self._create_default_path_provider()
         )
 
         # Initialize dependencies using factory methods
@@ -225,6 +226,16 @@ class CLI:
         from .textual.output_adapter import TextualOutputAdapter
         output_adapter = TextualOutputAdapter()
         return UnifiedIO(output_sink=output_adapter, theme=self._theme)
+
+    def _create_default_path_provider(self) -> PathProviderProtocol:
+        """Create the default path provider (production location).
+
+        Mirrors the orchestrator factory's default: project_root is irrelevant
+        to the two user-level members this CLI consumes (command history and,
+        through the default orchestrator, model cooldowns both resolve from
+        Path.home()), so Path(".") is chosen for consistency, not for effect.
+        """
+        return ScrappyPathProvider(Path("."))
 
     def _create_default_orchestrator(self) -> AgentOrchestrator:
         """Build the default orchestrator object (no provider setup / I/O).

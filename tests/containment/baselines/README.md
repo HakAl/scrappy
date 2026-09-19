@@ -36,8 +36,10 @@ pre-date the instrument. It records ONE escape:
   later slice in the sequence.
 
 The PREVIOUS measurement, taken before the routing change, recorded TWO escapes: the same
-copy at 101 bytes (the seed as it stood mid-run, already grown by test input) and
-`.scrappy/command_history` MODIFIED from 32 to 122 bytes with a changed hash. That
+copy at 101 bytes and `.scrappy/command_history` MODIFIED from 32 to 122 bytes with a
+changed hash. The 101-byte copy is CONSISTENT with the seed as it stood mid-run, already
+grown by test input, but that reading is NOT PROVEN: the old copy was never hashed, and
+a size alone does not identify content. That
 modification was the reproduced R1 damage, and it is why seeding with known bytes rather
 than measuring an empty profile is load-bearing: an overwrite of an empty profile is
 indistinguishable from a create. Its disappearance is the routing change's acceptance
