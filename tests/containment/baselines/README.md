@@ -21,19 +21,28 @@ by the architect-owned first contained suite run (brief section 6).
 
 `escape-baseline.darwin.default.json` is the CURRENT measurement, taken at the TRUE
 DEFAULT SELECTION with the instrument included after the command-history and model-cooldown
-consumers were routed through the injected path provider: 5362 selected, 5354 passed, 8
-skipped, 0 failures, 0 errors, 106 deselected. Six of the eight skips are the differential
-scanner cases in `test_launcher_validation.py` that argparse rejects outright; the other two
-pre-date the instrument. It records ONE escape:
+consumers were routed through the injected path provider and every direct partial-injection
+orchestrator construction in the tests was given a disposable provider: 5364 selected, 5356
+passed, 8 skipped, 0 failures, 0 errors, 106 deselected. Six of the eight skips are the
+differential scanner cases in `test_launcher_validation.py` that argparse rejects outright;
+the other two pre-date the instrument. It records ONE escape:
 
 - `Library/Application Support/scrappy/command_history` CREATED at 32 bytes, with a sha256
   IDENTICAL to the seeded `.scrappy/command_history`. This is the legacy migration in
-  `infrastructure/paths.py` copying the seed into the platform data directory, reached by
-  tests that still construct an orchestrator without an injected provider. The seed itself
-  is UNCHANGED, which is the point: nothing in the suite appends to it any more. The copy
-  is a faithful byte-for-byte reproduction of the seed, and its hash is recorded here so
-  that claim rests on the measurement, not on the size. Routing the migration itself is a
-  later slice in the sequence.
+  `infrastructure/paths.py` copying the seed into the platform data directory. Its
+  remaining trigger in this selection is the production `create_orchestrator()` helper in
+  `orchestrator/core.py`, which takes no provider and is exercised by the mock-mode
+  selection tests; it builds the factory's default provider, whose `ensure_user_dir`
+  runs the migration. That attribution was probed per file under a seeded contained
+  HOME: the mock-mode selection file alone produces the copy, while the orchestrator
+  dependency-injection file and the routing file, both of which inject a disposable
+  provider, do not. The seed itself is UNCHANGED, which is the point: nothing in the suite
+  appends to it any more. The copy is a faithful byte-for-byte reproduction of the seed,
+  and its hash is recorded here so that claim rests on the measurement, not on the size.
+  Routing the migration itself (and giving that helper a provider) is a later slice in
+  the sequence. No `model_cooldowns.json` appears anywhere in the measured region: the
+  persisted cooldown tracker, which reads and can rewrite its store on construction
+  alone, is bound to the injected provider at every construction that reaches it.
 
 The PREVIOUS measurement, taken before the routing change, recorded TWO escapes: the same
 copy at 101 bytes and `.scrappy/command_history` MODIFIED from 32 to 122 bytes with a
