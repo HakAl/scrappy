@@ -15,9 +15,8 @@ in the scrappy-i2jo PR sequence.
 
 ## These contents are a MEASUREMENT, never a prediction
 
-A baseline is written by `baseline.publish_baseline(...)` from an actual contained run,
-not hand-authored in advance (plan PR-1 EXPECTED DELTAS). The first baseline is produced
-by the architect-owned first contained suite run (brief section 6).
+A baseline is written by `baseline.publish_baseline(...)` from a completed contained run
+of the selection it names, never hand-authored in advance.
 
 `escape-baseline.darwin.default.json` is the CURRENT measurement, taken at the TRUE
 DEFAULT SELECTION with the instrument included after the command-history and model-cooldown

@@ -21,11 +21,13 @@ The composition tests additionally drive create_cli_from_context, create_cli
 and ScrappyApp._show_main_screen, and the cooldown tests drive the REAL
 CLI -> AgentOrchestrator -> OrchestratorFactory -> tracker composition (mock
 mode off, so the persisted tracker is actually built), stubbing only the
-CLI's unrelated I/O and the semantic-search background loader.
+CLI's unrelated I/O and, at the stdlib thread boundary, the semantic-search
+model-loading thread.
 """
 
 import contextlib
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -36,9 +38,9 @@ from scrappy.cli.core import CLI
 from scrappy.cli.screens.main_screen import MainAppScreen
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.utils.cli_factory import create_cli_from_context, create_cli
-from scrappy.context.codebase_context import CodebaseContext
 from scrappy.infrastructure.exceptions.failure_kinds import FailureKind
 from scrappy.infrastructure.paths import TempPathProvider
+from scrappy.infrastructure.threading import managed_thread
 from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.factory import OrchestratorFactory
 from scrappy.orchestrator.model_selection import (
@@ -92,6 +94,33 @@ def _expired_cooldown_store(model: str) -> bytes:
     ).encode("utf-8")
 
 
+class _UnstartedThread:
+    """Stand-in for threading.Thread that never runs its target.
+
+    Used only where the managed-thread module creates its stdlib thread, so
+    the semantic-search model loader (unrelated to path routing, and a network
+    boundary when the model is not cached) is composed for real but never
+    executes. Everything above the stdlib call stays real.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        self.name = kwargs.get("name", "")
+
+    def start(self) -> None:
+        return None
+
+    def join(self, timeout=None) -> None:
+        return None
+
+    def is_alive(self) -> bool:
+        return False
+
+
+_threading_without_start = SimpleNamespace(
+    Thread=_UnstartedThread, Event=threading.Event, Lock=threading.Lock
+)
+
+
 class _FalsyProvider(TempPathProvider):
     """A real provider that is falsy, to pin the explicit is-None rule."""
 
@@ -106,9 +135,10 @@ def _isolated_cli_env(*, real_orchestrator: bool = False):
 
     Leaves the command-history seam REAL so the routing under test is exercised
     end to end. With real_orchestrator=True the default orchestrator is built for
-    real too (CLI -> AgentOrchestrator -> OrchestratorFactory -> tracker); only
-    the semantic-search background loader is stubbed, because it would spawn a
-    model-loading thread that is unrelated to path routing.
+    real too (CLI -> AgentOrchestrator -> OrchestratorFactory -> tracker); the
+    only stub on that route is the stdlib thread the managed-thread module would
+    start for the semantic-search model loader, which is unrelated to path
+    routing. The loader's own composition (callbacks, initializer) stays real.
     """
     store = MagicMock()
     store.get_recent.return_value = []
@@ -120,7 +150,7 @@ def _isolated_cli_env(*, real_orchestrator: bool = False):
         "agent_mgr": MagicMock(),
     }
     orchestrator_patch = (
-        patch.object(CodebaseContext, "start_background_initialization", lambda self: None)
+        patch.object(managed_thread, "threading", _threading_without_start)
         if real_orchestrator
         else patch.object(CLI, "_create_default_orchestrator", return_value=MagicMock())
     )
@@ -323,6 +353,8 @@ class TestCooldownRouting:
         with _isolated_cli_env(real_orchestrator=True):
             cli = CLI(path_provider=provider)
         assert isinstance(cli.orchestrator, AgentOrchestrator)
+        # The stand-in held: the semantic-search loader thread never ran.
+        assert "SemanticSearchInit" not in {t.name for t in threading.enumerate()}
         cli.orchestrator.model_selector.mark_unhealthy(
             "groq/model-a", FailureKind.RATE_LIMIT, retry_after=3600.0
         )
