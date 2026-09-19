@@ -9,7 +9,8 @@ in the scrappy-i2jo PR sequence.
     escape-baseline.<platform>.<selection>.json
 
 - `<platform>`: `sys.platform`, e.g. `darwin`, `linux`. Separate per platform because
-  plan S-1 (path resolution) and S-5 (child forwarding) make them genuinely different.
+  profile path resolution and child-process forwarding differ per platform, so the
+  escape sets are genuinely different.
 - `<selection>`: `default` for the default suite, `integration` for the integration
   subset that exercises the iTerm2 and tmux child paths.
 
@@ -54,7 +55,7 @@ indistinguishable from a create. Its disappearance is the routing change's accep
 delta; the surviving copy is expected and explained, not forced away.
 
 There is no `linux` baseline and no `integration` baseline. Neither has been measured, and
-per L-4 an unmeasured baseline is not an empty one.
+an unmeasured baseline is not an empty one.
 
 ## The publication gate (bead scrappy-jxh4)
 
@@ -81,5 +82,5 @@ Refusal and failed/interrupted execution are covered by `tests/containment/test_
 ## Lifecycle
 
 The set SHRINKS as PR-2 through PR-7 route each escaping write to an injected path, and
-is empty when routing is complete. Per plan T-4, `HOME`'s boundary role ends when the
+is empty when routing is complete. `HOME`'s boundary role ends when the
 baseline is OBSERVED empty, not when any particular PR number lands.
