@@ -497,6 +497,10 @@ class CommandRouter:
         io = self.io
 
         io.echo("Launching provider setup wizard...")
+        # Re-read storage before the session starts: the wizard saves the whole
+        # config back, so it must edit current disk state rather than the
+        # snapshot cached when the service was built.
+        self._api_key_service.reload()
         wizard = SetupWizard(io, create_key_validator(), self._api_key_service)
         wizard.run(allow_cancel=True)
         # Refresh orchestrator provider state after wizard saves new keys.

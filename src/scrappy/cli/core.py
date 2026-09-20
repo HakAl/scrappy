@@ -352,6 +352,7 @@ class CLI:
             io=self.io,  # Pass existing TextualIO created before initialize()
             cli=self,  # Pass CLI reference for handler reinitialization with bridge
             path_provider=self._path_provider,
+            api_key_service=self._api_key_service,
         )
 
     def _show_semantic_search_progress(self):

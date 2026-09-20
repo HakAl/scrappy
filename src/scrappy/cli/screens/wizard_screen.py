@@ -100,6 +100,11 @@ class SetupWizardScreen(Screen):
         self._surface = self.query_one(ChatSurface)
         self._surface.focus_input()
 
+        # Re-read storage before the session starts: the wizard saves the whole
+        # config back, so it must edit current disk state rather than the
+        # snapshot cached when the service was built.
+        self._config_service.reload()
+
         # Create and start wizard
         self._wizard = SetupWizard(
             self._io, self._key_validator, self._config_service

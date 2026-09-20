@@ -269,11 +269,11 @@ class TestWizardScreenIntegration:
         class TestApp(App):
             def compose(self):
                 yield SetupWizardScreen(
-            io=mock_io,
-            key_validator=mock_validator,
-            clipboard=mock_clipboard,
-            config_service=MockApiKeyConfigService(),
-        )
+                    io=mock_io,
+                    key_validator=mock_validator,
+                    clipboard=mock_clipboard,
+                    config_service=MockApiKeyConfigService(),
+                )
 
         app = TestApp()
         async with app.run_test() as pilot:
@@ -294,11 +294,11 @@ class TestWizardScreenIntegration:
         class TestApp(App):
             def compose(self):
                 yield SetupWizardScreen(
-            io=mock_io,
-            key_validator=mock_validator,
-            clipboard=mock_clipboard,
-            config_service=MockApiKeyConfigService(),
-        )
+                    io=mock_io,
+                    key_validator=mock_validator,
+                    clipboard=mock_clipboard,
+                    config_service=MockApiKeyConfigService(),
+                )
 
         app = TestApp()
         async with app.run_test() as pilot:

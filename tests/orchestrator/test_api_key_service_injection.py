@@ -12,11 +12,14 @@ reading the developer's profile. A disposable path provider keeps the
 unrelated user-level files (cooldowns, logs) out of the profile too.
 """
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from scrappy.infrastructure.config.api_keys import ApiKeyConfigService
 from scrappy.infrastructure.paths import TempPathProvider
+from scrappy.infrastructure.persistence.json_persistence import JSONPersistence
 from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.factory import OrchestratorFactory
 from scrappy.orchestrator.litellm_service import LiteLLMService
@@ -26,6 +29,16 @@ from tests.default_path_tripwire import armed_default_path_tripwire
 
 GROQ_CHAT_MODEL = "groq/llama-3.3-70b-versatile"
 CEREBRAS_CHAT_MODEL = "cerebras/llama-3.3-70b"
+GROQ_KEY = "GROQ_API_KEY"
+CEREBRAS_KEY = "CEREBRAS_API_KEY"
+
+# Every component the all-components-provided branch checks for truthiness.
+# llm_service and model_selector are deliberately NOT among them.
+_GUARDED_COMPONENTS = (
+    "output", "registry", "cache", "rate_tracker", "working_memory",
+    "session_manager", "usage_reporter", "status_reporter", "task_executor",
+    "context_manager", "delegation_manager", "background_manager",
+)
 
 
 @pytest.fixture
@@ -130,3 +143,45 @@ class TestOrchestratorUsesInjectedService:
         status = orchestrator.status()
         assert GROQ_CHAT_MODEL in {m["model_id"] for m in status["configured_models"]}
         assert "chat" in status["model_groups"]
+
+
+class TestRefreshReadsCurrentDiskState:
+    """The refresh path re-reads storage itself, not only through the LLM service.
+
+    An orchestrator can legitimately be composed with every guarded component
+    supplied and no LLM service, in which case nothing else on that path reloads
+    and the model selector would be rebuilt from the startup snapshot. Real
+    persistence, because this is cache semantics a double cannot model.
+    """
+
+    def test_refresh_without_an_llm_service_sees_an_external_edit(
+        self, tripwire, tmp_path
+    ):
+        """A provider added to the file after startup reaches the model selector
+        even when no LLM service is present to reload on the way."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"api_keys": {GROQ_KEY: "gsk-x"}}))
+        service = ApiKeyConfigService(
+            JSONPersistence(str(config_file)), (GROQ_KEY, CEREBRAS_KEY)
+        )
+        assert service.get_key(GROQ_KEY) == "gsk-x"  # warms the cache
+
+        selector = MagicMock()
+        orchestrator = AgentOrchestrator(
+            llm_service=None,
+            model_selector=selector,
+            api_key_service=service,
+            path_provider=TempPathProvider(tmp_path / "provider"),
+            **{name: MagicMock() for name in _GUARDED_COMPONENTS},
+        )
+        assert orchestrator.llm_service is None  # the branch under test
+
+        config_file.write_text(json.dumps({
+            "api_keys": {GROQ_KEY: "gsk-x", CEREBRAS_KEY: "csk-y"}
+        }))
+
+        orchestrator.refresh_provider_configuration()
+
+        configured = selector.update_configured.call_args[0][0]
+        assert CEREBRAS_CHAT_MODEL in configured
+        assert GROQ_CHAT_MODEL in configured

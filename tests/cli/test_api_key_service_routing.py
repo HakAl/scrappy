@@ -45,6 +45,7 @@ from tests.cli.helpers import MockApiKeyConfigService, MockKeyValidationService
 from tests.default_path_tripwire import TRIPWIRE_MESSAGE, armed_default_path_tripwire
 
 GROQ_KEY = "GROQ_API_KEY"
+CEREBRAS_KEY = "CEREBRAS_API_KEY"
 GROQ_CHAT_MODEL = "groq/llama-3.3-70b-versatile"
 
 
@@ -320,6 +321,94 @@ class TestWizardRoutingReadsAndWrites:
         assert wizard._config_service is double
 
 
+class TestWizardSessionReadsCurrentDiskState:
+    """A wizard session starts from what is on disk, not from the snapshot the
+    long-lived service cached at startup.
+
+    The service writes the WHOLE config back on every set_key, so a session
+    that opened on a stale snapshot would silently revert a key another process
+    added in the meantime. Real persistence over a disposable file, because this
+    is cache semantics a double cannot model; the tripwire is armed so a session
+    that reaches the default path instead fails loudly rather than writing there.
+    """
+
+    OTHER_KEY = CEREBRAS_KEY
+    THIRD_KEY = "OPENROUTER_API_KEY"
+
+    def _stale_service(self, tmp_path: Path) -> ApiKeyConfigService:
+        """A service warmed on a one-key file that then grows a second key."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"api_keys": {GROQ_KEY: "gsk-x"}}))
+        service = ApiKeyConfigService(
+            JSONPersistence(str(config_file)),
+            (GROQ_KEY, self.OTHER_KEY, self.THIRD_KEY),
+        )
+        assert service.get_key(GROQ_KEY) == "gsk-x"  # warms the cache
+
+        # Another process adds a key after this service was built.
+        config_file.write_text(json.dumps({
+            "api_keys": {GROQ_KEY: "gsk-x", self.OTHER_KEY: "csk-y"}
+        }))
+        assert service.get_key(self.OTHER_KEY) is None  # the snapshot is stale
+        return service
+
+    def _stored_keys(self, tmp_path: Path) -> dict:
+        return json.loads((tmp_path / "config.json").read_text())["api_keys"]
+
+    @pytest.mark.asyncio
+    async def test_screen_session_does_not_revert_an_external_key(
+        self, tripwire, tmp_path
+    ):
+        """Saving through the screen-mounted wizard keeps the external key."""
+        service = self._stale_service(tmp_path)
+
+        io = MagicMock()
+        io.output_sink = MagicMock()
+        screen = SetupWizardScreen(
+            io=io,
+            key_validator=MockKeyValidationService((True, None)),
+            clipboard=MagicMock(),
+            config_service=service,
+        )
+
+        class _Host(App):
+            def compose(self):
+                yield screen
+
+        async with _Host().run_test() as pilot:
+            await pilot.pause()
+            screen._wizard._save_key(self.THIRD_KEY, "sk-or-z-0123456789")
+
+        stored = self._stored_keys(tmp_path)
+        assert stored.get(self.THIRD_KEY) == "sk-or-z-0123456789"
+        assert stored.get(self.OTHER_KEY) == "csk-y"
+
+    def test_router_session_does_not_revert_an_external_key(self, tripwire, tmp_path):
+        """Saving through the /setup CLI-mode wizard keeps the external key."""
+        service = self._stale_service(tmp_path)
+        router = CommandRouter(
+            io=MagicMock(),
+            orchestrator=MagicMock(),
+            session_context=MagicMock(),
+            display=MagicMock(),
+            session_mgr=MagicMock(),
+            codebase=MagicMock(),
+            tasks=MagicMock(),
+            agent_mgr=MagicMock(),
+            session_saver=MagicMock(),
+            model_selection=MagicMock(),
+            api_key_service=service,
+        )
+
+        with patch.object(SetupWizard, "run", autospec=True) as run_mock:
+            assert router._handle_setup("") is True
+        run_mock.call_args[0][0]._save_key(self.THIRD_KEY, "sk-or-z-0123456789")
+
+        stored = self._stored_keys(tmp_path)
+        assert stored.get(self.THIRD_KEY) == "sk-or-z-0123456789"
+        assert stored.get(self.OTHER_KEY) == "csk-y"
+
+
 class TestBannerUsesInjectedService:
     """The banner names the injected double's providers, through both entries."""
 
@@ -405,6 +494,27 @@ class TestCompositionSitesThreadService:
 
         assert app._api_key_service is double
 
+    def test_interactive_mode_threads_service_to_its_app(self, tripwire):
+        """T8: the immediate-mode route carries the service too, so the app it
+        builds does not fall back to a second, default-path service."""
+        double = _groq_double()
+
+        with _isolated_cli_env(real_orchestrator=False):
+            cli = CLI(api_key_service=double)
+            cli.io.output_sink = MagicMock()
+            mode = cli._create_interactive_mode()
+
+        assert mode._api_key_service is double
+
+        with (
+            patch("scrappy.cli.textual_interactive.ScrappyApp") as app_cls,
+            patch("scrappy.cli.textual_interactive.create_textual_runtime_session"),
+            patch("scrappy.cli.textual_interactive.wire_textual_runtime"),
+        ):
+            mode.run()
+
+        assert app_cls.call_args.kwargs["api_key_service"] is double
+
 
 class TestFalsyServiceIsKeptAndRouted:
     """The explicit is-None rule at all three composition roots."""
@@ -454,29 +564,45 @@ class TestRefreshBoundaryPreservesFreshReads:
     def _service(self, tmp_path: Path, key: str) -> ApiKeyConfigService:
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({"api_keys": {GROQ_KEY: key}}))
-        return ApiKeyConfigService(JSONPersistence(str(config_file)), (GROQ_KEY,))
+        return ApiKeyConfigService(
+            JSONPersistence(str(config_file)), (GROQ_KEY, CEREBRAS_KEY)
+        )
 
     def _rewrite(self, tmp_path: Path, key: str) -> None:
+        """Rewrite the groq key AND add a provider that was not there before.
+
+        The added provider is what makes the assertion consumer-visible: the
+        key value alone could be checked on the service, which a reload placed
+        AFTER the read would still satisfy.
+        """
         (tmp_path / "config.json").write_text(
-            json.dumps({"api_keys": {GROQ_KEY: key}})
+            json.dumps({"api_keys": {GROQ_KEY: key, CEREBRAS_KEY: "csk-added"}})
         )
 
     def test_list_models_sees_an_external_edit(self, tmp_path):
-        """T10a: /models re-reads, so a key rewritten after startup shows."""
+        """T10a: /models re-reads, so a provider added after startup is RENDERED."""
         service = self._service(tmp_path, "gsk-old")
         io = _RecordingIO()
         display = CLIDisplay(MagicMock(), datetime.now(), io, api_key_service=service)
 
         assert service.get_key(GROQ_KEY) == "gsk-old"  # warms the cache
+
+        display.list_models()
+        assert "cerebras/" not in io.rendered()  # the provider is not configured yet
+
         self._rewrite(tmp_path, "gsk-new")
         assert service.get_key(GROQ_KEY) == "gsk-old"  # the edit alone is invisible
 
+        io.printed.clear()
         display.list_models()
 
+        assert "cerebras/" in io.rendered()
+        assert GROQ_CHAT_MODEL in io.rendered()
         assert service.get_key(GROQ_KEY) == "gsk-new"
 
     def test_status_sees_an_external_edit(self, tmp_path):
-        """T10b: status re-reads, independently of the /models path."""
+        """T10b: status re-reads, so a provider added after startup is REPORTED,
+        independently of the /models path."""
         from scrappy.orchestrator.core import AgentOrchestrator
 
         service = self._service(tmp_path, "gsk-old")
@@ -493,9 +619,18 @@ class TestRefreshBoundaryPreservesFreshReads:
             )
 
         assert service.get_key(GROQ_KEY) == "gsk-old"  # warms the cache
+
+        assert not self._reported_cerebras_models(orchestrator.status())
+
         self._rewrite(tmp_path, "gsk-new")
         assert service.get_key(GROQ_KEY) == "gsk-old"  # the edit alone is invisible
 
-        orchestrator.status()
-
+        assert self._reported_cerebras_models(orchestrator.status())
         assert service.get_key(GROQ_KEY) == "gsk-new"
+
+    @staticmethod
+    def _reported_cerebras_models(status: dict) -> list:
+        return [
+            model for model in status["configured_models"]
+            if str(model.get("model_id", "")).startswith("cerebras/")
+        ]

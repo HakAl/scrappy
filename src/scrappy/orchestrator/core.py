@@ -804,6 +804,12 @@ class AgentOrchestrator:
         The orchestrator owns this path so LiteLLM router refresh, model
         selection refresh, and credential-related health clearing stay in sync.
         """
+        # Re-read storage first: this site used to build a fresh service per
+        # call, so keys written since startup were picked up here. The shared
+        # instance caches, so reload() preserves that for both branches below,
+        # including the one where no llm_service is present to reload for us.
+        self._api_key_service.reload()
+
         configured = False
         if self.llm_service is not None:
             configured = self.llm_service.configure()
