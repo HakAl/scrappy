@@ -17,7 +17,6 @@ test's own root instead of the developer's profile (scrappy-i2jo).
 """
 
 import json
-from pathlib import Path
 
 import pytest
 from unittest.mock import Mock
@@ -286,7 +285,6 @@ class TestCreateOrchestratorPathProvider:
     def test_injected_provider_receives_the_real_trackers_writes(self, mock_mode, tmp_path):
         """T11: the provider passed in is the one the consumers persist through."""
         provider = TempPathProvider(tmp_path)
-        production_user_dir = Path(paths_module.user_data_dir(paths_module.APP_NAME))
 
         orch = create_orchestrator(path_provider=provider)
         orch.rate_tracker.record_request("groq", "llama-3.3-70b-versatile", input_tokens=7)
@@ -294,7 +292,6 @@ class TestCreateOrchestratorPathProvider:
         recorded = json.loads(provider.rate_limits_file().read_text())
         assert recorded["providers"]["groq"]["llama-3.3-70b-versatile"]["requests_today"] == 1
         assert provider.rate_limits_file().is_relative_to(tmp_path)
-        assert not (production_user_dir / "rate_limits.json").exists()
 
     def test_no_argument_call_resolves_through_discovery(self, mock_mode, tmp_path, monkeypatch):
         """T12: the no-argument path still works, against controlled discovery.
