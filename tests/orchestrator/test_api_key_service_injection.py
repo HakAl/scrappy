@@ -23,6 +23,7 @@ from scrappy.infrastructure.persistence.json_persistence import JSONPersistence
 from scrappy.orchestrator.core import AgentOrchestrator
 from scrappy.orchestrator.factory import OrchestratorFactory
 from scrappy.orchestrator.litellm_service import LiteLLMService
+from scrappy.orchestrator.model_selection import ModelSelectionService
 from scrappy.orchestrator.output import NullOutput
 from tests.cli.helpers import MockApiKeyConfigService
 from tests.default_path_tripwire import armed_default_path_tripwire
@@ -166,7 +167,10 @@ class TestRefreshReadsCurrentDiskState:
         )
         assert service.get_key(GROQ_KEY) == "gsk-x"  # warms the cache
 
-        selector = MagicMock()
+        # A real selector, seeded with the startup state the warmed cache
+        # describes, so the refresh is observed as selector STATE rather than as
+        # a call record.
+        selector = ModelSelectionService({GROQ_CHAT_MODEL})
         orchestrator = AgentOrchestrator(
             llm_service=None,
             model_selector=selector,
@@ -176,12 +180,14 @@ class TestRefreshReadsCurrentDiskState:
         )
         assert orchestrator.llm_service is None  # the branch under test
 
+        assert selector.is_configured(GROQ_CHAT_MODEL)
+        assert not selector.is_configured(CEREBRAS_CHAT_MODEL)
+
         config_file.write_text(json.dumps({
             "api_keys": {GROQ_KEY: "gsk-x", CEREBRAS_KEY: "csk-y"}
         }))
 
         orchestrator.refresh_provider_configuration()
 
-        configured = selector.update_configured.call_args[0][0]
-        assert CEREBRAS_CHAT_MODEL in configured
-        assert GROQ_CHAT_MODEL in configured
+        assert selector.is_configured(CEREBRAS_CHAT_MODEL)
+        assert selector.is_configured(GROQ_CHAT_MODEL)

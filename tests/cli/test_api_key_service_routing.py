@@ -496,7 +496,13 @@ class TestCompositionSitesThreadService:
 
     def test_interactive_mode_threads_service_to_its_app(self, tripwire):
         """T8: the immediate-mode route carries the service too, so the app it
-        builds does not fall back to a second, default-path service."""
+        builds does not fall back to a second, default-path service.
+
+        Only ``run`` is patched, so the REAL ScrappyApp is constructed and the
+        assertions land on that instance rather than on constructor kwargs. The
+        app's own config read is then driven under the armed tripwire: a fallback
+        to the default path would raise there instead of answering.
+        """
         double = _groq_double()
 
         with _isolated_cli_env(real_orchestrator=False):
@@ -507,13 +513,19 @@ class TestCompositionSitesThreadService:
         assert mode._api_key_service is double
 
         with (
-            patch("scrappy.cli.textual_interactive.ScrappyApp") as app_cls,
+            patch.object(ScrappyApp, "run", autospec=True) as run_mock,
             patch("scrappy.cli.textual_interactive.create_textual_runtime_session"),
-            patch("scrappy.cli.textual_interactive.wire_textual_runtime"),
         ):
             mode.run()
 
-        assert app_cls.call_args.kwargs["api_key_service"] is double
+        app = run_mock.call_args[0][0]
+        assert isinstance(app, ScrappyApp)
+        assert app._api_key_service is double
+
+        # The double is the only holder of a groq key, so a True answer can only
+        # have come from it; a second, default-path service would trip the wire.
+        assert app._check_and_migrate_providers() == (True, 0)
+        assert "has_any_key" in double.calls
 
 
 class TestFalsyServiceIsKeptAndRouted:
