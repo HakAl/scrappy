@@ -67,8 +67,11 @@ _EXPECTED_ESCAPES = (
     "~/.scrappy/model_cooldowns.json (routed in PR-2)",
     "<user config>/scrappy/config.json (routed through injection in PR-3; still "
     "reached by tests that construct CLI, ScrappyApp or AgentOrchestrator bare)",
-    "<user data>/scrappy user directories and rate_limits.json (routed in PR-4)",
-    "<legacy>/.scrappy migration source (routed in PR-4)",
+    "<user data>/scrappy user directory CREATION and <legacy>/.scrappy reads "
+    "(the rate_limits.json write and the legacy migration copy are routed by "
+    "PR-4a injection and PR-4b forwarding, and the contained measurement now "
+    "records ZERO file operations; a mkdir and a read leave no file behind, so "
+    "the measurement cannot speak for them while bare constructions remain)",
     "~/.cache/huggingface population (unattributed; measured by PR-1)",
 )
 

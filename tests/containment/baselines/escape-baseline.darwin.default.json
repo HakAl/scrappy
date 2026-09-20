@@ -1,15 +1,5 @@
 {
-  "escapes": [
-    {
-      "after": {
-        "kind": "file",
-        "sha256": "83d0d6148a6463e93fa1267e297daaefc368866f1d889dac982e4714dffac7f2",
-        "size": 32
-      },
-      "op": "created",
-      "path": "Library/Application Support/scrappy/command_history"
-    }
-  ],
+  "escapes": [],
   "platform": "darwin",
   "run": {
     "argv": [
@@ -20,15 +10,15 @@
     ],
     "errors": 0,
     "failures": 0,
-    "non_skipped": 5356,
-    "passed": 5356,
+    "non_skipped": 5390,
+    "passed": 5390,
     "report_path": ".pytest_profile/baseline-default/junit-default.xml",
-    "report_sha256": "c2faa5123d201c2c9faee0add673ea2bd5e006901d886269cc500788e912d52b",
+    "report_sha256": "f4f542d54fcf0461b495e1424cd7a104e3f5afb2f2de55ccb7bebb1601e8b947",
     "returncode": 0,
     "selection": "default",
     "skipped": 8,
-    "started_at": 1789824574.5644748,
-    "tests": 5364
+    "started_at": 1789942145.010131,
+    "tests": 5398
   },
   "selection": "default"
 }
