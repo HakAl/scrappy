@@ -8,6 +8,7 @@ Uses platformdirs for cross-platform XDG-compliant paths.
 import json
 from pathlib import Path
 
+import pytest
 from platformdirs import user_data_dir
 
 import scrappy.infrastructure.paths as paths_module
@@ -326,57 +327,103 @@ class TestLegacyMigration:
         assert not (user_paths.user_data_dir / "config.json").exists()
 
 
+class PathEscape(Exception):
+    """Raised by the T5 guard when an operation targets a path outside the root."""
+
+
 class TestMigrationFilesystemBoundary:
-    """T5. In-suite guard at the mkdir/copy/unlink boundaries this code uses.
+    """T5. In-suite guard at the boundaries this code actually uses.
 
     PR-3's tripwire guards JSONPersistence load/save and paths.USER_CONFIG_FILE,
     which this provider never goes through. That guard is untouched and still
     covers its own seam; this one sits alongside it at the boundaries the
     migration actually calls. Makes no claim about the recorded escape set.
+
+    Every wrapper DECIDES BEFORE IT DELEGATES. A target outside the allowed
+    disposable root raises and the real mkdir/unlink/copy/exists/iterdir is
+    never reached, so an escape is prevented rather than reported after the
+    write has already landed.
     """
 
     def test_migration_writes_only_under_injected_paths(self, tmp_path: Path, monkeypatch):
+        allowed_root = tmp_path / "allowed"
+        allowed_root.mkdir()
+
+        # A disposable region the guard treats as forbidden. "Forbidden" here
+        # means only "outside the allowed root", which is the same rule that
+        # would reject a real user location; no real location is ever named.
+        forbidden_root = tmp_path / "forbidden"
+        forbidden_root.mkdir()
+        sentinel = forbidden_root / "sentinel.txt"
+        sentinel_bytes = "untouched sentinel"
+        sentinel.write_text(sentinel_bytes)
+
         made_dirs: list[Path] = []
         copied: list[tuple[Path, Path]] = []
         unlinked: list[Path] = []
+        checked: list[Path] = []
+        listed: list[Path] = []
 
         real_mkdir = Path.mkdir
         real_unlink = Path.unlink
+        real_exists = Path.exists
+        real_iterdir = Path.iterdir
         real_copy = paths_module.shutil.copy
 
-        def recording_mkdir(self, *args, **kwargs):
+        def allow_or_reject(*targets) -> None:
+            for target in targets:
+                if not Path(target).is_relative_to(allowed_root):
+                    raise PathEscape(
+                        f"migration reached outside {allowed_root}: {Path(target)}"
+                    )
+
+        def guarded_mkdir(self, *args, **kwargs):
+            allow_or_reject(self)
             made_dirs.append(Path(self))
             return real_mkdir(self, *args, **kwargs)
 
-        def recording_unlink(self, *args, **kwargs):
+        def guarded_unlink(self, *args, **kwargs):
+            allow_or_reject(self)
             unlinked.append(Path(self))
             return real_unlink(self, *args, **kwargs)
 
-        def recording_copy(src, dst, *args, **kwargs):
+        def guarded_copy(src, dst, *args, **kwargs):
+            allow_or_reject(src, dst)
             copied.append((Path(src), Path(dst)))
             return real_copy(src, dst, *args, **kwargs)
 
-        monkeypatch.setattr(Path, "mkdir", recording_mkdir)
-        monkeypatch.setattr(Path, "unlink", recording_unlink)
-        monkeypatch.setattr(paths_module.shutil, "copy", recording_copy)
+        def guarded_exists(self, *args, **kwargs):
+            allow_or_reject(self)
+            checked.append(Path(self))
+            return real_exists(self, *args, **kwargs)
 
-        user_paths = disposable_user_paths(tmp_path)
+        def guarded_iterdir(self, *args, **kwargs):
+            allow_or_reject(self)
+            listed.append(Path(self))
+            return real_iterdir(self, *args, **kwargs)
+
+        user_paths = disposable_user_paths(allowed_root)
         user_paths.legacy_user_dir.mkdir()
         (user_paths.legacy_user_dir / "legacy.txt").write_text("legacy")
 
-        project_root = _project_with_scrappy(tmp_path)
+        project_root = _project_with_scrappy(allowed_root)
         project_rate_limits = project_root / ".scrappy" / "rate_limits.json"
         project_rate_limits.write_text("{}")
 
         provider = ScrappyPathProvider(project_root, user_paths=user_paths)
-        provider.ensure_user_dir()
 
-        # NEGATIVE: nothing was touched outside the disposable root.
-        touched = made_dirs + unlinked + [p for pair in copied for p in pair]
-        escaped = [p for p in touched if not p.is_relative_to(tmp_path)]
-        assert escaped == [], f"migration touched paths outside tmp_path: {escaped}"
+        # The guard covers the migration call only, so an unrelated read
+        # elsewhere in the test process is never the thing being judged.
+        with monkeypatch.context() as patched:
+            patched.setattr(Path, "mkdir", guarded_mkdir)
+            patched.setattr(Path, "unlink", guarded_unlink)
+            patched.setattr(Path, "exists", guarded_exists)
+            patched.setattr(Path, "iterdir", guarded_iterdir)
+            patched.setattr(paths_module.shutil, "copy", guarded_copy)
+            provider.ensure_user_dir()
 
-        # POSITIVE: it ran where it was told, not merely nowhere.
+        # POSITIVE: it ran where it was told, not merely nowhere. A guard that
+        # passes because nothing happened at all would be worthless.
         assert user_paths.user_data_dir in made_dirs
         assert user_paths.user_config_dir in made_dirs
         assert user_paths.user_cache_dir in made_dirs
@@ -385,6 +432,30 @@ class TestMigrationFilesystemBoundary:
             user_paths.user_data_dir / "legacy.txt",
         ) in copied
         assert project_rate_limits in unlinked
+
+        # The read boundary was exercised, not merely declared.
+        assert user_paths.legacy_user_dir in listed
+        assert user_paths.user_data_dir / "rate_limits.json" in checked
+
+        # The forbidden region is byte-for-byte what it was before the run.
+        assert sentinel.read_text() == sentinel_bytes
+        assert [p.name for p in forbidden_root.iterdir()] == ["sentinel.txt"]
+
+        # The rejection bites: driven directly, the guard raises INSTEAD of
+        # performing the operation, and the sentinel survives each attempt.
+        with pytest.raises(PathEscape):
+            guarded_unlink(sentinel)
+        with pytest.raises(PathEscape):
+            guarded_mkdir(forbidden_root / "new_dir")
+        with pytest.raises(PathEscape):
+            guarded_copy(user_paths.legacy_user_dir / "legacy.txt", sentinel)
+        with pytest.raises(PathEscape):
+            guarded_iterdir(forbidden_root)
+
+        assert sentinel.read_text() == sentinel_bytes
+        assert [p.name for p in forbidden_root.iterdir()] == ["sentinel.txt"]
+        assert sentinel not in unlinked
+        assert forbidden_root / "new_dir" not in made_dirs
 
 
 class TestTempPathProviderUserDir:
