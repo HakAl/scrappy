@@ -11,7 +11,10 @@ from rich.text import Text
 
 from scrappy import __version__
 from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
-from scrappy.infrastructure.paths import ScrappyPathProvider
+from scrappy.infrastructure.paths import (
+    ScrappyPathProvider,
+    create_default_path_provider,
+)
 from scrappy.orchestrator.litellm_config import get_configured_models
 from scrappy.orchestrator.provider_definitions import AGENT_PROVIDER_GUIDANCE
 from scrappy.sandbox.docker_executor import DockerExecutor
@@ -160,7 +163,7 @@ def display_banner_status(
     """
     # Use provided dependencies or create defaults
     if path_provider is None:
-        path_provider = ScrappyPathProvider(Path.cwd())
+        path_provider = create_default_path_provider(Path.cwd())
 
     # Show configured providers
     providers = _get_configured_provider_names(api_key_service)

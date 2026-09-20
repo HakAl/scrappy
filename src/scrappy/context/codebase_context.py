@@ -17,7 +17,7 @@ from ..platform.protocols.detection import PlatformDetectorProtocol
 from .project_detector import ProjectDetector
 from .config_loader import get_truncation_defaults, get_extensions_config, get_paths_config
 from ..infrastructure.protocols import PathProviderProtocol, BackgroundInitializerProtocol
-from ..infrastructure.paths import ScrappyPathProvider
+from ..infrastructure.paths import create_default_path_provider
 from ..infrastructure.threading import (
     EventQueueProtocol,
     ThreadSafeEventQueue,
@@ -115,7 +115,7 @@ class CodebaseContext:
         self.explored_at: Optional[datetime] = None
 
         # Path provider for data files
-        self._path_provider = path_provider or ScrappyPathProvider(self.project_path)
+        self._path_provider = path_provider or create_default_path_provider(self.project_path)
 
         # Component instances using factory methods
         self._file_scanner = file_scanner or self._create_default_file_scanner()

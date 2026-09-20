@@ -29,7 +29,7 @@ from .logging import get_logger
 from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from scrappy.infrastructure.persistence import ConversationStoreProtocol
 from scrappy.infrastructure.protocols import PathProviderProtocol
-from scrappy.infrastructure.paths import ScrappyPathProvider
+from scrappy.infrastructure.paths import create_default_path_provider
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 from scrappy.orchestrator.api_key_composition import create_api_key_service
 
@@ -253,7 +253,7 @@ class CLI:
         through the default orchestrator, model cooldowns both resolve from
         Path.home()), so Path(".") is chosen for consistency, not for effect.
         """
-        return ScrappyPathProvider(Path("."))
+        return create_default_path_provider(Path("."))
 
     def _create_default_api_key_service(self) -> ApiKeyConfigServiceProtocol:
         """Create the default API key service (production location).

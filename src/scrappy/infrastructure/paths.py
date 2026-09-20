@@ -12,6 +12,7 @@ Uses platformdirs for cross-platform XDG-compliant paths:
 
 import logging
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 from platformdirs import user_data_dir, user_config_dir, user_cache_dir
@@ -29,6 +30,22 @@ USER_CONFIG_FILE = USER_CONFIG_DIR / "config.json"
 LEGACY_USER_DIR = Path.home() / ".scrappy"
 
 
+@dataclass(frozen=True)
+class UserPaths:
+    """User-level storage locations and the legacy migration source.
+
+    These four values are one configuration: three destinations and the
+    source the migration reads from. No field carries a default, so none
+    can be forgotten, and a caller cannot mix disposable destinations with
+    the real legacy source by accident.
+    """
+
+    user_data_dir: Path
+    user_config_dir: Path
+    user_cache_dir: Path
+    legacy_user_dir: Path
+
+
 class ScrappyPathProvider:
     """
     Production path provider using .scrappy/ directory.
@@ -37,19 +54,23 @@ class ScrappyPathProvider:
     Stores user-level files in platform-appropriate locations via platformdirs.
     """
 
-    def __init__(self, project_root: Path):
+    def __init__(self, project_root: Path, *, user_paths: UserPaths):
         """
         Initialize path provider.
 
         Args:
             project_root: Root directory of the project
+            user_paths: User-level locations and the legacy migration source.
+                Required and keyword-only: omitting it is a TypeError rather
+                than a silent selection of the real user profile. Production
+                callers should use create_default_path_provider().
         """
         self._project_root = project_root
         self._data_dir = project_root / ".scrappy"
-        # Use platformdirs for cross-platform user directories
-        self._user_dir = Path(user_data_dir(APP_NAME))
-        self._user_config_dir = Path(user_config_dir(APP_NAME))
-        self._user_cache_dir = Path(user_cache_dir(APP_NAME))
+        self._user_paths = user_paths
+        self._user_dir = user_paths.user_data_dir
+        self._user_config_dir = user_paths.user_config_dir
+        self._user_cache_dir = user_paths.user_cache_dir
 
     def project_root(self) -> Path:
         """Get the project root directory."""
@@ -146,8 +167,9 @@ class ScrappyPathProvider:
         self._migrate_rate_limits()
 
     def _migrate_from_legacy(self) -> None:
-        """Migrate data from legacy ~/.scrappy to platform-appropriate location."""
-        if not LEGACY_USER_DIR.exists():
+        """Migrate data from the legacy directory to the user data location."""
+        legacy_user_dir = self._user_paths.legacy_user_dir
+        if not legacy_user_dir.exists():
             return
 
         # Already migrated if new location has data
@@ -155,7 +177,7 @@ class ScrappyPathProvider:
             return
 
         # Migrate all files from legacy location
-        for item in LEGACY_USER_DIR.iterdir():
+        for item in legacy_user_dir.iterdir():
             if item.is_file():
                 dest = self._user_dir / item.name
                 if not dest.exists():
@@ -164,7 +186,7 @@ class ScrappyPathProvider:
 
         logger.info(
             "Migration complete. Legacy directory %s can be removed.",
-            LEGACY_USER_DIR
+            legacy_user_dir
         )
 
     def _migrate_rate_limits(self) -> None:
@@ -180,6 +202,33 @@ class ScrappyPathProvider:
                 project_file,
                 user_file
             )
+
+
+def create_default_path_provider(project_root: Path) -> ScrappyPathProvider:
+    """Create a provider pointed at today's production user locations.
+
+    This is the one production composition point. The three platform
+    directories are discovered HERE, when the provider is created, matching
+    the timing they had inside the constructor. The legacy migration source
+    CAPTURES the existing module-level LEGACY_USER_DIR, which is bound at
+    import time; it is deliberately not recomputed from Path.home(), because
+    that would convert an import-bound default into a call-time one.
+
+    Args:
+        project_root: Root directory of the project
+
+    Returns:
+        A provider whose user-level locations match production exactly.
+    """
+    return ScrappyPathProvider(
+        project_root,
+        user_paths=UserPaths(
+            user_data_dir=Path(user_data_dir(APP_NAME)),
+            user_config_dir=Path(user_config_dir(APP_NAME)),
+            user_cache_dir=Path(user_cache_dir(APP_NAME)),
+            legacy_user_dir=LEGACY_USER_DIR,
+        ),
+    )
 
 
 class TempPathProvider:

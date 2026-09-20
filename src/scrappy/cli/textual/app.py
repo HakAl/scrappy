@@ -27,7 +27,7 @@ from scrappy.cli.protocols import (
 )
 from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from scrappy.infrastructure.output_mode import OutputModeContext
-from scrappy.infrastructure.paths import ScrappyPathProvider
+from scrappy.infrastructure.paths import create_default_path_provider
 from scrappy.infrastructure.protocols import PathProviderProtocol
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 from scrappy.orchestrator.api_key_composition import create_api_key_service
@@ -202,7 +202,7 @@ class ScrappyApp(App):
         command-history member (it resolves from Path.home()), so Path(".") is
         chosen for consistency with the orchestrator default, not for effect.
         """
-        return ScrappyPathProvider(Path("."))
+        return create_default_path_provider(Path("."))
 
     def _create_default_api_key_service(self) -> ApiKeyConfigServiceProtocol:
         """Create the default API key service (production location).

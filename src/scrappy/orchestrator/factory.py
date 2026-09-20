@@ -72,7 +72,7 @@ from .protocols import (
 from ..context import CodebaseContextProtocol
 from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from ..infrastructure.protocols import PathProviderProtocol
-from ..infrastructure.paths import ScrappyPathProvider
+from ..infrastructure.paths import create_default_path_provider
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ class OrchestratorFactory:
         # Create path provider if not provided
         if path_provider is None:
             project_root = Path(project_path) if project_path else Path(".")
-            path_provider = ScrappyPathProvider(project_root)
+            path_provider = create_default_path_provider(project_root)
         self._path_provider = path_provider
 
     def create_all_components(
