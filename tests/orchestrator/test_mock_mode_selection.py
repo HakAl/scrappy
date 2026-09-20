@@ -15,6 +15,7 @@ provider="mock" (the value the metrics path turns into the "mock:" display).
 
 import pytest
 
+from scrappy.infrastructure.paths import TempPathProvider
 from scrappy.orchestrator.core import create_orchestrator
 from scrappy.orchestrator.mock_llm_service import (
     MockLLMService,
@@ -69,18 +70,28 @@ def mock_mode(monkeypatch):
 
 
 class TestMockModeStreaming:
-    """End-to-end: mock-mode streaming emits mock-provider chunks, not errors."""
+    """End-to-end: mock-mode streaming emits mock-provider chunks, not errors.
 
-    def test_orchestrator_uses_mock_services_in_mock_mode(self, mock_mode):
-        orch = create_orchestrator()
+    Each construction passes a TempPathProvider: even in mock mode the factory
+    builds the real rate tracker, and the UNINJECTED DEFAULT provider it used to
+    build ran the real ensure_user_dir, whose legacy migration copied the
+    developer's profile into the platform data directory (scrappy-i2jo).
+    TempPathProvider does not migrate anything; it only creates disposable
+    directories, so these tests prove mock-mode selection without touching a
+    real location. The production migration path itself is covered by T12 in
+    tests/orchestrator/test_orchestrator_di.py.
+    """
+
+    def test_orchestrator_uses_mock_services_in_mock_mode(self, mock_mode, tmp_path):
+        orch = create_orchestrator(path_provider=TempPathProvider(tmp_path))
 
         assert isinstance(orch.llm_service, MockLLMService)
         assert isinstance(orch.model_selector, MockModelSelectionService)
 
-    def test_instruct_streaming_emits_mock_provider(self, mock_mode):
+    def test_instruct_streaming_emits_mock_provider(self, mock_mode, tmp_path):
         """The failing path: INSTRUCT streaming must not raise and must carry
         provider='mock' so metrics show 'mock:' instead of 'provider: --'."""
-        orch = create_orchestrator()
+        orch = create_orchestrator(path_provider=TempPathProvider(tmp_path))
 
         chunks = list(
             orch.stream_completion_with_fallback(
@@ -97,9 +108,9 @@ class TestMockModeStreaming:
         "selection_type",
         [ModelSelectionType.FAST, ModelSelectionType.CHAT],
     )
-    def test_other_selection_types_do_not_raise(self, mock_mode, selection_type):
+    def test_other_selection_types_do_not_raise(self, mock_mode, selection_type, tmp_path):
         """delegate() reaches FAST/CHAT in mock mode; neither may raise."""
-        orch = create_orchestrator()
+        orch = create_orchestrator(path_provider=TempPathProvider(tmp_path))
 
         chunks = list(
             orch.stream_completion_with_fallback(

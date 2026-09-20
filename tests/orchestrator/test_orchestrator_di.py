@@ -16,11 +16,14 @@ the tracker, the user-directory creation and the cache all resolve under the
 test's own root instead of the developer's profile (scrappy-i2jo).
 """
 
+import json
+
 import pytest
 from unittest.mock import Mock
 
+from scrappy.infrastructure import paths as paths_module
 from scrappy.infrastructure.paths import TempPathProvider
-from scrappy.orchestrator.core import AgentOrchestrator
+from scrappy.orchestrator.core import AgentOrchestrator, create_orchestrator
 from scrappy.orchestrator.cache import ResponseCache
 from scrappy.orchestrator.rate_limiting import RateLimitTracker
 from scrappy.orchestrator.memory import WorkingMemory
@@ -259,6 +262,65 @@ class TestDependencyInjection:
 
         assert result['status'] == 'loaded'
         mock_session.load_session.assert_called_once()
+
+
+@pytest.fixture
+def mock_mode(monkeypatch):
+    """Deterministic, latency-free mock mode so the helper needs no API keys."""
+    monkeypatch.setenv("SCRAPPY_MOCK_LLM", "1")
+    monkeypatch.setenv("SCRAPPY_MOCK_LATENCY_MS", "0")
+    monkeypatch.setenv("SCRAPPY_MOCK_RESPONSE", "Mock response")
+
+
+class TestCreateOrchestratorPathProvider:
+    """create_orchestrator() forwards a provider, and still works without one.
+
+    Both tests drive the REAL rate tracker the factory builds and then read the
+    file it wrote. Persistence at a provider-derived path is the evidence; the
+    call graph is not asserted, because an inlined equivalent would be
+    observationally identical in production and a test that could tell them
+    apart would be asserting composition rather than behaviour.
+    """
+
+    def test_injected_provider_receives_the_real_trackers_writes(self, mock_mode, tmp_path):
+        """T11: the provider passed in is the one the consumers persist through."""
+        provider = TempPathProvider(tmp_path)
+
+        orch = create_orchestrator(path_provider=provider)
+        orch.rate_tracker.record_request("groq", "llama-3.3-70b-versatile", input_tokens=7)
+
+        recorded = json.loads(provider.rate_limits_file().read_text())
+        assert recorded["providers"]["groq"]["llama-3.3-70b-versatile"]["requests_today"] == 1
+        assert provider.rate_limits_file().is_relative_to(tmp_path)
+
+    def test_no_argument_call_resolves_through_discovery(self, mock_mode, tmp_path, monkeypatch):
+        """T12: the no-argument path still works, against controlled discovery.
+
+        The discovery inputs are patched on the paths module, not on Path.home():
+        create_default_path_provider reads the three platformdirs lookups when it
+        builds the provider and CAPTURES the import-bound LEGACY_USER_DIR, so a
+        home() change would not reach the legacy source (D5).
+        """
+        discovered = tmp_path / "discovered"
+        legacy = tmp_path / "legacy" / ".scrappy"
+        legacy.mkdir(parents=True)
+        (legacy / "command_history").write_text("legacy history\n")
+
+        monkeypatch.setattr(paths_module, "user_data_dir", lambda app: str(discovered / app / "data"))
+        monkeypatch.setattr(paths_module, "user_config_dir", lambda app: str(discovered / app / "config"))
+        monkeypatch.setattr(paths_module, "user_cache_dir", lambda app: str(discovered / app / "cache"))
+        monkeypatch.setattr(paths_module, "LEGACY_USER_DIR", legacy)
+        monkeypatch.chdir(tmp_path)
+
+        orch = create_orchestrator()
+        orch.rate_tracker.record_request("groq", "llama-3.3-70b-versatile", input_tokens=7)
+
+        data_dir = discovered / paths_module.APP_NAME / "data"
+        persisted = json.loads((data_dir / "rate_limits.json").read_text())
+        assert persisted["providers"]["groq"]["llama-3.3-70b-versatile"]["requests_today"] == 1
+        # The real ensure_user_dir ran, including the legacy migration, and read
+        # the captured module constant rather than a home()-derived path.
+        assert (data_dir / "command_history").read_text() == "legacy history\n"
 
 
 class TestDependencyInjectionEdgeCases:

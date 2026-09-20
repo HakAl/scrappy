@@ -20,39 +20,44 @@ A baseline is written by `baseline.publish_baseline(...)` from a completed conta
 of the selection it names, never hand-authored in advance.
 
 `escape-baseline.darwin.default.json` is the CURRENT measurement, taken at the TRUE
-DEFAULT SELECTION with the instrument included after the command-history and model-cooldown
-consumers were routed through the injected path provider and every direct partial-injection
-orchestrator construction in the tests was given a disposable provider: 5364 selected, 5356
-passed, 8 skipped, 0 failures, 0 errors, 106 deselected. Six of the eight skips are the
+DEFAULT SELECTION with the instrument included after the last production helper that took
+no provider, `create_orchestrator()` in `orchestrator/core.py`, was given an optional one
+and the tests that reached its default were routed to disposable providers: 5398 selected,
+5390 passed, 8 skipped, 0 failures, 0 errors, 106 deselected. Six of the eight skips are the
 differential scanner cases in `test_launcher_validation.py` that argparse rejects outright;
-the other two pre-date the instrument. It records ONE escape:
+the other two pre-date the instrument. It records NO escapes.
 
-- `Library/Application Support/scrappy/command_history` CREATED at 32 bytes, with a sha256
-  IDENTICAL to the seeded `.scrappy/command_history`. This is the legacy migration in
-  `infrastructure/paths.py` copying the seed into the platform data directory. Its
-  remaining trigger in this selection is the production `create_orchestrator()` helper in
-  `orchestrator/core.py`, which takes no provider and is exercised by the mock-mode
-  selection tests; it builds the factory's default provider, whose `ensure_user_dir`
-  runs the migration. That attribution was probed per file under a seeded contained
-  HOME: the mock-mode selection file alone produces the copy, while the orchestrator
-  dependency-injection file and the routing file, both of which inject a disposable
-  provider, do not. The seed itself is UNCHANGED, which is the point: nothing in the suite
-  appends to it any more. The copy is a faithful byte-for-byte reproduction of the seed,
-  and its hash is recorded here so that claim rests on the measurement, not on the size.
-  Routing the migration itself (and giving that helper a provider) is a later slice in
-  the sequence. No `model_cooldowns.json` appears anywhere in the measured region: the
-  persisted cooldown tracker, which reads and can rewrite its store on construction
-  alone, is bound to the injected provider at every construction that reaches it.
+An EMPTY set here means exactly one thing: NO DETECTABLE NET FILE CHANGE between the before
+and after snapshots of the measured profile region. It is NOT a completion certificate, and
+it is not a claim that nothing happened during the run. Read it with three limits in mind:
 
-The PREVIOUS measurement, taken before the routing change, recorded TWO escapes: the same
-copy at 101 bytes and `.scrappy/command_history` MODIFIED from 32 to 122 bytes with a
-changed hash. The 101-byte copy is CONSISTENT with the seed as it stood mid-run, already
-grown by test input, but that reading is NOT PROVEN: the old copy was never hashed, and
-a size alone does not identify content. That modification was the reproduced
-command-history damage, and it is why seeding with known bytes rather than measuring an
-empty profile is load-bearing: an overwrite of an empty profile is indistinguishable from
-a create. Its disappearance is the routing change's acceptance delta; the surviving copy
-is expected and explained, not forced away.
+- It does NOT complete `scrappy-i2jo` and does NOT retire the containment boundary. PR-5
+  through PR-7 and final acceptance remain.
+- A before/after diff sees NET STATE, not events. A file created and removed inside the run
+  is invisible, and so are a `mkdir` that leaves no file and any read. Tests that still
+  construct CLI, ScrappyApp or AgentOrchestrator bare can still create the user directories
+  and read the legacy directory; `tests/conftest.py` keeps disclosing that.
+- It covers `darwin` at the default selection only, measured once.
+
+The measurement that produced it used the EXTENDED hash selection: the two seeded paths plus
+the migration destination `Library/Application Support/scrappy/command_history`. That
+selection is load-bearing for comparability. A run that hashes only the seeds records
+`sha256: null` for any surviving copy, which looks like a content change against a baseline
+that hashed it and is not one. Keep the extension when re-measuring.
+
+The PREVIOUS measurement recorded ONE escape: `Library/Application Support/scrappy/command_history`
+CREATED at 32 bytes, the legacy migration copying the seed into the platform data directory,
+triggered by the mock-mode selection tests through the then-providerless `create_orchestrator()`.
+Its disappearance is this slice's acceptance delta, and the delta was falsified rather than
+assumed: pointing ONE mock-mode test back at the default provider and re-measuring brings the
+same 32-byte copy back, so the instrument is sensitive to precisely the routing that removed it.
+The measurement BEFORE that one recorded TWO escapes, the same copy at 101 bytes and
+`.scrappy/command_history` MODIFIED from 32 to 122 bytes with a changed hash. That modification
+was the reproduced command-history damage, and it is why seeding with known bytes rather than
+measuring an empty profile is load-bearing: an overwrite of an empty profile is
+indistinguishable from a create. No `model_cooldowns.json` ever appeared in the measured
+region: the persisted cooldown tracker, which reads and can rewrite its store on construction
+alone, is bound to the injected provider at every construction that reaches it.
 
 There is no `linux` baseline and no `integration` baseline. Neither has been measured, and
 an unmeasured baseline is not an empty one.
@@ -81,6 +86,12 @@ Refusal and failed/interrupted execution are covered by `tests/containment/test_
 
 ## Lifecycle
 
-The set SHRINKS as PR-2 through PR-7 route each escaping write to an injected path, and
-is empty when routing is complete. `HOME`'s boundary role ends when the
-baseline is OBSERVED empty, not when any particular PR number lands.
+The set SHRINKS as PR-2 through PR-7 route each escaping write to an injected path. It is
+now empty for `darwin` at the default selection, which is a MEASUREMENT of that selection
+on that platform, not the end of the sequence.
+
+An observed-empty baseline does NOT retire `HOME`'s boundary role and does NOT complete
+`scrappy-i2jo`. The file manifest cannot see directory creation or reads, no `linux` or
+`integration` selection has ever been measured, and the remaining PRs in the sequence plus
+final acceptance still have to land. Retirement is a decision taken against the whole
+sequence, never against one empty file list.
