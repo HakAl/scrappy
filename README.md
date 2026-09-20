@@ -1,3 +1,5 @@
+
+
 # Scrappy
 
 [![Tests](https://github.com/HakAl/scrappy/actions/workflows/tests.yml/badge.svg)](https://github.com/HakAl/scrappy/actions/workflows/tests.yml)
@@ -76,6 +78,8 @@ You need **at least one** (all three recommended for 23K+ daily requests):
 | **Gemini** | 1,650 req/day | [aistudio.google.com](https://aistudio.google.com) |
 
 No credit card required for any of them.
+
+You can also set `CEREBRAS_API_KEY`, `GROQ_API_KEY`, or `GEMINI_API_KEY` in your environment instead of pasting keys into the first-run wizard.
 
 ### 3. Run
 
