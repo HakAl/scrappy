@@ -252,6 +252,10 @@ class CLI:
         to the two user-level members this CLI consumes (command history and,
         through the default orchestrator, model cooldowns both resolve from
         Path.home()), so Path(".") is chosen for consistency, not for effect.
+
+        The provider resolves this root at composition, so the project-level
+        locations it now also serves are snapshotted here rather than
+        re-derived later from wherever the process happens to be.
         """
         return create_default_path_provider(Path("."))
 
@@ -273,7 +277,11 @@ class CLI:
         dependencies only.
         """
         return AgentOrchestrator(
-            project_path=".",
+            # Resolved here, at the CLI entry point, which is where the
+            # working directory may legitimately be read. Downstream modules
+            # receive an absolute scan root instead of a relative one they
+            # would each re-resolve later.
+            project_path=str(Path.cwd()),
             context_aware=self._context_aware,
             enable_semantic_search=True,  # Enable for CLI usage
             path_provider=self._path_provider,
@@ -326,6 +334,7 @@ class CLI:
             model_selection=model_selection,
             state_manager=self.state_manager,
             api_key_service=self._api_key_service,
+            path_provider=self._path_provider,
         )
 
     def _create_interactive_mode(self) -> TextualInteractiveMode:

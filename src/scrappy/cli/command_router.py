@@ -23,6 +23,7 @@ from .utils.session_utils import (
     display_session_not_saved_warning
 )
 from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
+from ..infrastructure.protocols import PathProviderProtocol
 from ..orchestrator.protocols import Orchestrator
 from ..orchestrator.model_selection import (
     ModelSelectionServiceProtocol,
@@ -48,6 +49,7 @@ class CommandRouter:
         state_manager: Optional[PlanStateManager] = None,
         *,
         api_key_service: ApiKeyConfigServiceProtocol,
+        path_provider: Optional[PathProviderProtocol] = None,
     ) -> None:
         """
         Initialize CommandRouter with all dependencies.
@@ -66,8 +68,12 @@ class CommandRouter:
             state_manager: Optional plan state manager.
             api_key_service: API key config service handed to the wizard /setup
                 launches in CLI mode.
+            path_provider: Path provider selecting storage locations. When
+                None, the production default is composed from the current
+                directory, preserving standalone behaviour.
         """
         self._api_key_service = api_key_service
+        self._path_provider = path_provider
         self.io = io
         self.orchestrator = orchestrator
         self.session_context = session_context
@@ -338,8 +344,14 @@ class CommandRouter:
         from .protocols import TaskStatus
         from ..infrastructure.paths import create_default_path_provider
 
-        # Use the production path provider for consistent path handling
-        path_provider = create_default_path_provider(Path.cwd())
+        # Prefer the injected provider; fall back to composing the production
+        # default so standalone construction keeps working. Task storage
+        # itself is unchanged: it still reads todo_file() from the provider.
+        path_provider = (
+            self._path_provider
+            if self._path_provider is not None
+            else create_default_path_provider(Path.cwd())
+        )
         storage = MarkdownTaskStorage(path_provider.todo_file())
 
         if not storage.exists():

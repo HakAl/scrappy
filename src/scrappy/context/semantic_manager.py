@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 from ..infrastructure.protocols import (
     BackgroundInitializerProtocol,
+    PathProviderProtocol,
     ProgressReporterProtocol,
 )
 from ..infrastructure.threading import (
@@ -36,6 +37,46 @@ from .semantic.state import LanceDBIndexStateManager
 from .semantic.decision import ThresholdDecisionMaker
 
 logger = logging.getLogger(__name__)
+
+SEMANTIC_DB_DIR_NAME = "lancedb"
+FINGERPRINT_FILE_NAME = "fingerprints.json"
+
+
+def bind_storage_defaults(
+    path_provider: Optional[PathProviderProtocol],
+) -> SemanticIndexConfig:
+    """Build a fresh config whose storage fields point at the provider.
+
+    Storage identity comes from the provider; scan identity does not. This
+    binds only the two fields that select storage, leaving every other
+    default untouched.
+
+    The bound values are ABSOLUTE and RESOLVED. That is what makes them
+    effective: consumers join them onto a scan root
+    (``root / config.fingerprint_file``), and an absolute right-hand side
+    wins that join, so storage follows the provider without any consumer
+    needing to know a provider exists. A merely joined value would not be
+    enough, because providers are routinely composed from a relative root.
+
+    Only call this when the caller supplied no config. An explicitly
+    supplied config object wins as a whole, including path values that
+    happen to equal the class defaults; provenance is never inferred by
+    comparing field values.
+
+    Args:
+        path_provider: Provider selecting storage, or None for global defaults
+
+    Returns:
+        A new SemanticIndexConfig; the caller's config is never mutated.
+    """
+    if path_provider is None:
+        return SemanticIndexConfig()
+
+    data_dir = path_provider.data_dir()
+    return SemanticIndexConfig(
+        db_dir_name=str((data_dir / SEMANTIC_DB_DIR_NAME).resolve()),
+        fingerprint_file=str((data_dir / FINGERPRINT_FILE_NAME).resolve()),
+    )
 
 
 class SemanticSearchManager:
@@ -87,10 +128,16 @@ class SemanticSearchManager:
         self._project_path = project_path
         self._event_queue = event_queue or ThreadSafeEventQueue()
         self._io = io
-        self._config = config or self._create_default_config()
+        # Explicit None selection: an injected dependency is honoured even when
+        # it is falsey. Only absence selects the default.
+        self._config = config if config is not None else self._create_default_config()
         self._state_manager = state_manager or self._create_default_state_manager()
         self._decision_maker = decision_maker or self._create_default_decision_maker()
-        self._staleness_checker = staleness_checker or self._create_default_staleness_checker()
+        self._staleness_checker = (
+            staleness_checker
+            if staleness_checker is not None
+            else self._create_default_staleness_checker()
+        )
 
         # Semantic search state
         self._semantic_search: Optional[IndexingSearchProtocol] = None
@@ -164,6 +211,7 @@ class SemanticSearchManager:
             return SemanticSearchInitializer(
                 self._project_path,
                 event_queue=self._event_queue,
+                config=self._config,
             )
         except ImportError as e:
             logger.debug(f"Semantic search dependencies not available: {e}")
