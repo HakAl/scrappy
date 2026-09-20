@@ -6,6 +6,7 @@ Provides a clean TUI interface using Textual framework.
 
 from typing import TYPE_CHECKING, Optional
 
+from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from scrappy.infrastructure.protocols import PathProviderProtocol
 from .textual.app import ScrappyApp
 from .unified_io import UnifiedIO
@@ -55,7 +56,8 @@ class TextualInteractiveMode:
         io: UnifiedIO,
         cli: "CLI" = None,
         config: "CLIConfig" = None,
-        path_provider: Optional[PathProviderProtocol] = None
+        path_provider: Optional[PathProviderProtocol] = None,
+        api_key_service: Optional[ApiKeyConfigServiceProtocol] = None
     ):
         """Initialize TextualInteractiveMode with all dependencies.
 
@@ -74,6 +76,9 @@ class TextualInteractiveMode:
             path_provider: Path provider threaded to ScrappyApp (and thence the
                 main screen's history). If None, ScrappyApp uses its production
                 default; acceptable for production, never for a test that mounts.
+            api_key_service: API key config service threaded to ScrappyApp (and
+                thence the wizard). If None, ScrappyApp uses its production
+                default; acceptable for production, never for a test that mounts.
         """
         self.orchestrator = orchestrator
         self.session_context = session_context
@@ -86,6 +91,7 @@ class TextualInteractiveMode:
         self.io = io
         self._cli = cli
         self._path_provider = path_provider
+        self._api_key_service = api_key_service
         # Load config from parameter or default locations
         self._config = config or get_config()
 
@@ -122,6 +128,7 @@ class TextualInteractiveMode:
             output_adapter,
             theme=self._config.theme,
             path_provider=self._path_provider,
+            api_key_service=self._api_key_service,
         )
 
         wire_textual_runtime(

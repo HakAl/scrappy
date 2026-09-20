@@ -16,7 +16,6 @@ from ..infrastructure.logging import StructuredLogger
 
 from .provider_types import ProviderRegistry
 from ..context import CodebaseContext
-from .api_key_composition import create_api_key_service
 
 from .cache import ResponseCache
 from .rate_limiting import (
@@ -71,6 +70,7 @@ from .protocols import (
     ProviderStatusTrackerProtocol,
 )
 from ..context import CodebaseContextProtocol
+from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from ..infrastructure.protocols import PathProviderProtocol
 from ..infrastructure.paths import ScrappyPathProvider
 
@@ -142,6 +142,8 @@ class OrchestratorFactory:
         path_provider: Optional[PathProviderProtocol] = None,
         config: Optional[OrchestratorConfig] = None,
         enable_semantic_search: bool = True,
+        *,
+        api_key_service: ApiKeyConfigServiceProtocol,
     ):
         """
         Initialize factory with configuration.
@@ -156,7 +158,11 @@ class OrchestratorFactory:
             path_provider: Path provider for data files (auto-creates if None)
             config: OrchestratorConfig instance (creates default if None)
             enable_semantic_search: Enable background semantic search initialization (default: True)
+            api_key_service: API key config service shared by the composed
+                graph. Required: a factory that built its own would read the
+                user config file behind the caller's back.
         """
+        self._api_key_service = api_key_service
         self.project_path = project_path
         self.cache_ttl_hours = cache_ttl_hours
         self.context_aware = context_aware
@@ -441,8 +447,7 @@ class OrchestratorFactory:
             logger.info("Mock model selector enabled via SCRAPPY_MOCK_LLM env var")
             return MockModelSelectionService()
 
-        api_key_service = create_api_key_service()
-        configured_models = self._get_configured_models(api_key_service)
+        configured_models = self._get_configured_models(self._api_key_service)
         return ModelSelectionService(
             configured_models=configured_models,
             availability_tracker=self.create_model_availability_tracker(),
@@ -539,9 +544,6 @@ class OrchestratorFactory:
             status_tracker=status_tracker,
         )
 
-        # Get api key service - passed to LiteLLMService for configure()
-        api_key_service = create_api_key_service()
-
         # Create empty router - will be configured via service.configure()
         router = create_litellm_router(callbacks=[callback])
 
@@ -558,7 +560,7 @@ class OrchestratorFactory:
         # Create service with all dependencies
         service = LiteLLMService(
             router=router,
-            api_key_service=api_key_service,
+            api_key_service=self._api_key_service,
             output=output,
             callback=callback,
             logger=api_logger,

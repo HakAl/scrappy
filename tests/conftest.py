@@ -65,7 +65,8 @@ _TRUTHY = {"1", "true", "t", "yes", "y"}
 _EXPECTED_ESCAPES = (
     "~/.scrappy/command_history (routed in PR-2)",
     "~/.scrappy/model_cooldowns.json (routed in PR-2)",
-    "<user config>/scrappy/config.json (routed in PR-3)",
+    "<user config>/scrappy/config.json (routed through injection in PR-3; still "
+    "reached by tests that construct CLI, ScrappyApp or AgentOrchestrator bare)",
     "<user data>/scrappy user directories and rate_limits.json (routed in PR-4)",
     "<legacy>/.scrappy migration source (routed in PR-4)",
     "~/.cache/huggingface population (unattributed; measured by PR-1)",

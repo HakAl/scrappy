@@ -19,6 +19,7 @@ from scrappy.orchestrator.model_selection import (
     ModelHealthState,
     default_model_cooldowns_path,
 )
+from tests.cli.helpers import MockApiKeyConfigService
 
 
 class FakeClock:
@@ -254,7 +255,7 @@ class TestFactoryWiring:
     def test_factory_tracker_persists_across_restart(self, tmp_path, monkeypatch):
         """Factory-built trackers share cooldown state via the default path."""
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        factory = OrchestratorFactory()
+        factory = OrchestratorFactory(api_key_service=MockApiKeyConfigService())
 
         first = factory.create_model_availability_tracker()
         mark_unavailable(first, "groq/model-a", retry_after=3600.0)

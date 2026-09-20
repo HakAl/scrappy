@@ -48,6 +48,7 @@ from scrappy.orchestrator.model_selection import (
     ModelHealthState,
 )
 from scrappy.orchestrator.output import NullOutput
+from tests.cli.helpers import MockApiKeyConfigService
 
 HISTORY_SENTINEL = b"SENTINEL-HISTORY-do-not-touch"
 COOLDOWN_SENTINEL = b"SENTINEL-COOLDOWN-do-not-touch"
@@ -246,7 +247,9 @@ class TestCooldownRouting:
         history_sentinel, cooldown_sentinel = _seed_home_sentinels(home)
 
         provider = TempPathProvider(provider_root)
-        factory = OrchestratorFactory(path_provider=provider)
+        factory = OrchestratorFactory(
+            path_provider=provider, api_key_service=MockApiKeyConfigService()
+        )
         tracker = factory.create_model_availability_tracker()
         # Drive a real cooldown mutation, which persists through the store.
         mark_unavailable(tracker, "groq/model-a")

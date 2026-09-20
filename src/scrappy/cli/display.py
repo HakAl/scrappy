@@ -5,7 +5,7 @@ Handles help, status, listings, and usage statistics.
 
 from datetime import datetime
 
-from scrappy.orchestrator.api_key_composition import create_api_key_service
+from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 
 from .io_interface import CLIIOProtocol
 from .unified_io import UnifiedIO
@@ -15,17 +15,25 @@ from .display_rich import show_help_table, show_status_rich, show_usage_rich
 class CLIDisplay:
     """Handles all display and UI operations for the CLI."""
 
-    def __init__(self, orchestrator, session_start: datetime, io: CLIIOProtocol):
+    def __init__(
+        self,
+        orchestrator,
+        session_start: datetime,
+        io: CLIIOProtocol,
+        api_key_service: ApiKeyConfigServiceProtocol,
+    ):
         """Initialize display handler.
 
         Args:
             orchestrator: The AgentOrchestrator instance
             session_start: When the CLI session started
             io: I/O interface for output
+            api_key_service: API key config service used to list models
         """
         self.orchestrator = orchestrator
         self.session_start = session_start
         self.io = io
+        self._api_key_service = api_key_service
 
     def show_help(self):
         """Display help information showing all available CLI commands.
@@ -168,8 +176,11 @@ class CLIDisplay:
         from scrappy.orchestrator.litellm_config import get_configured_models
         from scrappy.orchestrator.model_selection import MODEL_GROUPS
 
-        api_key_service = create_api_key_service()
-        configured_models = get_configured_models(api_key_service)
+        # Re-read storage first: this site used to build a fresh service per
+        # call, so a key added since startup showed up here. The shared
+        # instance caches, so reload() preserves that.
+        self._api_key_service.reload()
+        configured_models = get_configured_models(self._api_key_service)
 
         if not configured_models:
             self.io.secho("No models configured. Run /setup to configure API keys.", fg=self.io.theme.warning)

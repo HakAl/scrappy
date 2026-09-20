@@ -6,6 +6,7 @@ import pytest
 
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.textual.mouse_policy import TextualMouseReportingPolicy
+from tests.cli.helpers import MockApiKeyConfigService
 
 
 class FakeMousePolicy:
@@ -42,15 +43,20 @@ class FakeDriver:
 @pytest.mark.asyncio
 async def test_restore_mouse_support_delegates_to_policy_enable() -> None:
     policy = FakeMousePolicy()
-    app = ScrappyApp(cli_factory=lambda: Mock(), mouse_policy=policy)
+    # The app is constructed before on_mount runs, so the service must be
+    # injected here: patching the factory afterwards would no longer reach the
+    # disclaimer read, which would then go to the real user config file.
+    app = ScrappyApp(
+        cli_factory=lambda: Mock(),
+        mouse_policy=policy,
+        api_key_service=MockApiKeyConfigService(),
+    )
 
     with (
         patch.object(app, "_check_and_migrate_providers", return_value=(True, 0)),
         patch.object(app, "_show_main_screen"),
-        patch("scrappy.cli.textual.app.create_api_key_service") as api_keys,
         patch("scrappy.orchestrator.mock_llm_service.is_mock_mode_enabled", return_value=True),
     ):
-        api_keys.return_value.is_disclaimer_acknowledged.return_value = True
         async with app.run_test():
             app.restore_mouse_support()
 

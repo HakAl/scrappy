@@ -17,6 +17,7 @@ from unittest.mock import MagicMock
 
 from scrappy.cli.screens.wizard_screen import SetupWizardScreen
 from scrappy.cli.setup_wizard import SetupWizard
+from tests.cli.helpers import MockApiKeyConfigService
 
 
 class TestSetupWizardScreen:
@@ -30,7 +31,12 @@ class TestSetupWizardScreen:
         mock_validator = MagicMock()
         mock_clipboard = MagicMock()
 
-        screen = SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
+        screen = SetupWizardScreen(
+            io=mock_io,
+            key_validator=mock_validator,
+            clipboard=mock_clipboard,
+            config_service=MockApiKeyConfigService(),
+        )
         assert screen is not None
 
     def test_wizard_screen_stores_dependencies(self):
@@ -40,7 +46,12 @@ class TestSetupWizardScreen:
         mock_validator = MagicMock()
         mock_clipboard = MagicMock()
 
-        screen = SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
+        screen = SetupWizardScreen(
+            io=mock_io,
+            key_validator=mock_validator,
+            clipboard=mock_clipboard,
+            config_service=MockApiKeyConfigService(),
+        )
         assert screen._io is mock_io
         assert screen._key_validator is mock_validator
         assert screen._clipboard is mock_clipboard
@@ -51,7 +62,12 @@ class TestSetupWizardScreen:
         mock_io.theme = MagicMock()
         mock_validator = MagicMock()
         mock_clipboard = MagicMock()
-        screen = SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
+        screen = SetupWizardScreen(
+            io=mock_io,
+            key_validator=mock_validator,
+            clipboard=mock_clipboard,
+            config_service=MockApiKeyConfigService(),
+        )
         screen._surface = MagicMock()
         event = MagicMock()
         event.button = 3
@@ -69,6 +85,7 @@ class TestSetupWizardScreen:
             io=mock_io,
             key_validator=MagicMock(),
             clipboard=MagicMock(),
+            config_service=MockApiKeyConfigService(),
         )
 
         with pytest.raises(RuntimeError, match="transcript_target"):
@@ -251,7 +268,12 @@ class TestWizardScreenIntegration:
 
         class TestApp(App):
             def compose(self):
-                yield SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
+                yield SetupWizardScreen(
+                    io=mock_io,
+                    key_validator=mock_validator,
+                    clipboard=mock_clipboard,
+                    config_service=MockApiKeyConfigService(),
+                )
 
         app = TestApp()
         async with app.run_test() as pilot:
@@ -271,7 +293,12 @@ class TestWizardScreenIntegration:
 
         class TestApp(App):
             def compose(self):
-                yield SetupWizardScreen(io=mock_io, key_validator=mock_validator, clipboard=mock_clipboard)
+                yield SetupWizardScreen(
+                    io=mock_io,
+                    key_validator=mock_validator,
+                    clipboard=mock_clipboard,
+                    config_service=MockApiKeyConfigService(),
+                )
 
         app = TestApp()
         async with app.run_test() as pilot:

@@ -20,6 +20,7 @@ from ..cache_manager import CacheManager
 from ..rate_limiter import RateLimiter
 from ..persistence import SessionPersistence
 from ..user_interaction import get_user_interaction
+from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from scrappy.infrastructure.persistence import ConversationStore
 from scrappy.infrastructure.protocols import PathProviderProtocol
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
@@ -134,6 +135,8 @@ def initialize_cli_handlers(
     io: CLIIOProtocol,
     bridge: Optional["ThreadSafeAsyncBridge"] = None,
     theme: Optional[ThemeProtocol] = None,
+    *,
+    api_key_service: ApiKeyConfigServiceProtocol,
 ) -> Dict[str, Any]:
     """
     Create and return all CLI component handlers.
@@ -144,6 +147,7 @@ def initialize_cli_handlers(
         io: I/O interface for output
         bridge: Optional ThreadSafeAsyncBridge for TUI mode modal dialogs
         theme: Optional theme for styling. Defaults to DEFAULT_THEME.
+        api_key_service: API key config service handed to the display handler
 
     Returns:
         Dict with all 8 standard handlers
@@ -169,7 +173,7 @@ def initialize_cli_handlers(
     interaction = get_user_interaction(io, bridge)
 
     return {
-        'display': CLIDisplay(orchestrator, session_start, io),
+        'display': CLIDisplay(orchestrator, session_start, io, api_key_service),
         'session_mgr': session_mgr,
         'codebase': CLICodebaseAnalysis(orchestrator, io),
         'tasks': CLITaskExecution(orchestrator, io),
@@ -181,7 +185,8 @@ def create_cli_from_context(
     ctx: Any,
     io: Optional[CLIIOProtocol] = None,
     theme: Optional[ThemeProtocol] = None,
-    path_provider: Optional[PathProviderProtocol] = None
+    path_provider: Optional[PathProviderProtocol] = None,
+    api_key_service: Optional[ApiKeyConfigServiceProtocol] = None
 ) -> "CLI":
     """
     Create CLI instance from Click context object.
@@ -191,6 +196,8 @@ def create_cli_from_context(
         io: IO interface
         theme: Optional theme for styling. Defaults to DEFAULT_THEME.
         path_provider: Path provider threaded to the CLI (default: CLI builds one).
+        api_key_service: API key config service threaded to the CLI
+            (default: CLI builds one).
 
     Returns:
         CLI instance configured from context
@@ -207,7 +214,8 @@ def create_cli_from_context(
         show_provider_status=options['show_provider_status'],
         io=io,
         theme=theme,
-        path_provider=path_provider
+        path_provider=path_provider,
+        api_key_service=api_key_service
     )
     cli.initialize()
     return cli
@@ -217,7 +225,8 @@ def create_cli(
     config: Dict[str, Any],
     io: Optional[CLIIOProtocol] = None,
     theme: Optional[ThemeProtocol] = None,
-    path_provider: Optional[PathProviderProtocol] = None
+    path_provider: Optional[PathProviderProtocol] = None,
+    api_key_service: Optional[ApiKeyConfigServiceProtocol] = None
 ) -> "CLI":
     """
     Create CLI instance from a simple dictionary configuration.
@@ -233,6 +242,9 @@ def create_cli(
             - show_provider_status: Show provider status on startup (default False)
         io: IO interface (creates if not provided)
         theme: Optional theme for styling. Defaults to DEFAULT_THEME.
+        path_provider: Path provider threaded to the CLI (default: CLI builds one).
+        api_key_service: API key config service threaded to the CLI
+            (default: CLI builds one).
 
     Returns:
         CLI instance configured from dict
@@ -251,7 +263,8 @@ def create_cli(
         show_provider_status=config.get('show_provider_status', False),
         io=io,
         theme=theme,
-        path_provider=path_provider
+        path_provider=path_provider,
+        api_key_service=api_key_service
     )
     cli.initialize()
     return cli

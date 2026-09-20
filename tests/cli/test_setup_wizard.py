@@ -205,7 +205,9 @@ class TestSetupWizardProviderConfiguration:
         """Returns provider name for valid index."""
         io = MockIO()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, key_validator=mock_llm)
+        wizard = SetupWizard(
+            io, key_validator=mock_llm, config_service=MockApiKeyConfigService()
+        )
 
         # Index 1 should return first provider by priority
         sorted_providers = sorted(PROVIDERS.items(), key=lambda x: x[1].priority)
@@ -217,7 +219,9 @@ class TestSetupWizardProviderConfiguration:
         """Returns None for invalid index."""
         io = MockIO()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, key_validator=mock_llm)
+        wizard = SetupWizard(
+            io, key_validator=mock_llm, config_service=MockApiKeyConfigService()
+        )
 
         assert wizard._get_provider_by_index("0") is None
         assert wizard._get_provider_by_index("999") is None
@@ -261,7 +265,9 @@ class TestSetupWizardMenuGeneration:
         io = MockIO()
         io.output_sink = CapturingOutputSink()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, key_validator=mock_llm)
+        wizard = SetupWizard(
+            io, key_validator=mock_llm, config_service=MockApiKeyConfigService()
+        )
 
         wizard._show_menu()
 
@@ -296,7 +302,9 @@ class TestSetupWizardFlow:
         io = MockIO()
         io.prompt_responses = ["short"]  # Too short
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, key_validator=mock_llm)
+        wizard = SetupWizard(
+            io, key_validator=mock_llm, config_service=MockApiKeyConfigService()
+        )
 
         result = wizard._configure_provider("groq")
 
@@ -310,7 +318,9 @@ class TestSetupWizardFlow:
         io = MockIO()
         io.prompt_responses = ["valid_format_key_1234567890"]
         mock_llm = MockLLMService(validate_key_result=(False, "Invalid API key"))
-        wizard = SetupWizard(io, key_validator=mock_llm)
+        wizard = SetupWizard(
+            io, key_validator=mock_llm, config_service=MockApiKeyConfigService()
+        )
 
         result = wizard._configure_provider("groq")
 
@@ -506,7 +516,9 @@ class TestSetupWizardProviderTesting:
         """Valid API key returns True when key_validator.validate_key succeeds."""
         io = MockIO()
         mock_llm = MockLLMService(validate_key_result=(True, None))
-        wizard = SetupWizard(io, key_validator=mock_llm)
+        wizard = SetupWizard(
+            io, key_validator=mock_llm, config_service=MockApiKeyConfigService()
+        )
 
         success, error = wizard._test_provider_key("groq", "test_key")
 
@@ -519,7 +531,9 @@ class TestSetupWizardProviderTesting:
         """Unauthorized error returns False with friendly message."""
         io = MockIO()
         mock_llm = MockLLMService(validate_key_result=(False, "Invalid API key"))
-        wizard = SetupWizard(io, key_validator=mock_llm)
+        wizard = SetupWizard(
+            io, key_validator=mock_llm, config_service=MockApiKeyConfigService()
+        )
 
         success, error = wizard._test_provider_key("groq", "test_key")
 
@@ -530,7 +544,9 @@ class TestSetupWizardProviderTesting:
         """Unknown provider returns False."""
         io = MockIO()
         mock_llm = MockLLMService()
-        wizard = SetupWizard(io, key_validator=mock_llm)
+        wizard = SetupWizard(
+            io, key_validator=mock_llm, config_service=MockApiKeyConfigService()
+        )
 
         success, error = wizard._test_provider_key("unknown_provider", "test_key")
 

@@ -26,10 +26,12 @@ from .utils.session_utils import display_previous_session_detected
 from .utils.cli_factory import initialize_cli_handlers, create_conversation_store
 from .error_recovery import graceful_degrade
 from .logging import get_logger
+from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from scrappy.infrastructure.persistence import ConversationStoreProtocol
 from scrappy.infrastructure.protocols import PathProviderProtocol
 from scrappy.infrastructure.paths import ScrappyPathProvider
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
+from scrappy.orchestrator.api_key_composition import create_api_key_service
 
 
 class CLI:
@@ -46,7 +48,8 @@ class CLI:
         state_manager: Optional[PlanStateManager] = None,
         theme: Optional[ThemeProtocol] = None,
         conversation_store: Optional[ConversationStoreProtocol] = None,
-        path_provider: Optional[PathProviderProtocol] = None
+        path_provider: Optional[PathProviderProtocol] = None,
+        api_key_service: Optional[ApiKeyConfigServiceProtocol] = None
     ):
         """
         Initialize CLI with orchestrator and component handlers.
@@ -76,6 +79,9 @@ class CLI:
             conversation_store: Injectable persistence store (default: creates one
                 via create_conversation_store, which performs filesystem I/O).
                 Inject a store (or fake) to keep construction side effect free.
+            api_key_service: Injectable API key config service, threaded to the
+                default orchestrator, the display handler and the command router
+                (default: creates the production one).
         """
         # Store config for factory methods and initialization
         self._brain = brain
@@ -92,6 +98,14 @@ class CLI:
         self._path_provider = (
             path_provider if path_provider is not None
             else self._create_default_path_provider()
+        )
+
+        # The API key service follows the same rule and is likewise assigned
+        # BEFORE the default orchestrator, the handlers and the command router
+        # are built, since all three are handed this object.
+        self._api_key_service = (
+            api_key_service if api_key_service is not None
+            else self._create_default_api_key_service()
         )
 
         # Initialize dependencies using factory methods
@@ -127,7 +141,11 @@ class CLI:
 
         # Initialize component handlers using factory (pass theme)
         handlers = initialize_cli_handlers(
-            self.orchestrator, self.session_start, self.io, theme=self._theme
+            self.orchestrator,
+            self.session_start,
+            self.io,
+            theme=self._theme,
+            api_key_service=self._api_key_service,
         )
         self.display = handlers['display']
         self.session_mgr = handlers['session_mgr']
@@ -237,6 +255,15 @@ class CLI:
         """
         return ScrappyPathProvider(Path("."))
 
+    def _create_default_api_key_service(self) -> ApiKeyConfigServiceProtocol:
+        """Create the default API key service (production location).
+
+        Mirrors _create_default_path_provider: standalone CLI construction is
+        supported, so the default lives here; composed graphs pass the root's
+        service in instead.
+        """
+        return create_api_key_service()
+
     def _create_default_orchestrator(self) -> AgentOrchestrator:
         """Build the default orchestrator object (no provider setup / I/O).
 
@@ -250,6 +277,7 @@ class CLI:
             context_aware=self._context_aware,
             enable_semantic_search=True,  # Enable for CLI usage
             path_provider=self._path_provider,
+            api_key_service=self._api_key_service,
         )
 
     def _initialize_orchestrator(self) -> None:
@@ -296,7 +324,8 @@ class CLI:
             agent_mgr=self.agent_mgr,
             session_saver=self.orchestrator,
             model_selection=model_selection,
-            state_manager=self.state_manager
+            state_manager=self.state_manager,
+            api_key_service=self._api_key_service,
         )
 
     def _create_interactive_mode(self) -> TextualInteractiveMode:
@@ -323,6 +352,7 @@ class CLI:
             io=self.io,  # Pass existing TextualIO created before initialize()
             cli=self,  # Pass CLI reference for handler reinitialization with bridge
             path_provider=self._path_provider,
+            api_key_service=self._api_key_service,
         )
 
     def _show_semantic_search_progress(self):

@@ -59,6 +59,7 @@ def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
     from .textual.output_adapter import TextualOutputAdapter
     from .unified_io import UnifiedIO
     from scrappy.infrastructure.paths import ScrappyPathProvider
+    from scrappy.orchestrator.api_key_composition import create_api_key_service
 
     output_adapter = TextualOutputAdapter()
     io = UnifiedIO(output_sink=output_adapter, theme=theme)
@@ -68,10 +69,20 @@ def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
     # the main screen, so history/cooldowns resolve through a single provider.
     path_provider = ScrappyPathProvider(Path("."))
 
+    # Same for the API key service. Sharing one instance across the main thread
+    # and the CLI worker needs no lock: the app completes both of its mount
+    # reads before initialize_cli() starts the worker that builds the CLI, and
+    # the banner read runs on the main thread after the worker finishes.
+    api_key_service = create_api_key_service()
+
     def cli_factory():
         """Factory function called in background thread."""
         cli_instance = create_cli_from_context(
-            ctx, io=io, theme=theme, path_provider=path_provider
+            ctx,
+            io=io,
+            theme=theme,
+            path_provider=path_provider,
+            api_key_service=api_key_service,
         )
         cli_instance.auto_save = ctx.obj.get('auto_save', True)
 
@@ -85,6 +96,7 @@ def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
         output_adapter=output_adapter,
         theme=theme,
         path_provider=path_provider,
+        api_key_service=api_key_service,
     )
     app.run()
 

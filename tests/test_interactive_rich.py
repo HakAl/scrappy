@@ -14,6 +14,7 @@ from rich.console import Console
 
 from scrappy.cli.unified_io import UnifiedIO
 from scrappy.cli.display import CLIDisplay
+from tests.cli.helpers import MockApiKeyConfigService
 from tests.helpers import ConfigurableTestOrchestrator
 
 
@@ -74,7 +75,7 @@ class TestHelpCommandsTable:
         """Help display should use Rich Table for command listing."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        CLIDisplay(orch, datetime.now(), io)
+        CLIDisplay(orch, datetime.now(), io, MockApiKeyConfigService())
 
         from scrappy.cli.display_rich import show_help_table
 
@@ -175,7 +176,7 @@ class TestStatusDisplayComponents:
         """Status display should group information in panels."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        CLIDisplay(orch, datetime.now(), io)
+        CLIDisplay(orch, datetime.now(), io, MockApiKeyConfigService())
 
         from scrappy.cli.display_rich import show_status_rich
 
@@ -376,7 +377,7 @@ class TestUsageStatisticsRich:
         """Usage stats should display provider breakdown in a table."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        CLIDisplay(orch, datetime.now(), io)
+        CLIDisplay(orch, datetime.now(), io, MockApiKeyConfigService())
 
         from scrappy.cli.display_rich import show_usage_rich
 
@@ -570,7 +571,7 @@ class TestRichDisplayIntegration:
         """Display methods should use the provided IO interface."""
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        display = CLIDisplay(orch, datetime.now(), io)
+        display = CLIDisplay(orch, datetime.now(), io, MockApiKeyConfigService())
 
         # Use the existing show_status which should work with UnifiedIO
         display.show_status()
@@ -601,7 +602,7 @@ class TestRichDisplayIntegration:
         # This test ensures robustness
         io, console = make_capturing_rich_io()
         orch = ConfigurableTestOrchestrator()
-        display = CLIDisplay(orch, datetime.now(), io)
+        display = CLIDisplay(orch, datetime.now(), io, MockApiKeyConfigService())
 
         # The existing method should still work
         display.show_help()

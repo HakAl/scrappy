@@ -199,8 +199,10 @@ class TestRouterDerivationDrift:
         """_get_configured_models' internal provider->key map, behaviorally."""
         from scrappy.orchestrator.factory import OrchestratorFactory
 
-        factory = OrchestratorFactory(path_provider=MagicMock())
         service = RecordingApiKeyService(dict(ALL_KEYS))
+        factory = OrchestratorFactory(
+            path_provider=MagicMock(), api_key_service=service
+        )
         configured = factory._get_configured_models(service)
 
         expected = {

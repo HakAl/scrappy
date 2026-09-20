@@ -202,13 +202,17 @@ class TestDisplayBanner:
         all_output = io.get_all_output()
         assert "/help" in all_output
 
-    def test_uses_default_dependencies_when_none_provided(self):
-        """Banner should create default dependencies when none provided."""
-        io = MockIO()
+    def test_uses_default_path_provider_when_none_provided(self):
+        """Banner still defaults the path provider when none is given.
 
-        # Should not raise - will use defaults
-        # Note: This may show real configured providers from environment
-        display_banner(io)
+        The api_key_service has no default any more: it is supplied by the
+        caller, so the banner can no longer read the user's config file on its
+        own. The path provider is the one dependency that still falls back.
+        """
+        io = MockIO()
+        api_service = MockApiKeyService()
+
+        display_banner(io, api_key_service=api_service)
 
         # At minimum, workspace should be shown
         all_output = io.get_all_output()
