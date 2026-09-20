@@ -73,10 +73,13 @@ class TestMockModeStreaming:
     """End-to-end: mock-mode streaming emits mock-provider chunks, not errors.
 
     Each construction passes a TempPathProvider: even in mock mode the factory
-    builds the real rate tracker, which runs the real ensure_user_dir and its
-    legacy migration. Without a disposable provider that work lands in the
-    developer's profile (scrappy-i2jo). The helper still does the composing;
-    only the destination is disposable.
+    builds the real rate tracker, and the UNINJECTED DEFAULT provider it used to
+    build ran the real ensure_user_dir, whose legacy migration copied the
+    developer's profile into the platform data directory (scrappy-i2jo).
+    TempPathProvider does not migrate anything; it only creates disposable
+    directories, so these tests prove mock-mode selection without touching a
+    real location. The production migration path itself is covered by T12 in
+    tests/orchestrator/test_orchestrator_di.py.
     """
 
     def test_orchestrator_uses_mock_services_in_mock_mode(self, mock_mode, tmp_path):

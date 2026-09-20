@@ -27,15 +27,16 @@ and the tests that reached its default were routed to disposable providers: 5398
 differential scanner cases in `test_launcher_validation.py` that argparse rejects outright;
 the other two pre-date the instrument. It records NO escapes.
 
-An EMPTY set here means exactly one thing: no file under the measured profile region was
-created, modified or deleted by that run. It is NOT a completion certificate. Read it with
-three limits in mind:
+An EMPTY set here means exactly one thing: NO DETECTABLE NET FILE CHANGE between the before
+and after snapshots of the measured profile region. It is NOT a completion certificate, and
+it is not a claim that nothing happened during the run. Read it with three limits in mind:
 
 - It does NOT complete `scrappy-i2jo` and does NOT retire the containment boundary. PR-5
   through PR-7 and final acceptance remain.
-- A file-level manifest cannot see a `mkdir` that leaves no file, or a read. Tests that
-  still construct CLI, ScrappyApp or AgentOrchestrator bare can still create the user
-  directories and read the legacy directory; `tests/conftest.py` keeps disclosing that.
+- A before/after diff sees NET STATE, not events. A file created and removed inside the run
+  is invisible, and so are a `mkdir` that leaves no file and any read. Tests that still
+  construct CLI, ScrappyApp or AgentOrchestrator bare can still create the user directories
+  and read the legacy directory; `tests/conftest.py` keeps disclosing that.
 - It covers `darwin` at the default selection only, measured once.
 
 The measurement that produced it used the EXTENDED hash selection: the two seeded paths plus
