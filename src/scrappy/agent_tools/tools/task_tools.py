@@ -237,8 +237,8 @@ class TaskTool(ToolBase):
             return context.task_storage
 
         # 3. Legacy file-based storage
-        from scrappy.infrastructure.paths import ScrappyPathProvider
-        path_provider = ScrappyPathProvider(context.project_root)
+        from scrappy.infrastructure.paths import create_default_path_provider
+        path_provider = create_default_path_provider(context.project_root)
         return MarkdownTaskStorage(path_provider.todo_file())
 
     def execute(self, context: ToolContext, **kwargs) -> ToolResult:

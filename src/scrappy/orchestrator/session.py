@@ -13,7 +13,7 @@ from ..infrastructure.utils import safe_import
 from .memory import WorkingMemory
 from .protocols import WorkingMemoryProtocol  # For type hints (Dependency Inversion)
 from ..infrastructure.protocols import PathProviderProtocol
-from ..infrastructure.paths import ScrappyPathProvider
+from ..infrastructure.paths import create_default_path_provider
 
 aiofiles, AIOFILES_AVAILABLE = safe_import('aiofiles')
 
@@ -42,7 +42,7 @@ class SessionManager:
             path_provider: Path provider for file locations (defaults to ScrappyPathProvider)
         """
         self.project_path = project_path
-        self._path_provider = path_provider or ScrappyPathProvider(project_path)
+        self._path_provider = path_provider or create_default_path_provider(project_path)
         self._path_provider.ensure_data_dir()
 
     @property

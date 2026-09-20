@@ -58,7 +58,7 @@ def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
     from .textual.app import ScrappyApp
     from .textual.output_adapter import TextualOutputAdapter
     from .unified_io import UnifiedIO
-    from scrappy.infrastructure.paths import ScrappyPathProvider
+    from scrappy.infrastructure.paths import create_default_path_provider
     from scrappy.orchestrator.api_key_composition import create_api_key_service
 
     output_adapter = TextualOutputAdapter()
@@ -67,7 +67,7 @@ def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
     # Resolve ONE provider at this composition root and share the SAME object
     # between the CLI (built later on a background thread) and the app that owns
     # the main screen, so history/cooldowns resolve through a single provider.
-    path_provider = ScrappyPathProvider(Path("."))
+    path_provider = create_default_path_provider(Path("."))
 
     # Same for the API key service. Sharing one instance across the main thread
     # and the CLI worker needs no lock: the app completes both of its mount

@@ -336,10 +336,10 @@ class CommandRouter:
         """
         from ..agent_tools.tools.task_tools import MarkdownTaskStorage
         from .protocols import TaskStatus
-        from ..infrastructure.paths import ScrappyPathProvider
+        from ..infrastructure.paths import create_default_path_provider
 
-        # Use ScrappyPathProvider for consistent path handling
-        path_provider = ScrappyPathProvider(Path.cwd())
+        # Use the production path provider for consistent path handling
+        path_provider = create_default_path_provider(Path.cwd())
         storage = MarkdownTaskStorage(path_provider.todo_file())
 
         if not storage.exists():

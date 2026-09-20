@@ -11,7 +11,25 @@ member; sending a temp provider's paths back to HOME would defeat the contract.
 
 from pathlib import Path
 
-from scrappy.infrastructure.paths import ScrappyPathProvider, TempPathProvider
+from scrappy.infrastructure.paths import (
+    ScrappyPathProvider,
+    TempPathProvider,
+    UserPaths,
+)
+
+
+def _disposable_user_paths(root: Path) -> UserPaths:
+    """User paths under a disposable root.
+
+    These two members resolve from Path.home() and never read the user
+    directories, so the values here only need to be safely out of the way.
+    """
+    return UserPaths(
+        user_data_dir=root / "unused_data",
+        user_config_dir=root / "unused_config",
+        user_cache_dir=root / "unused_cache",
+        legacy_user_dir=root / "unused_legacy",
+    )
 
 
 class TestScrappyProviderResolvesHomeAtCallTime:
@@ -25,7 +43,7 @@ class TestScrappyProviderResolvesHomeAtCallTime:
 
         monkeypatch.setattr(Path, "home", staticmethod(lambda: home1))
         # project_root is irrelevant to this member; it resolves from HOME.
-        provider = ScrappyPathProvider(Path("."))
+        provider = ScrappyPathProvider(Path("."), user_paths=_disposable_user_paths(tmp_path))
         assert provider.command_history_file() == home1 / ".scrappy" / "command_history"
 
         # MOVE HOME, then call again: the second call must follow the moved home.
@@ -39,7 +57,7 @@ class TestScrappyProviderResolvesHomeAtCallTime:
         home2.mkdir()
 
         monkeypatch.setattr(Path, "home", staticmethod(lambda: home1))
-        provider = ScrappyPathProvider(Path("."))
+        provider = ScrappyPathProvider(Path("."), user_paths=_disposable_user_paths(tmp_path))
         assert provider.model_cooldowns_file() == home1 / ".scrappy" / "model_cooldowns.json"
 
         monkeypatch.setattr(Path, "home", staticmethod(lambda: home2))

@@ -647,8 +647,9 @@ class PathProviderProtocol(Protocol):
         """
         Ensure user data directory exists and migrate data if needed.
 
-        Creates ~/.scrappy/ and migrates any project-level rate_limits.json
-        to user-level (then deletes the project-level file).
+        Creates the implementation's user-level directories and migrates any
+        project-level rate_limits.json to user-level (then deletes the
+        project-level file).
 
         Raises:
             PermissionError: If no write permission
