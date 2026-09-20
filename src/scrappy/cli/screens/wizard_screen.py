@@ -16,6 +16,7 @@ from .chat_surface import (
 )
 from scrappy.cli.protocols import ClipboardProtocol
 from scrappy.cli.textual.tui_events import TuiEventTarget
+from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from scrappy.orchestrator.protocols import KeyValidatorProtocol
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ class SetupWizardScreen(Screen):
         io: "UnifiedIO",
         key_validator: KeyValidatorProtocol,
         clipboard: ClipboardProtocol,
+        config_service: ApiKeyConfigServiceProtocol,
         allow_cancel: bool = True,
         on_complete: Optional[Callable[[bool], None]] = None,
     ):
@@ -57,6 +59,8 @@ class SetupWizardScreen(Screen):
             io: UnifiedIO for output routing
             key_validator: Lightweight key validator for testing API keys
             clipboard: Clipboard service for OS clipboard integration
+            config_service: API key config service handed to the wizard this
+                screen builds on mount
             allow_cancel: If False, user must configure at least one provider
             on_complete: Callback when wizard completes (receives has_provider bool)
         """
@@ -64,6 +68,7 @@ class SetupWizardScreen(Screen):
         self._io = io
         self._key_validator = key_validator
         self._clipboard = clipboard
+        self._config_service = config_service
         self._allow_cancel = allow_cancel
         self._on_complete = on_complete
 
@@ -96,7 +101,9 @@ class SetupWizardScreen(Screen):
         self._surface.focus_input()
 
         # Create and start wizard
-        self._wizard = SetupWizard(self._io, self._key_validator)
+        self._wizard = SetupWizard(
+            self._io, self._key_validator, self._config_service
+        )
         with self._wizard_output_context():
             self._wizard.start(
                 allow_cancel=self._allow_cancel,

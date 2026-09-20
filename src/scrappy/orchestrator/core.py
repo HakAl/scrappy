@@ -53,6 +53,7 @@ from .protocols import (
 from .provider_types import ProviderAttempt
 from .litellm_config import get_configured_models
 from .api_key_composition import create_api_key_service
+from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from ..infrastructure.logging import get_logger
 
 
@@ -118,6 +119,7 @@ class AgentOrchestrator:
         provider_status_tracker: Optional[ProviderStatusTrackerProtocol] = None,
         model_selector: Optional[ModelSelectionServiceProtocol] = None,
         path_provider: Optional[PathProviderProtocol] = None,
+        api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
     ):
         """
         Initialize orchestrator (dependencies only - NO side effects).
@@ -127,6 +129,16 @@ class AgentOrchestrator:
         All dependencies can be injected for testing, or will be created with
         sensible defaults using OrchestratorFactory.
         """
+        # The API key service is resolved once and shared with the factory (and
+        # thence the LLM service), so refresh_provider_configuration and status
+        # read the same object the rest of the graph does. Explicit is-None
+        # check: a Protocol-typed service with a falsy __bool__/__len__ must not
+        # trigger a silent default.
+        self._api_key_service = (
+            api_key_service if api_key_service is not None
+            else self._create_default_api_key_service()
+        )
+
         # Core state
         self.task_history: list[dict] = []
         self.created_at = datetime.now()
@@ -178,7 +190,8 @@ class AgentOrchestrator:
                 context_aware=context_aware,
                 created_at=self.created_at,
                 path_provider=path_provider,
-                enable_semantic_search=enable_semantic_search
+                enable_semantic_search=enable_semantic_search,
+                api_key_service=self._api_key_service,
             )
 
             components = factory.create_all_components(
@@ -208,6 +221,15 @@ class AgentOrchestrator:
             self.model_selector.set_default_type(
                 ModelSelectionType.CHAT if quality_mode else ModelSelectionType.FAST
             )
+
+    def _create_default_api_key_service(self) -> ApiKeyConfigServiceProtocol:
+        """Create the default API key service (production location).
+
+        Standalone construction of an orchestrator is supported, so the default
+        lives here rather than being forced on every caller. Composed graphs
+        pass the root's service in instead.
+        """
+        return create_api_key_service()
 
     @property
     def quality_mode(self) -> bool:
@@ -787,10 +809,9 @@ class AgentOrchestrator:
             configured = self.llm_service.configure()
 
         if self.model_selector is not None:
-            api_key_service = create_api_key_service()
             configured_models = {
                 metadata.model_id
-                for metadata in get_configured_models(api_key_service)
+                for metadata in get_configured_models(self._api_key_service)
             }
             self.model_selector.update_configured(configured_models)
             self.model_selector.clear_failure_kinds({
@@ -946,10 +967,12 @@ class AgentOrchestrator:
         """Get current status of all providers and model groups."""
         from .litellm_config import get_configured_models, get_available_groups
 
-        # Get LiteLLM model group info
-        api_key_service = create_api_key_service()
-        configured_models = get_configured_models(api_key_service)
-        available_groups = get_available_groups(api_key_service)
+        # Re-read storage first: this site used to build a fresh service per
+        # call, so an external edit of the config file was visible here. The
+        # shared instance caches, so reload() preserves that.
+        self._api_key_service.reload()
+        configured_models = get_configured_models(self._api_key_service)
+        available_groups = get_available_groups(self._api_key_service)
 
         # Get provider health status if tracker available
         provider_health = {}

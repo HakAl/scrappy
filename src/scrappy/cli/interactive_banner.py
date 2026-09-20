@@ -12,7 +12,6 @@ from rich.text import Text
 from scrappy import __version__
 from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from scrappy.infrastructure.paths import ScrappyPathProvider
-from scrappy.orchestrator.api_key_composition import create_api_key_service
 from scrappy.orchestrator.litellm_config import get_configured_models
 from scrappy.orchestrator.provider_definitions import AGENT_PROVIDER_GUIDANCE
 from scrappy.sandbox.docker_executor import DockerExecutor
@@ -146,7 +145,7 @@ def _get_docker_status(project_dir: str) -> dict:
 
 def display_banner_status(
     io: "UnifiedIOProtocol",
-    api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
+    api_key_service: ApiKeyConfigServiceProtocol,
     path_provider: Optional[ScrappyPathProvider] = None,
 ) -> None:
     """Display banner status lines (providers + workspace).
@@ -156,12 +155,10 @@ def display_banner_status(
 
     Args:
         io: UnifiedIO instance with console property
-        api_key_service: Optional service for checking API keys (for testing)
+        api_key_service: Service for checking API keys, supplied by the caller
         path_provider: Optional path provider (for testing)
     """
     # Use provided dependencies or create defaults
-    if api_key_service is None:
-        api_key_service = create_api_key_service()
     if path_provider is None:
         path_provider = ScrappyPathProvider(Path.cwd())
 
@@ -190,7 +187,7 @@ def display_banner_status(
 
 def display_banner(
     io: "UnifiedIOProtocol",
-    api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
+    api_key_service: ApiKeyConfigServiceProtocol,
     path_provider: Optional[ScrappyPathProvider] = None,
 ) -> None:
     """Display welcome banner with ASCII art, providers, and workspace.
@@ -201,7 +198,7 @@ def display_banner(
 
     Args:
         io: UnifiedIO instance with console property and theme
-        api_key_service: Optional service for checking API keys (for testing)
+        api_key_service: Service for checking API keys, supplied by the caller
         path_provider: Optional path provider (for testing)
     """
     display_banner_header(io)

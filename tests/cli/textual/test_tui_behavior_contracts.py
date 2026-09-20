@@ -20,6 +20,7 @@ from scrappy.cli.screens.wizard_screen import SetupWizardScreen
 from scrappy.cli.textual.app import ScrappyApp
 from scrappy.cli.widgets.selectable_log import SelectableLog
 from scrappy.infrastructure.paths import TempPathProvider
+from tests.cli.helpers import MockApiKeyConfigService
 
 
 def create_test_app() -> ScrappyApp:
@@ -99,6 +100,7 @@ def create_wizard_screen(clipboard) -> SetupWizardScreen:
         io=mock_io,
         key_validator=MagicMock(),
         clipboard=clipboard,
+        config_service=MockApiKeyConfigService(),
     )
 
 

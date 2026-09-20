@@ -25,6 +25,7 @@ from scrappy.cli.protocols import (
     ClipboardProtocol,
     MouseReportingPolicyProtocol,
 )
+from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from scrappy.infrastructure.output_mode import OutputModeContext
 from scrappy.infrastructure.paths import ScrappyPathProvider
 from scrappy.infrastructure.protocols import PathProviderProtocol
@@ -101,6 +102,7 @@ class ScrappyApp(App):
         mouse_policy: Optional[MouseReportingPolicyProtocol] = None,
         now: Optional[Callable[[], float]] = None,
         path_provider: Optional[PathProviderProtocol] = None,
+        api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
     ):
         """Initialize the Textual app controller.
 
@@ -128,6 +130,10 @@ class ScrappyApp(App):
             path_provider: Path provider threaded to the main screen's command
                 history. If None, falls back to the production default. Tests that
                 mount the app MUST inject a TempPathProvider to isolate history.
+            api_key_service: API key config service read on mount and threaded to
+                the wizard screen and the banner. If None, falls back to the
+                production default. Tests that mount the app MUST inject a double
+                to keep the read off the user's config file.
         """
         super().__init__()
         self._theme = theme or DEFAULT_THEME
@@ -137,6 +143,13 @@ class ScrappyApp(App):
         self._path_provider = (
             path_provider if path_provider is not None
             else self._create_default_path_provider()
+        )
+        # Same rule for the API key service: resolved once here and shared with
+        # the wizard screen and the banner, so the mount reads and the wizard's
+        # writes all go through one object.
+        self._api_key_service = (
+            api_key_service if api_key_service is not None
+            else self._create_default_api_key_service()
         )
         self._shutdown_requested = False
         self._clipboard_service = clipboard or self._create_default_clipboard()
@@ -190,6 +203,14 @@ class ScrappyApp(App):
         chosen for consistency with the orchestrator default, not for effect.
         """
         return ScrappyPathProvider(Path("."))
+
+    def _create_default_api_key_service(self) -> ApiKeyConfigServiceProtocol:
+        """Create the default API key service (production location).
+
+        Mirrors the path provider's default: the production root passes its own
+        service in, and this only backs standalone construction.
+        """
+        return create_api_key_service()
 
     def _create_default_clipboard(self) -> ClipboardProtocol:
         """Create the default clipboard service."""
@@ -345,8 +366,7 @@ class ScrappyApp(App):
         has_provider, env_key_count = self._check_and_migrate_providers()
 
         # Check if disclaimer has been acknowledged
-        config_service = create_api_key_service()
-        disclaimer_acknowledged = config_service.is_disclaimer_acknowledged()
+        disclaimer_acknowledged = self._api_key_service.is_disclaimer_acknowledged()
 
         # Mock mode bypasses wizard (for e2e testing)
         from scrappy.orchestrator.mock_llm_service import is_mock_mode_enabled
@@ -443,7 +463,7 @@ class ScrappyApp(App):
 
         # Display status lines now that CLI is ready (header already shown on mount)
         from scrappy.cli.interactive_banner import display_banner_status
-        display_banner_status(self._cli.io)
+        display_banner_status(self._cli.io, api_key_service=self._api_key_service)
         self.call_after_refresh(self.restore_mouse_support)
         self.call_after_refresh(self._signal_integration_ready)
 
@@ -695,10 +715,9 @@ class ScrappyApp(App):
         from scrappy.orchestrator.provider_definitions import PROVIDERS
 
         # Migration happens automatically in load() via _migrate_from_env()
-        config_service = create_api_key_service()
         env_vars = [info.env_var for info in PROVIDERS.values()]
 
-        return config_service.has_any_key(env_vars), 0
+        return self._api_key_service.has_any_key(env_vars), 0
 
     def _show_main_screen(self, env_key_count: int = 0) -> None:
         """Switch to main chat screen.
@@ -765,6 +784,7 @@ class ScrappyApp(App):
             io=cast("UnifiedIO", self.interactive_mode.io),
             key_validator=create_key_validator(),
             clipboard=self._clipboard_service,
+            config_service=self._api_key_service,
             allow_cancel=allow_cancel,
             on_complete=self._on_wizard_complete,
         )

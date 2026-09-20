@@ -22,6 +22,7 @@ from .utils.session_utils import (
     display_session_save_error,
     display_session_not_saved_warning
 )
+from ..infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from ..orchestrator.protocols import Orchestrator
 from ..orchestrator.model_selection import (
     ModelSelectionServiceProtocol,
@@ -44,7 +45,9 @@ class CommandRouter:
         agent_mgr: CLIAgentManager,
         session_saver: SessionSaverProtocol,
         model_selection: ModelSelectionServiceProtocol,
-        state_manager: Optional[PlanStateManager] = None
+        state_manager: Optional[PlanStateManager] = None,
+        *,
+        api_key_service: ApiKeyConfigServiceProtocol,
     ) -> None:
         """
         Initialize CommandRouter with all dependencies.
@@ -61,7 +64,10 @@ class CommandRouter:
             session_saver: Seam for saving the session on exit.
             model_selection: Model selection service for tier state and display.
             state_manager: Optional plan state manager.
+            api_key_service: API key config service handed to the wizard /setup
+                launches in CLI mode.
         """
+        self._api_key_service = api_key_service
         self.io = io
         self.orchestrator = orchestrator
         self.session_context = session_context
@@ -491,7 +497,7 @@ class CommandRouter:
         io = self.io
 
         io.echo("Launching provider setup wizard...")
-        wizard = SetupWizard(io, create_key_validator())
+        wizard = SetupWizard(io, create_key_validator(), self._api_key_service)
         wizard.run(allow_cancel=True)
         # Refresh orchestrator provider state after wizard saves new keys.
         self.orchestrator.refresh_provider_configuration()

@@ -20,6 +20,7 @@ from scrappy.orchestrator.model_selection import (
     ModelSelectionType,
 )
 from scrappy.orchestrator.session import SessionManager
+from tests.cli.helpers import MockApiKeyConfigService
 
 
 FAST_MODEL = "groq/llama-3.1-8b-instant"
@@ -150,6 +151,7 @@ def router(
         agent_mgr=mock_agent_mgr,
         session_saver=mock_session_saver,
         model_selection=mock_model_selection,
+        api_key_service=MockApiKeyConfigService(),
     )
 
 
@@ -849,6 +851,7 @@ class TestQuitCopyPins:
             agent_mgr=Mock(),
             session_saver=orchestrator,
             model_selection=Mock(),
+            api_key_service=MockApiKeyConfigService(),
         )
 
         result = router._handle_exit("")

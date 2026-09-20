@@ -14,11 +14,13 @@ from scrappy.cli.textual.tui_events import (
     TuiEventMessage,
 )
 from scrappy.cli.widgets import SelectableLog
+from tests.cli.helpers import MockApiKeyConfigService
 
 
 def test_setup_interactive_mode_uses_shared_helpers():
     """Deferred app setup should reuse the shared session and wiring helpers."""
-    app = ScrappyApp(cli_factory=lambda: Mock())
+    api_key_service = MockApiKeyConfigService()
+    app = ScrappyApp(cli_factory=lambda: Mock(), api_key_service=api_key_service)
     cli = Mock()
     cli.io = Mock()
     cli.orchestrator = Mock()
@@ -198,7 +200,8 @@ def test_restore_mouse_support_uses_driver_hook_when_available():
 
 def test_on_cliready_reasserts_mouse_support_after_banner_status():
     """Completing deferred startup should schedule mouse support restoration."""
-    app = ScrappyApp(cli_factory=lambda: Mock())
+    api_key_service = MockApiKeyConfigService()
+    app = ScrappyApp(cli_factory=lambda: Mock(), api_key_service=api_key_service)
     cli = Mock()
     cli.io = Mock()
 
@@ -209,7 +212,11 @@ def test_on_cliready_reasserts_mouse_support_after_banner_status():
     ):
         app.on_tui_event_message(TuiEventMessage(CliReadyChanged(cli=cli)))
 
-    mock_banner_status.assert_called_once_with(cli.io)
+    # The app hands the banner its own service rather than letting the banner
+    # build one from the default config path.
+    mock_banner_status.assert_called_once_with(
+        cli.io, api_key_service=api_key_service
+    )
     assert mock_call_after_refresh.call_args_list == [
         call(app.restore_mouse_support),
         call(app._signal_integration_ready),

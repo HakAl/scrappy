@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, Optional, Tuple, Callable, TYPE_CHECKING
 
-from scrappy.orchestrator.api_key_composition import create_api_key_service
 from scrappy.orchestrator.provider_catalog import build_default_catalog
 from scrappy.orchestrator.provider_definitions import PROVIDERS, SETUP_PROVIDER_GUIDANCE
 from scrappy.infrastructure.config.api_keys import (
@@ -114,7 +113,7 @@ class SetupWizard:
         self,
         io: "UnifiedIO",
         key_validator: KeyValidatorProtocol,
-        config_service: Optional[ApiKeyConfigServiceProtocol] = None,
+        config_service: ApiKeyConfigServiceProtocol,
     ):
         """
         Initialize wizard with dependencies.
@@ -122,11 +121,12 @@ class SetupWizard:
         Args:
             io: Output interface for TUI
             key_validator: Lightweight validator for testing API keys
-            config_service: API key config service (uses default if None)
+            config_service: API key config service the wizard reads and writes
+                through, supplied by the caller
         """
         self.io = io
         self._key_validator = key_validator
-        self._config_service = config_service or create_api_key_service()
+        self._config_service = config_service
 
         # State machine for non-blocking TUI operation
         self._state = WizardState.DONE

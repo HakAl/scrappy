@@ -28,9 +28,14 @@ CHAT_32K_MODEL = "groq/llama-3.3-70b-versatile"
 FAST_128K_MODEL = "groq/llama-3.1-8b-instant"
 
 
-def make_orchestrator(*, llm_service, model_selector, delegation_manager) -> AgentOrchestrator:
+def make_orchestrator(
+    *, llm_service, model_selector, delegation_manager, api_key_service=None
+) -> AgentOrchestrator:
     """Construct an orchestrator with direct mock dependencies."""
     return AgentOrchestrator(
+        api_key_service=(
+            api_key_service if api_key_service is not None else MockApiKeyService()
+        ),
         output=Mock(),
         registry=Mock(),
         cache=Mock(),
@@ -1233,7 +1238,7 @@ def test_fallback_preference_recovers_after_cooldown():
     assert delegation_manager.calls[12] == primary
 
 
-def test_refresh_provider_configuration_updates_selector_and_clears_auth(monkeypatch):
+def test_refresh_provider_configuration_updates_selector_and_clears_auth():
     """Setup refresh preserves the selector while clearing credential failures."""
     llm_service = ConfigurableLLMService()
     selector = ModelSelectionService(
@@ -1246,15 +1251,14 @@ def test_refresh_provider_configuration_updates_selector_and_clears_auth(monkeyp
         },
     )
     selector.mark_unhealthy("cerebras/llama3.1-8b", FailureKind.AUTH)
+    # The orchestrator is built BEFORE the keys are needed, so the service must
+    # be injected at construction: refresh_provider_configuration reads the
+    # service the orchestrator holds, not a freshly built one.
     orchestrator = make_orchestrator(
         llm_service=llm_service,
         model_selector=selector,
         delegation_manager=Mock(),
-    )
-
-    monkeypatch.setattr(
-        "scrappy.orchestrator.core.create_api_key_service",
-        lambda: MockApiKeyService(
+        api_key_service=MockApiKeyService(
             keys={
                 "CEREBRAS_API_KEY": "test-cerebras",
                 "GROQ_API_KEY": "test-groq",
