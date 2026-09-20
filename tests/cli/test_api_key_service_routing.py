@@ -459,25 +459,33 @@ class TestDisplayUsesInjectedService:
 class TestCompositionSitesThreadService:
     """The service passed at each composition root reaches the consumers."""
 
-    def test_create_cli_from_context_threads_service(self, tripwire):
+    def test_create_cli_from_context_threads_service(self, tripwire, tmp_path):
         """T8: create_cli_from_context -> CLI -> orchestrator."""
         double = _groq_double()
         ctx = SimpleNamespace(obj={})
 
         with _isolated_cli_env():
             cli = create_cli_from_context(
-                ctx, io=MagicMock(), api_key_service=double
+                ctx,
+                io=MagicMock(),
+                path_provider=TempPathProvider(tmp_path),
+                api_key_service=double,
             )
 
         assert cli._api_key_service is double
         assert cli.orchestrator._api_key_service is double
 
-    def test_create_cli_threads_service(self, tripwire):
+    def test_create_cli_threads_service(self, tripwire, tmp_path):
         """T8: create_cli -> CLI -> orchestrator."""
         double = _groq_double()
 
         with _isolated_cli_env():
-            cli = create_cli({}, io=MagicMock(), api_key_service=double)
+            cli = create_cli(
+                {},
+                io=MagicMock(),
+                path_provider=TempPathProvider(tmp_path),
+                api_key_service=double,
+            )
 
         assert cli._api_key_service is double
         assert cli.orchestrator._api_key_service is double

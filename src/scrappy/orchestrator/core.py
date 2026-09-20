@@ -1749,8 +1749,17 @@ class AgentOrchestrator:
         self.rate_tracker.reset_rate_tracking(provider_name)
 
 
-def create_orchestrator() -> AgentOrchestrator:
-    """Factory function to create an initialized orchestrator."""
-    orch = AgentOrchestrator()
+def create_orchestrator(
+    path_provider: Optional[PathProviderProtocol] = None,
+) -> AgentOrchestrator:
+    """Factory function to create an initialized orchestrator.
+
+    Args:
+        path_provider: Optional path provider, forwarded as given. Passing None
+            keeps today's production behaviour: the factory builds the default
+            provider at its own composition point, so this helper never
+            resolves a user location itself.
+    """
+    orch = AgentOrchestrator(path_provider=path_provider)
     orch.initialize(auto_register=True)
     return orch
