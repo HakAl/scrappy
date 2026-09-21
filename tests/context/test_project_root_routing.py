@@ -520,30 +520,77 @@ class TestConfigObjectPrecedence:
     def test_t18_default_valued_config_object_is_still_caller_supplied(self, routing):
         """The case that fails if anyone infers provenance by equality.
 
-        This config's fields equal the class defaults. It must still be
-        honoured as supplied rather than bound to the provider.
+        This config's fields equal the class defaults, and it is supplied at
+        the routed reconfiguration seam of a PROVIDER-BACKED context. That is
+        the seam where equality-based rebinding would actually be written, so
+        the proof is the destination reached, not the config's field values:
+        rebinding on equality would move persistence under the storage root.
         """
         supplied = SemanticIndexConfig()
         assert supplied.fingerprint_file == SemanticIndexConfig().fingerprint_file
 
-        manager = SemanticSearchManager(
-            project_path=routing.scan_project,
+        context = _context_via_factory(routing)
+        context.configure_semantic_search(
             config=supplied,
+            state_manager=Mock(),
+            decision_maker=Mock(),
         )
 
-        assert manager._config is supplied, "caller's config object was replaced"
-        assert manager._config.fingerprint_file == SemanticIndexConfig().fingerprint_file
-        assert manager._config.db_dir_name == SemanticIndexConfig().db_dir_name
+        checker = context._semantic_manager._staleness_checker
+        assert checker is context._staleness_checker, (
+            "reconfiguration forked the checker"
+        )
 
-    def test_t18_model_only_config_retains_its_own_storage_defaults(self, routing):
-        """Setting only the model must not silently acquire provider binding."""
+        expected = routing.scan_project / SemanticIndexConfig().fingerprint_file
+        assert checker._fingerprint_path == expected
+        assert not checker._fingerprint_path.is_relative_to(routing.storage_root), (
+            "a default-valued config was rebound to the provider by equality"
+        )
+
+        checker.update_fingerprints()
+        assert expected.exists(), "fingerprints were not written as supplied"
+        provider_default = Path(bind_storage_defaults(routing.provider).fingerprint_file)
+        assert not provider_default.exists(), (
+            "persistence landed at the provider destination anyway"
+        )
+
+    def test_t18_model_only_config_retains_its_own_storage_defaults(
+        self, routing, monkeypatch
+    ):
+        """Setting only the model must not silently acquire provider binding.
+
+        Driven to the real connection destination: the model subdirectory has
+        to appear under the config's own default storage on the SCAN root,
+        never under the provider, even though the context is provider-backed.
+        """
+        # Model selection must come from the supplied config, so no env override.
+        monkeypatch.delenv("SEMANTIC_INDEX_EMBEDDING_MODEL", raising=False)
+        connected = _stub_semantic_externals(monkeypatch)
+
         supplied = SemanticIndexConfig(embedding_model="bge-small")
-        manager = SemanticSearchManager(
-            project_path=routing.scan_project,
+
+        context = _context_via_factory(routing)
+        context.configure_semantic_search(
             config=supplied,
+            state_manager=Mock(),
+            decision_maker=Mock(),
         )
-        assert manager._config is supplied
-        assert manager._config.db_dir_name == SemanticIndexConfig().db_dir_name
+
+        initializer = context._semantic_manager._create_default_initializer()
+
+        class StubThread:
+            shutdown_requested = False
+
+        initializer._initialize_worker(StubThread())
+        assert initializer.is_complete(), (
+            f"initialization did not succeed: {initializer.get_error()}"
+        )
+
+        expected = routing.scan_project / SemanticIndexConfig().db_dir_name / "bge-small"
+        assert expected in connected, f"model dir not connected: {connected}"
+        assert not any(
+            directory.is_relative_to(routing.storage_root) for directory in connected
+        ), f"a model-only config acquired provider binding: {connected}"
 
     def test_t18_binder_never_mutates_and_covers_both_fields(self, routing):
         """The binder returns a new object and binds BOTH storage fields."""
@@ -583,15 +630,40 @@ class TestConfigObjectPrecedence:
         assert checker._fingerprint_path.is_relative_to(routing.storage_root)
         assert not checker._fingerprint_path.is_relative_to(routing.scan_project)
 
-    def test_t18_injected_state_manager_keeps_its_destination(self, routing, tmp_path):
-        """An injected storage dependency is never recomputed."""
-        sentinel = Mock()
-        manager = SemanticSearchManager(
-            project_path=routing.scan_project,
-            config=bind_storage_defaults(routing.provider),
-            state_manager=sentinel,
+    def test_t18_injected_state_manager_keeps_its_destination(
+        self, routing, tmp_path, monkeypatch
+    ):
+        """An injected storage dependency is never recomputed.
+
+        The supplied state manager points somewhere the config does NOT: the
+        config carries the provider-bound storage root, the state manager
+        carries a separate custom directory. Dropping the explicit dependency
+        would rebuild it from the config and open the provider directory
+        instead, which the connection destination makes visible.
+        """
+        from scrappy.context.semantic import state as state_module
+
+        connected = _stub_semantic_externals(monkeypatch)
+
+        custom_db = tmp_path / "custom_state_store" / "db"
+        supplied_state = state_module.LanceDBIndexStateManager(custom_db)
+        routed_config = bind_storage_defaults(routing.provider)
+
+        context = _context_via_factory(routing)
+        context.configure_semantic_search(
+            config=routed_config,
+            state_manager=supplied_state,
+            decision_maker=Mock(),
         )
-        assert manager._state_manager is sentinel
+
+        context._semantic_manager._state_manager._ensure_db()
+
+        assert custom_db in connected, (
+            f"the injected state manager's destination was not opened: {connected}"
+        )
+        assert Path(routed_config.db_dir_name) not in connected, (
+            "the state manager was rebuilt from config instead of being honoured"
+        )
 
 
 class TestManagerReplacementSharesChecker:

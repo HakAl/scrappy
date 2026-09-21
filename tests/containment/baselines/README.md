@@ -20,12 +20,18 @@ A baseline is written by `baseline.publish_baseline(...)` from a completed conta
 of the selection it names, never hand-authored in advance.
 
 `escape-baseline.darwin.default.json` is the CURRENT measurement, taken at the TRUE
-DEFAULT SELECTION with the instrument included after the last production helper that took
+DEFAULT SELECTION. The instrument was included after the last production helper that took
 no provider, `create_orchestrator()` in `orchestrator/core.py`, was given an optional one
-and the tests that reached its default were routed to disposable providers: 5398 selected,
-5390 passed, 8 skipped, 0 failures, 0 errors, 106 deselected. Six of the eight skips are the
-differential scanner cases in `test_launcher_validation.py` that argparse rejects outright;
-the other two pre-date the instrument. It records NO escapes.
+and the tests that reached its default were routed to disposable providers. It was
+RE-MEASURED at the PR-5 candidate, which routes semantic storage through the injected
+provider and adds the project-root routing cases: 5419 selected, 5411 passed, 8 skipped,
+0 failures, 0 errors, 106 deselected. Six of the eight skips are the differential scanner
+cases in `test_launcher_validation.py` that argparse rejects outright; the other two
+pre-date the instrument. It records NO escapes.
+
+The node count moving does NOT change what an empty set means. Added tests can only widen
+what was exercised; they cannot evidence that an unexercised path is contained. Re-read the
+three limits below against every re-measurement, not just the first.
 
 An EMPTY set here means exactly one thing: NO DETECTABLE NET FILE CHANGE between the before
 and after snapshots of the measured profile region. It is NOT a completion certificate, and
