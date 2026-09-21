@@ -45,8 +45,9 @@ An EMPTY set here means exactly one thing: NO DETECTABLE NET FILE CHANGE between
 and after snapshots of the measured profile region. It is NOT a completion certificate, and
 it is not a claim that nothing happened during the run. Read it with three limits in mind:
 
-- It does NOT complete `scrappy-i2jo` and does NOT retire the containment boundary. PR-5
-  through PR-7 and final acceptance remain.
+- It does NOT complete `scrappy-i2jo` and does NOT retire the containment boundary. PR-6 is
+  the candidate being measured here and is NOT landed yet; it, PR-7 and final acceptance all
+  remain.
 - A before/after diff sees NET STATE, not events. A file created and removed inside the run
   is invisible, and so are a `mkdir` that leaves no file and any read. Tests that still
   construct CLI, ScrappyApp or AgentOrchestrator bare can still create the user directories

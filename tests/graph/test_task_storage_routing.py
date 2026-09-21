@@ -495,6 +495,18 @@ def test_captured_code_root_survives_injected_orchestrator_and_moved_cwd(roots):
 def test_default_orchestrator_reuses_the_same_captured_root(roots, monkeypatch):
     """The default branch reuses the capture rather than re-reading CWD.
 
+    The capture (`core.py:121`) and the default construction (`:128`) are
+    ADJACENT statements inside one `__init__`, and the capture is itself a
+    `Path.cwd()` reading. `make_cli` moves the CWD only AFTER construction, so
+    under it "reuses the capture" and "takes a second Path.cwd() reading" return
+    the identical value and the distinction is untestable: the assertions below
+    would hold against either. This test therefore moves the process FOR REAL at
+    that seam, so the two behaviours produce different directories.
+
+    Each root carries a distinct marker file, so the destination is confirmed by
+    reading what is actually on disk rather than by comparing path strings that
+    a coincidence of layout could satisfy.
+
     AgentOrchestrator does not retain project_path as an attribute, so the
     construction seam is where reuse is observable. The orchestrator is also
     stubbed here to keep this test offline; building a real default one performs
@@ -502,20 +514,51 @@ def test_default_orchestrator_reuses_the_same_captured_root(roots, monkeypatch):
     """
     from scrappy.cli import core as core_module
 
+    (roots.code_root / "ROOT_MARKER").write_text("code-root")
+    (roots.process_cwd / "ROOT_MARKER").write_text("process-cwd")
+
     captured = {}
 
     def recording_orchestrator(**kwargs):
         captured.update(kwargs)
+        # Ambient CWD AT THE MOMENT OF CONSTRUCTION, to prove the move below
+        # really had landed before the orchestrator was built.
+        captured["ambient_cwd"] = os.getcwd()
         return Mock()
 
     monkeypatch.setattr(core_module, "AgentOrchestrator", recording_orchestrator)
 
-    cli = make_cli(roots, orchestrator=None)
+    # Move the process on the FIRST Path.cwd() reading, which is the capture
+    # itself. A real os.chdir is used rather than a faked return value, so
+    # anything re-reading the CWD by any means sees the moved directory.
+    real_cwd = Path.cwd
+    moved = []
 
+    def cwd_then_move():
+        here = real_cwd()
+        if not moved:
+            moved.append(True)
+            os.chdir(roots.process_cwd)
+        return here
+
+    monkeypatch.setattr(Path, "cwd", staticmethod(cwd_then_move))
+
+    os.chdir(roots.code_root)
+    cli = core_module.CLI(orchestrator=None, io=Mock())
+
+    assert moved, "Path.cwd was never read, so the capture seam went unexercised"
+    # The capture ran before the move and still holds the code root.
     assert Path(cli._code_root).resolve() == roots.code_root.resolve()
-    assert Path(captured["project_path"]).resolve() == roots.code_root.resolve()
-    # Not the ambient CWD, which moved after composition.
-    assert Path(captured["project_path"]).resolve() != roots.process_cwd.resolve()
+    # The CWD had genuinely moved by construction time, so a second reading
+    # would have yielded a DIFFERENT directory than the capture.
+    assert Path(captured["ambient_cwd"]).resolve() == roots.process_cwd.resolve()
+
+    project_path = Path(captured["project_path"]).resolve()
+    assert project_path == roots.code_root.resolve()
+    # Not the ambient CWD, which moved before the orchestrator was built.
+    assert project_path != roots.process_cwd.resolve()
+    # Confirm the destination from disk content, not from the path string.
+    assert (project_path / "ROOT_MARKER").read_text() == "code-root"
 
 
 def test_recreated_handler_reuses_captured_root_after_cwd_moved(roots):
