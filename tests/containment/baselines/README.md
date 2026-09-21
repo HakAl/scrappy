@@ -22,12 +22,20 @@ of the selection it names, never hand-authored in advance.
 `escape-baseline.darwin.default.json` is the CURRENT measurement, taken at the TRUE
 DEFAULT SELECTION. The instrument was included after the last production helper that took
 no provider, `create_orchestrator()` in `orchestrator/core.py`, was given an optional one
-and the tests that reached its default were routed to disposable providers. It was
-RE-MEASURED at the PR-5 candidate, which routes semantic storage through the injected
-provider and adds the project-root routing cases: 5419 selected, 5411 passed, 8 skipped,
-0 failures, 0 errors, 106 deselected. Six of the eight skips are the differential scanner
-cases in `test_launcher_validation.py` that argparse rejects outright; the other two
-pre-date the instrument. It records NO escapes.
+and the tests that reached its default were routed to disposable providers.
+
+It was RE-MEASURED at the PR-6 candidate, which threads selected task storage through the
+existing graph execution context and captures the CLI code root at composition: 5437
+selected, 5429 passed, 8 skipped, 0 failures, 0 errors, 106 deselected. It records NO
+escapes. Six of the eight skips are the differential scanner cases in
+`test_launcher_validation.py` that argparse rejects outright; the other two pre-date the
+instrument.
+
+The PR-5 measurement it supersedes recorded 5419 selected, 5411 passed, 8 skipped, and
+likewise NO escapes. The +18 node delta is the PR-6 behavioural routing tests
+(`tests/graph/test_task_storage_routing.py`) plus the maintenance updates; PR-6 removed no
+tests. An unchanged empty set across that delta is the expected result, not a new claim:
+see the node-count note immediately below.
 
 The node count moving does NOT change what an empty set means. Added tests can only widen
 what was exercised; they cannot evidence that an unexercised path is contained. Re-read the
@@ -51,12 +59,18 @@ selection is load-bearing for comparability. A run that hashes only the seeds re
 `sha256: null` for any surviving copy, which looks like a content change against a baseline
 that hashed it and is not one. Keep the extension when re-measuring.
 
-The PREVIOUS measurement recorded ONE escape: `Library/Application Support/scrappy/command_history`
+MEASUREMENT HISTORY, in order. The PR-6 measurement above and the PR-5 measurement before it
+BOTH recorded ZERO escapes; PR-6 held the empty set across an 18-node increase rather than
+newly achieving it.
+
+The last measurement to record a NON-EMPTY set was the one before PR-5. It recorded ONE escape:
+`Library/Application Support/scrappy/command_history`
 CREATED at 32 bytes, the legacy migration copying the seed into the platform data directory,
 triggered by the mock-mode selection tests through the then-providerless `create_orchestrator()`.
-Its disappearance is this slice's acceptance delta, and the delta was falsified rather than
+Its disappearance was PR-5's acceptance delta, and that delta was falsified rather than
 assumed: pointing ONE mock-mode test back at the default provider and re-measuring brings the
 same 32-byte copy back, so the instrument is sensitive to precisely the routing that removed it.
+PR-6 changes no provider routing and so inherits that result rather than re-earning it.
 The measurement BEFORE that one recorded TWO escapes, the same copy at 101 bytes and
 `.scrappy/command_history` MODIFIED from 32 to 122 bytes with a changed hash. That modification
 was the reproduced command-history damage, and it is why seeding with known bytes rather than

@@ -873,7 +873,9 @@ def test_no_live_storage_is_serialized_into_agent_state(roots):
     reloaded = json.loads(payload)
     assert "task_storage" not in reloaded
 
-    # No value anywhere in the state is the live storage instance.
+    # Top-level fields specifically: none of them IS the live storage instance.
+    # The strict serialization above is what carries the real proof; this is a
+    # cheap direct check, not a deep scan.
     assert all(value is not storage for value in dumped.values())
 
     assert final_state.working_dir == str(roots.code_root.resolve())

@@ -10,15 +10,15 @@
     ],
     "errors": 0,
     "failures": 0,
-    "non_skipped": 5411,
-    "passed": 5411,
+    "non_skipped": 5429,
+    "passed": 5429,
     "report_path": ".pytest_profile/baseline-default/junit-default.xml",
-    "report_sha256": "73e17bda4bf46a414f71a8397d0e5f9e8d6ffbb2adc3fa4d762585b8951f88fb",
+    "report_sha256": "90c6be7e64466140ec2e9fb02b2beb6e41bcf874b829e9c52f21f891966db35c",
     "returncode": 0,
     "selection": "default",
     "skipped": 8,
-    "started_at": 1789949009.76683,
-    "tests": 5419
+    "started_at": 1789953287.735017,
+    "tests": 5437
   },
   "selection": "default"
 }
