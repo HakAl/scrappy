@@ -507,16 +507,42 @@ def test_default_orchestrator_reuses_the_same_captured_root(roots, monkeypatch):
     reading what is actually on disk rather than by comparing path strings that
     a coincidence of layout could satisfy.
 
-    AgentOrchestrator does not retain project_path as an attribute, so the
-    construction seam is where reuse is observable. The orchestrator is also
-    stubbed here to keep this test offline; building a real default one performs
-    provider and model setup unrelated to root capture.
+    REAL SCAN. The orchestrator is the PRODUCTION class built through the real
+    OrchestratorFactory, so the CodebaseContext beneath it is the real one. The
+    proof is that context's OWN scan result, read bidirectionally against two
+    distinct marker files: the code-root marker present, the CWD decoy absent.
+    Reading a marker from the captured constructor argument instead would only
+    restate what the CLI passed, not where the default context actually looks.
+
+    Stubbed ONLY at external boundaries: IO, the API key service, and semantic
+    search, whose index service has no bearing on root capture.
+
+    Storage uses the DISPOSABLE provider, which is the brief's prescribed
+    composition for a routing test (isolation by construction). This is not a
+    convenience. `OrchestratorFactory` calls `path_provider.ensure_user_dir()`
+    (`factory.py:353`), and on a default-discovered provider that runs the
+    LEGACY MIGRATION, which copies the seed into the platform data directory.
+    That directory is inside the MEASURED profile region, so composing this
+    test with `create_default_path_provider` re-creates the single
+    `Library/Application Support/scrappy/command_history` escape that PR-4b
+    eliminated. Measured, not predicted: it turned the escape set from 0 to 1.
+    The disposable provider's `ensure_user_dir` only mkdirs under the injected
+    temp dir (`paths.py:331-334`), and every member derives from it.
     """
     from scrappy.cli import core as core_module
+    from scrappy.infrastructure.paths import TempPathProvider
 
-    (roots.code_root / "ROOT_MARKER").write_text("code-root")
-    (roots.process_cwd / "ROOT_MARKER").write_text("process-cwd")
+    code_marker = "marker_code_root.py"
+    decoy_marker = "marker_process_cwd.py"
+    (roots.code_root / code_marker).write_text("# scanned when the capture is reused\n")
+    (roots.process_cwd / decoy_marker).write_text("# scanned only if CWD is re-read\n")
 
+    # External boundary. get_key is typed Optional[str], so the stub honours
+    # that contract rather than returning a bare Mock the model layer rejects.
+    api_key_service = Mock()
+    api_key_service.get_key.return_value = "stub-api-key"
+
+    real_orchestrator_cls = core_module.AgentOrchestrator
     captured = {}
 
     def recording_orchestrator(**kwargs):
@@ -524,7 +550,7 @@ def test_default_orchestrator_reuses_the_same_captured_root(roots, monkeypatch):
         # Ambient CWD AT THE MOMENT OF CONSTRUCTION, to prove the move below
         # really had landed before the orchestrator was built.
         captured["ambient_cwd"] = os.getcwd()
-        return Mock()
+        return real_orchestrator_cls(**{**kwargs, "enable_semantic_search": False})
 
     monkeypatch.setattr(core_module, "AgentOrchestrator", recording_orchestrator)
 
@@ -544,7 +570,12 @@ def test_default_orchestrator_reuses_the_same_captured_root(roots, monkeypatch):
     monkeypatch.setattr(Path, "cwd", staticmethod(cwd_then_move))
 
     os.chdir(roots.code_root)
-    cli = core_module.CLI(orchestrator=None, io=Mock())
+    cli = core_module.CLI(
+        orchestrator=None,
+        io=Mock(),
+        api_key_service=api_key_service,
+        path_provider=TempPathProvider(roots.storage_root),
+    )
 
     assert moved, "Path.cwd was never read, so the capture seam went unexercised"
     # The capture ran before the move and still holds the code root.
@@ -553,12 +584,24 @@ def test_default_orchestrator_reuses_the_same_captured_root(roots, monkeypatch):
     # would have yielded a DIFFERENT directory than the capture.
     assert Path(captured["ambient_cwd"]).resolve() == roots.process_cwd.resolve()
 
-    project_path = Path(captured["project_path"]).resolve()
-    assert project_path == roots.code_root.resolve()
-    # Not the ambient CWD, which moved before the orchestrator was built.
-    assert project_path != roots.process_cwd.resolve()
-    # Confirm the destination from disk content, not from the path string.
-    assert (project_path / "ROOT_MARKER").read_text() == "code-root"
+    # THE PRIMARY PROOF, asserted FIRST so that it is the assertion a regression
+    # trips: what the real default context actually SCANS, not what it was
+    # handed. Bidirectional, so re-pointing the scan root fails either way.
+    # Ordering matters here. The captured-argument check below would otherwise
+    # short-circuit the run and this scan would never execute.
+    context = cli.orchestrator.context
+    context.explore()
+    python_files = context.file_index.get("python", [])
+
+    assert code_marker in python_files, (
+        f"default context did not scan the captured code root; saw {python_files}"
+    )
+    assert decoy_marker not in python_files, (
+        f"default context scanned the moved CWD instead; saw {python_files}"
+    )
+
+    # Corroborating only: the argument the CLI passed agrees with the scan.
+    assert Path(captured["project_path"]).resolve() == roots.code_root.resolve()
 
 
 def test_recreated_handler_reuses_captured_root_after_cwd_moved(roots):
