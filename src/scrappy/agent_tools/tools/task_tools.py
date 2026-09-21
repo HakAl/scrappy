@@ -228,8 +228,10 @@ class TaskTool(ToolBase):
         Returns:
             TaskStorageProtocol implementation.
         """
-        # 1. Test injection takes priority
-        if self._injected_storage:
+        # 1. Test injection takes priority. Explicit-None check, not truthiness:
+        # a valid storage that happens to be falsey (e.g. an empty task list)
+        # must still win over the context and file-based tiers.
+        if self._injected_storage is not None:
             return self._injected_storage
 
         # 2. Session-scoped storage from context (HUD)

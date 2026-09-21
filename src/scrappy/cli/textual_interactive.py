@@ -57,7 +57,8 @@ class TextualInteractiveMode:
         cli: "CLI" = None,
         config: "CLIConfig" = None,
         path_provider: Optional[PathProviderProtocol] = None,
-        api_key_service: Optional[ApiKeyConfigServiceProtocol] = None
+        api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
+        code_root: Optional[str] = None
     ):
         """Initialize TextualInteractiveMode with all dependencies.
 
@@ -79,6 +80,9 @@ class TextualInteractiveMode:
             api_key_service: API key config service threaded to ScrappyApp (and
                 thence the wizard). If None, ScrappyApp uses its production
                 default; acceptable for production, never for a test that mounts.
+            code_root: Code working directory captured once at CLI composition and
+                forwarded to the chat session, so a chat started after the process
+                CWD moved still targets the directory the CLI was built for.
         """
         self.orchestrator = orchestrator
         self.session_context = session_context
@@ -92,6 +96,7 @@ class TextualInteractiveMode:
         self._cli = cli
         self._path_provider = path_provider
         self._api_key_service = api_key_service
+        self._code_root = code_root
         # Load config from parameter or default locations
         self._config = config or get_config()
 
@@ -120,6 +125,7 @@ class TextualInteractiveMode:
             tasks=self.tasks,
             logger=self.logger,
             output_adapter=output_adapter,
+            code_root=self._code_root,
         )
 
         # Create ScrappyApp with InteractiveMode, output adapter, and user theme

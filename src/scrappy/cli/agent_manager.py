@@ -3,6 +3,7 @@ Code agent management for the CLI.
 Handles running and managing code execution agents with human approval.
 """
 
+import os
 from typing import TYPE_CHECKING, Optional
 
 from scrappy.undo import create_undo_point, UndoError
@@ -24,6 +25,7 @@ class CLIAgentManager:
         io: CLIIOProtocol,
         user_interaction: Optional["UserInteractionProtocol"] = None,
         langgraph_bridge: Optional["LangGraphBridge"] = None,
+        code_root: Optional[str] = None,
     ):
         """Initialize agent manager.
 
@@ -34,6 +36,10 @@ class CLIAgentManager:
                 Defaults to CLIUserInteraction if not provided.
             langgraph_bridge: Optional LangGraph bridge for TUI mode.
                 When provided, run_agent uses LangGraph instead of CodeAgent.
+            code_root: Code working directory captured once at CLI composition.
+                Appended after the existing signature so current positional callers
+                are unaffected. When omitted this standalone entry snapshots its own
+                default once, rather than re-reading ambient CWD per invocation.
         """
         self.orchestrator = orchestrator
         self.io = io  # Store directly per CLAUDE.md DI principles
@@ -41,6 +47,8 @@ class CLIAgentManager:
         self._interaction = user_interaction or CLIUserInteraction(io)
         # LangGraph bridge for TUI mode
         self._langgraph_bridge = langgraph_bridge
+        # Code root is captured ONCE here, never re-read per invocation.
+        self._code_root: str = code_root if code_root is not None else os.getcwd()
 
     def cancel(self) -> None:
         """Cancel the currently running agent if any."""
@@ -109,8 +117,6 @@ class CLIAgentManager:
             dry_run: Whether this is a dry run (currently ignored for LangGraph)
             dashboard: Dashboard instance if enabled
         """
-        import os
-
         io = self.io
 
         # Minimal config output - task is shown by the bridge
@@ -141,7 +147,7 @@ class CLIAgentManager:
             # The bridge handles all HITL confirmations via ThreadSafeAsyncBridge
             result = bridge.run_agent(
                 task=task,
-                working_dir=os.getcwd(),
+                working_dir=self._code_root,
             )
 
             lgr.debug("_run_langgraph_agent: bridge.run_agent returned, result.success=%s, result.cancelled=%s",

@@ -40,6 +40,7 @@ class InteractiveMode:
         logger: CLILogger,
         session_saver: SessionSaverProtocol,
         theme: Optional[ThemeProtocol] = None,
+        code_root: Optional[str] = None,
     ) -> None:
         """
         Initialize InteractiveMode.
@@ -56,6 +57,10 @@ class InteractiveMode:
             logger: Logger for structured logging.
             session_saver: Seam for saving the session on exit.
             theme: Optional theme for consistent styling.
+            code_root: Code working directory captured once at CLI composition.
+                Appended after the existing signature so current callers are
+                unaffected. When omitted this standalone entry snapshots its own
+                default once, rather than re-reading ambient CWD per invocation.
         """
         from scrappy.infrastructure.theme import DEFAULT_THEME
 
@@ -70,6 +75,8 @@ class InteractiveMode:
         self.logger = logger
         self.session_saver = session_saver
         self._theme = theme or DEFAULT_THEME
+        # Code root is captured ONCE here, never re-read per invocation.
+        self._code_root: str = code_root if code_root is not None else os.getcwd()
         # LangGraph bridge for unified chat (set later via set_langgraph_bridge)
         self._langgraph_bridge: Optional["LangGraphBridge"] = None
 
@@ -116,7 +123,7 @@ class InteractiveMode:
             logger.info("Chat mode: calling run_agent with tier=chat")
             result = bridge.run_agent(
                 task=user_input,
-                working_dir=os.getcwd(),
+                working_dir=self._code_root,
                 tier="chat",
             )
 

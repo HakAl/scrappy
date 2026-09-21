@@ -110,6 +110,16 @@ class CLI:
 
         # Initialize dependencies using factory methods
         self.io = io or self._create_default_io()
+
+        # Capture the CODE working directory ONCE, here, UNCONDITIONALLY, and
+        # BEFORE the orchestrator is selected below. Capturing inside
+        # _create_default_orchestrator instead would miss every INJECTED
+        # orchestrator, since the `or` short-circuits before that method runs.
+        # Every consumer reuses this value; none re-reads ambient CWD, so a CWD
+        # change after construction cannot retarget an already-composed CLI.
+        # This is the CODE root and is never derived from any storage provider.
+        self._code_root: str = str(Path.cwd())
+
         # The default orchestrator is built as a bare object here; its provider
         # probing / brain setup / exploration (orch.initialize) is deferred to
         # CLI.initialize() so construction performs no I/O. An injected orchestrator
@@ -146,6 +156,7 @@ class CLI:
             self.io,
             theme=self._theme,
             api_key_service=self._api_key_service,
+            code_root=self._code_root,
         )
         self.display = handlers['display']
         self.session_mgr = handlers['session_mgr']
@@ -277,11 +288,12 @@ class CLI:
         dependencies only.
         """
         return AgentOrchestrator(
-            # Resolved here, at the CLI entry point, which is where the
-            # working directory may legitimately be read. Downstream modules
-            # receive an absolute scan root instead of a relative one they
-            # would each re-resolve later.
-            project_path=str(Path.cwd()),
+            # REUSES the code root captured once in __init__ rather than taking a
+            # second, independent Path.cwd() reading. Downstream modules receive an
+            # absolute scan root instead of a relative one they would each
+            # re-resolve later, and the default and injected orchestrator paths now
+            # agree on exactly one captured value.
+            project_path=self._code_root,
             context_aware=self._context_aware,
             enable_semantic_search=True,  # Enable for CLI usage
             path_provider=self._path_provider,
@@ -362,6 +374,7 @@ class CLI:
             cli=self,  # Pass CLI reference for handler reinitialization with bridge
             path_provider=self._path_provider,
             api_key_service=self._api_key_service,
+            code_root=self._code_root,
         )
 
     def _show_semantic_search_progress(self):
@@ -527,11 +540,15 @@ class CLI:
         # Re-create handlers that use user interaction
         from .agent_manager import CLIAgentManager
 
+        # The rebuilt handler REUSES the root captured at composition. It must not
+        # re-snapshot ambient CWD here: this rebuild happens well after __init__,
+        # by which time the process working directory may have moved.
         self.agent_mgr = CLIAgentManager(
             self.orchestrator,
             self.io,
             interaction,
             langgraph_bridge=langgraph_bridge,
+            code_root=self._code_root,
         )
 
     def interactive_mode(self):

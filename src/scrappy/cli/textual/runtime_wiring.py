@@ -32,8 +32,14 @@ def create_textual_runtime_session(
     tasks: "CLITaskExecution",
     logger: "CLILogger",
     output_adapter: "TextualOutputAdapter",
+    code_root: Optional[str] = None,
 ) -> "InteractiveMode":
-    """Create InteractiveMode and route orchestrator output through Textual."""
+    """Create InteractiveMode and route orchestrator output through Textual.
+
+    ``code_root`` is the code working directory captured once at CLI composition.
+    It is forwarded rather than re-derived so that a chat invocation started after
+    the process CWD has moved still operates on the directory the CLI was built for.
+    """
     from ..interactive import InteractiveMode
     from ..output_bridge import OutputBridge
 
@@ -49,6 +55,7 @@ def create_textual_runtime_session(
         tasks=tasks,
         logger=logger,
         session_saver=command_router.session_saver,
+        code_root=code_root,
     )
 
 
@@ -77,8 +84,18 @@ def wire_textual_runtime(
         from .langgraph_bridge import LangGraphBridge
         from scrappy.graph.tools import ToolAdapter
 
+        from scrappy.agent_tools.tools.task_tools import MarkdownTaskStorage
+
         # Owned by the app so cleanup happens in one place.
         app._tool_adapter = ToolAdapter.create_default()
+
+        # Compose task storage from the APP-selected path provider, never from the
+        # CLI. ScrappyApp.__init__ always assigns _path_provider with explicit-None
+        # selection, so this holds the injected provider even when cli is None.
+        # Selecting via cli and falling back to a fresh default would silently drop
+        # an explicitly injected provider, which is exactly the app-level injection
+        # path a caller uses.
+        task_storage = MarkdownTaskStorage(app._path_provider.todo_file())
 
         langgraph_bridge = LangGraphBridge(
             app=app,
@@ -86,6 +103,7 @@ def wire_textual_runtime(
             output_adapter=output_adapter,
             orchestrator=orchestrator,
             tool_adapter=app._tool_adapter,
+            task_storage=task_storage,
         )
 
     if cli is not None:

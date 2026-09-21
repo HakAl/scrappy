@@ -491,6 +491,7 @@ class ScrappyApp(App):
             tasks=self._cli.tasks,
             logger=self._cli.logger,
             output_adapter=self.output_adapter,
+            code_root=self._cli._code_root,
         )
 
         wire_textual_runtime(
