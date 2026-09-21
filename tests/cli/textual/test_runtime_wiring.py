@@ -1,5 +1,6 @@
 """Tests for shared Textual runtime wiring."""
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -9,10 +10,19 @@ from scrappy.cli.textual.runtime_wiring import (
 )
 
 
-def create_runtime(orchestrator):
-    """Create lightweight mocks for runtime wiring tests."""
+def create_runtime(orchestrator, todo_file=None):
+    """Create lightweight mocks for runtime wiring tests.
+
+    ``app._path_provider`` is given a CONTROLLED provider rather than being left as
+    an auto-created Mock attribute. Storage composition at the wiring seam calls
+    ``todo_file()`` for real, so an auto-Mock would silently produce a Mock-shaped
+    path and the test would not be exercising real composition.
+    """
     app = Mock()
     app.bridge = Mock()
+    app._path_provider = SimpleNamespace(
+        todo_file=lambda: todo_file if todo_file is not None else Path("/controlled/TODO.md")
+    )
     output_adapter = Mock()
     io = Mock()
     interactive_mode = Mock()
@@ -55,6 +65,7 @@ def test_create_textual_runtime_session_builds_interactive_mode(
         tasks=tasks,
         logger=logger,
         output_adapter=output_adapter,
+        code_root="/captured/code/root",
     )
 
     assert result is interactive_mode
@@ -71,6 +82,7 @@ def test_create_textual_runtime_session_builds_interactive_mode(
         tasks=tasks,
         logger=logger,
         session_saver=command_router.session_saver,
+        code_root="/captured/code/root",
     )
 
 

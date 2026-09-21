@@ -25,6 +25,7 @@ def create_mode(orchestrator, cli=None):
         io=io,
         cli=cli,
         config=config,
+        code_root="/captured/code/root",
     )
 
 
@@ -61,6 +62,7 @@ def test_run_skips_langgraph_when_orchestrator_lacks_streaming(
         tasks=mode.tasks,
         logger=mode.logger,
         output_adapter=mode.io.output_sink,
+        code_root="/captured/code/root",
     )
     mock_wire_runtime.assert_called_once_with(
         app=app,
