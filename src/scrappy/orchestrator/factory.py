@@ -290,36 +290,44 @@ class OrchestratorFactory:
         return BackgroundTaskManager()
 
     def create_codebase_context(self) -> CodebaseContextProtocol:
-        """Create default codebase context with semantic search if enabled."""
-        context = CodebaseContext(self.project_path)
+        """Create default codebase context with semantic search if enabled.
 
-        if self.enable_semantic_search:
+        project_path selects the code to SCAN; the injected provider selects
+        where derived state is STORED. Both are forwarded, and neither is
+        derived from the other.
+        """
+        context = CodebaseContext(
+            self.project_path,
+            path_provider=self._path_provider,
+        )
+
+        # The project_path gate preserves today's behaviour: the previous
+        # implementation derived db_path from project_path and skipped
+        # configuration and background start whenever it was absent.
+        if self.enable_semantic_search and self.project_path:
             try:
-                from ..context.semantic.config import SemanticIndexConfig
                 from ..context.semantic.state import LanceDBIndexStateManager
                 from ..context.semantic.decision import ThresholdDecisionMaker
-                from ..context.semantic_manager import SemanticSearchManager
+                from ..context.semantic_manager import bind_storage_defaults
 
-                config = SemanticIndexConfig()
-                db_path = Path(self.project_path) / config.db_dir_name if self.project_path else None
+                config = bind_storage_defaults(self._path_provider)
+                db_path = Path(config.db_dir_name)
 
-                if db_path:
-                    state_manager = LanceDBIndexStateManager(db_path)
-                    decision_maker = ThresholdDecisionMaker(config)
+                state_manager = LanceDBIndexStateManager(db_path)
+                decision_maker = ThresholdDecisionMaker(config)
 
-                    # Create semantic manager with dependencies
-                    semantic_manager = SemanticSearchManager(
-                        project_path=Path(self.project_path) if self.project_path else Path("."),
-                        config=config,
-                        state_manager=state_manager,
-                        decision_maker=decision_maker,
-                    )
+                # Configure through the context's own API rather than
+                # replacing the manager behind its back: that keeps one
+                # staleness checker shared between the two and avoids a
+                # second copy of the default composition.
+                context.configure_semantic_search(
+                    config=config,
+                    state_manager=state_manager,
+                    decision_maker=decision_maker,
+                )
 
-                    # Replace default semantic manager with configured one
-                    context._semantic_manager = semantic_manager
-
-                    # Start background initialization
-                    context.start_background_initialization()
+                # Start background initialization
+                context.start_background_initialization()
             except ImportError as e:
                 # Semantic search dependencies not available, fall back to basic context
                 logger.warning(f"Semantic search dependencies not available: {e}")

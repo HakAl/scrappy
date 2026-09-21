@@ -656,6 +656,36 @@ class PathProviderProtocol(Protocol):
         """
         ...
 
+    def todo_file(self) -> Path:
+        """
+        Get path to the task markdown file.
+
+        Returns:
+            Path to .todo.md
+        """
+        ...
+
+    def project_root(self) -> Path:
+        """
+        Get the project root directory this provider stores against.
+
+        This is the provider's STORAGE root. It is not a scan root, and
+        callers must not use it to decide which directory to explore.
+
+        Returns:
+            Path to the project root
+        """
+        ...
+
+    def workspace_display(self) -> str:
+        """
+        Get the project root formatted for display.
+
+        Returns:
+            Display string for the workspace, with ~ substituted for home
+        """
+        ...
+
 
 class BackgroundInitializerProtocol(Protocol):
     """

@@ -463,7 +463,11 @@ class ScrappyApp(App):
 
         # Display status lines now that CLI is ready (header already shown on mount)
         from scrappy.cli.interactive_banner import display_banner_status
-        display_banner_status(self._cli.io, api_key_service=self._api_key_service)
+        display_banner_status(
+            self._cli.io,
+            api_key_service=self._api_key_service,
+            path_provider=self._path_provider,
+        )
         self.call_after_refresh(self.restore_mouse_support)
         self.call_after_refresh(self._signal_integration_ready)
 

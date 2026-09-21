@@ -212,10 +212,14 @@ def test_on_cliready_reasserts_mouse_support_after_banner_status():
     ):
         app.on_tui_event_message(TuiEventMessage(CliReadyChanged(cli=cli)))
 
-    # The app hands the banner its own service rather than letting the banner
-    # build one from the default config path.
+    # The app hands the banner its own service AND its own path provider,
+    # rather than letting the banner build either from a default: the service
+    # would read the default config path, and the provider would be composed
+    # from the current working directory (scrappy-i2jo PR-5).
     mock_banner_status.assert_called_once_with(
-        cli.io, api_key_service=api_key_service
+        cli.io,
+        api_key_service=api_key_service,
+        path_provider=app._path_provider,
     )
     assert mock_call_after_refresh.call_args_list == [
         call(app.restore_mouse_support),

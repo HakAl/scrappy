@@ -214,6 +214,13 @@ def create_default_path_provider(project_root: Path) -> ScrappyPathProvider:
     import time; it is deliberately not recomputed from Path.home(), because
     that would convert an import-bound default into a call-time one.
 
+    The project root is RESOLVED here, for the same reason: several callers
+    compose a provider from a relative root (Path(".")) and then use it much
+    later, after the working directory may have moved. Resolving at
+    composition snapshots the root once instead of re-deriving it at each
+    use. The directory selected in production is unchanged; only the stored
+    representation becomes absolute.
+
     Args:
         project_root: Root directory of the project
 
@@ -221,7 +228,7 @@ def create_default_path_provider(project_root: Path) -> ScrappyPathProvider:
         A provider whose user-level locations match production exactly.
     """
     return ScrappyPathProvider(
-        project_root,
+        project_root.resolve(),
         user_paths=UserPaths(
             user_data_dir=Path(user_data_dir(APP_NAME)),
             user_config_dir=Path(user_config_dir(APP_NAME)),

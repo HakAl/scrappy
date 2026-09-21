@@ -22,7 +22,7 @@ from ..infrastructure.threading import (
     EventQueueProtocol,
     ThreadSafeEventQueue,
 )
-from .semantic_manager import SemanticSearchManager
+from .semantic_manager import SemanticSearchManager, bind_storage_defaults
 from .augmenter import ContextAugmenter
 from .protocols import (
     SemanticSearchManagerProtocol,
@@ -133,10 +133,23 @@ class CodebaseContext:
         # File collector for semantic search
         self._file_collector = file_collector
 
+        # === Effective semantic config ===
+        # Storage comes from the provider, scanning does not. Bound once here
+        # so every route below selects the same destination.
+        self._semantic_config = bind_storage_defaults(self._path_provider)
+
         # === Staleness Checker ===
         # Create staleness checker FIRST so it can be shared with SemanticSearchManager
         # This prevents duplicate instances that get out of sync (see AGENT_BUGS.md)
-        self._staleness_checker = staleness_checker or self._create_default_staleness_checker()
+        # Remember whether the caller supplied one: a user-injected checker
+        # survives manager replacement, and that is decided by explicit None
+        # handling, never by comparing a checker against a fresh default.
+        self._staleness_checker_injected = staleness_checker is not None
+        self._staleness_checker = (
+            staleness_checker
+            if staleness_checker is not None
+            else self._create_default_staleness_checker()
+        )
 
         # === Semantic Search Manager (extracted) ===
         # If semantic_manager is provided, use it; otherwise create default
@@ -148,6 +161,7 @@ class CodebaseContext:
                 project_path=self.project_path,
                 event_queue=self._event_queue,
                 io=self._io,
+                config=self._semantic_config,
                 staleness_checker=self._staleness_checker,
             )
 
@@ -247,6 +261,36 @@ class CodebaseContext:
         """Create default project detector."""
         return ProjectDetector(self.project_path)
 
+    def _shared_staleness_checker(
+        self, config: 'SemanticIndexConfig'
+    ) -> StalenessCheckerProtocol:
+        """
+        Get the checker this context and its semantic manager must share.
+
+        A checker the caller injected is preserved across manager
+        replacement; that is decided by explicit None handling recorded at
+        construction, not by comparing the current checker against a freshly
+        built default. Otherwise the default is rebuilt from the incoming
+        config so it stores fingerprints at the selected destination, and
+        BOTH this context and the replacement manager adopt it.
+
+        Args:
+            config: The effective configuration the manager is being given
+
+        Returns:
+            The single checker shared by the context and its manager
+        """
+        if self._staleness_checker_injected:
+            return self._staleness_checker
+
+        from .staleness import StalenessChecker
+
+        self._staleness_checker = StalenessChecker(
+            root_path=self.project_path,
+            config=config,
+        )
+        return self._staleness_checker
+
     def _create_default_staleness_checker(self) -> StalenessCheckerProtocol:
         """
         Create default staleness checker for file change detection.
@@ -255,14 +299,13 @@ class CodebaseContext:
             StalenessChecker with default configuration
         """
         from .staleness import StalenessChecker
-        from .semantic.config import SemanticIndexConfig
 
-        # Use default config for staleness settings
-        config = SemanticIndexConfig()
-
+        # root_path is the SCAN root; the config selects where fingerprints
+        # are STORED. Both roles are present in this one constructor, so the
+        # two arguments must not be collapsed into each other.
         return StalenessChecker(
             root_path=self.project_path,
-            config=config,
+            config=self._semantic_config,
         )
 
     def _create_default_file_collector(self) -> 'FileCollectorProtocol':
@@ -342,7 +385,10 @@ class CodebaseContext:
             state_manager: Index state persistence manager
             decision_maker: Indexing decision logic
         """
-        # Re-create semantic manager with new dependencies
+        # Re-create semantic manager with new dependencies, sharing ONE
+        # staleness checker with this context. Supplying most dependencies
+        # does not carry the checker: without this the replacement manager
+        # would build its own and the two would drift apart.
         self._semantic_manager = SemanticSearchManager(
             project_path=self.project_path,
             event_queue=self._event_queue,
@@ -350,6 +396,7 @@ class CodebaseContext:
             config=config,
             state_manager=state_manager,
             decision_maker=decision_maker,
+            staleness_checker=self._shared_staleness_checker(config),
         )
 
         # Re-apply progress callback if it was set

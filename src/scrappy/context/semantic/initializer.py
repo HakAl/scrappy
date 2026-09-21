@@ -42,18 +42,24 @@ class SemanticSearchInitializer:
         self,
         project_path: Path,
         event_queue: Optional["EventQueueProtocol"] = None,
+        config: Optional[SemanticIndexConfig] = None,
     ):
         """
         Initialize semantic search loader.
 
         Args:
-            project_path: Path to project root for semantic search
+            project_path: Path to project root for semantic search. This is a
+                        SCAN root; it selects which code is indexed, not where
+                        the index is stored.
             event_queue: Optional event queue for main-thread-safe notifications.
                         When provided, completion/failure events are submitted
                         to the queue instead of using callback threads.
+            config: Index configuration selecting storage. When None, the
+                        global defaults apply, preserving standalone behaviour.
         """
         self._project_path = project_path
         self._event_queue = event_queue
+        self._config = config
         self._managed_thread: Optional[ManagedThread] = None
         self._complete = False
         self._result: Optional[SemanticSearchProtocol] = None
@@ -241,8 +247,9 @@ class SemanticSearchInitializer:
                 logger.debug("Shutdown requested before database init")
                 return
 
-            # Note: db_dir_name is the base path; actual path includes model subdirectory
-            config = SemanticIndexConfig(db_dir_name=".scrappy/lancedb")
+            # Note: db_dir_name is the base path; actual path includes model subdirectory.
+            # An injected config selects storage; None keeps the global defaults.
+            config = self._config if self._config is not None else SemanticIndexConfig()
             search_provider = LanceDBSearchProvider(
                 self._project_path,
                 chunker,

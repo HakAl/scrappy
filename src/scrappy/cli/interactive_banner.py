@@ -12,9 +12,9 @@ from rich.text import Text
 from scrappy import __version__
 from scrappy.infrastructure.config.api_keys import ApiKeyConfigServiceProtocol
 from scrappy.infrastructure.paths import (
-    ScrappyPathProvider,
     create_default_path_provider,
 )
+from scrappy.infrastructure.protocols import PathProviderProtocol
 from scrappy.orchestrator.litellm_config import get_configured_models
 from scrappy.orchestrator.provider_definitions import AGENT_PROVIDER_GUIDANCE
 from scrappy.sandbox.docker_executor import DockerExecutor
@@ -149,7 +149,7 @@ def _get_docker_status(project_dir: str) -> dict:
 def display_banner_status(
     io: "UnifiedIOProtocol",
     api_key_service: ApiKeyConfigServiceProtocol,
-    path_provider: Optional[ScrappyPathProvider] = None,
+    path_provider: Optional[PathProviderProtocol] = None,
 ) -> None:
     """Display banner status lines (providers + workspace).
 
@@ -179,7 +179,7 @@ def display_banner_status(
     _print_rich(io, f"[green]●[/] Workspace: [cyan]{workspace}[/]")
 
     # Show Docker/sandbox status
-    docker_status = _get_docker_status(str(path_provider.project_root))
+    docker_status = _get_docker_status(str(path_provider.project_root()))
     if docker_status["available"]:
         image = docker_status.get("image", "unknown")
         _print_rich(io, f"[green]●[/] Docker: [cyan]{image}[/]")
@@ -191,7 +191,7 @@ def display_banner_status(
 def display_banner(
     io: "UnifiedIOProtocol",
     api_key_service: ApiKeyConfigServiceProtocol,
-    path_provider: Optional[ScrappyPathProvider] = None,
+    path_provider: Optional[PathProviderProtocol] = None,
 ) -> None:
     """Display welcome banner with ASCII art, providers, and workspace.
 
