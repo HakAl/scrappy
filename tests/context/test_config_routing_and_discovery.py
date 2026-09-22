@@ -283,3 +283,110 @@ def test_nearest_directory_wins_over_an_ancestor(tmp_path):
 
     assert found is not None
     assert found.resolve() == (start / "AGENTS.md").resolve()
+
+
+# ---------------------------------------------------------------------------
+# F3: positional API compatibility. Adding an optional parameter in the wrong
+# position silently REBINDS existing positional callers, and keyword-only tests
+# cannot see it. These bind old-style calls and assert where each argument
+# lands.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.no_contained_config_seed
+def test_orchestrator_positional_api_key_service_still_binds_to_the_service():
+    """An old positional api_key_service must NOT land on cli_config."""
+    import inspect
+    from unittest.mock import Mock
+
+    from scrappy.orchestrator.core import AgentOrchestrator
+
+    sig = inspect.signature(AgentOrchestrator.__init__)
+    names = [n for n, p in sig.parameters.items()
+             if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+    assert names.index("cli_config") > names.index("api_key_service"), (
+        "cli_config must be appended AFTER api_key_service, or an existing "
+        "positional service rebinds to configuration"
+    )
+
+    service = Mock(name="api_key_service")
+    positional = [None] * (names.index("api_key_service") - 1) + [service]
+    bound = sig.bind(Mock(name="self"), *positional)
+
+    assert bound.arguments["api_key_service"] is service
+    assert "cli_config" not in bound.arguments, "cli_config must remain defaulted"
+
+
+@pytest.mark.no_contained_config_seed
+def test_factory_positional_semantic_search_flag_is_not_captured_by_cli_config():
+    """An old positional enable_semantic_search=False must stay False.
+
+    Behavioural, not just signature shape: the factory is really constructed
+    with the flag in its historical positional slot.
+    """
+    import inspect
+    from unittest.mock import Mock
+
+    from scrappy.orchestrator.factory import OrchestratorFactory
+
+    sig = inspect.signature(OrchestratorFactory.__init__)
+    assert sig.parameters["cli_config"].kind is inspect.Parameter.KEYWORD_ONLY, (
+        "cli_config must be keyword-only so it cannot absorb a positional flag"
+    )
+
+    factory = OrchestratorFactory(
+        None,          # project_path
+        24,            # cache_ttl_hours
+        True,          # context_aware
+        None,          # created_at
+        None,          # path_provider
+        None,          # config
+        False,         # enable_semantic_search, the historical positional slot
+        api_key_service=Mock(),
+    )
+
+    assert factory.enable_semantic_search is False, (
+        "positional False was captured by the new parameter"
+    )
+    assert factory._cli_config is None
+
+
+# ---------------------------------------------------------------------------
+# F5: fixture lifecycle. The fixture claims to restore the global AND the
+# factory cache. These two run in file order: the first deliberately dirties
+# both, the second asserts neither leaked. Restoring only the global would
+# leave _factory._cached_config cleared rather than restored, and this pair is
+# what detects that.
+# ---------------------------------------------------------------------------
+
+LIFECYCLE_SENTINEL = 0.4242
+
+
+def test_lifecycle_a_dirties_both_the_global_and_the_factory_cache(tmp_path):
+    """Dirty both caches. Teardown must undo this before the next test."""
+    from scrappy.cli import config_factory as cf
+
+    path = write_config(tmp_path, LIFECYCLE_SENTINEL)
+    dirty = cf.CLIConfigFactory().create_from_file(str(path))
+
+    cf.set_config(dirty)
+    cf._factory._cached_config = dirty
+
+    assert cf.get_config().temperature_default == LIFECYCLE_SENTINEL
+    assert cf._factory._cached_config is dirty
+
+
+def test_lifecycle_b_sees_no_leak_from_the_previous_test():
+    """Neither cache may carry the previous test's object."""
+    from tests.conftest import CONTAINED_CONFIG_SEED
+    from scrappy.cli import config_factory as cf
+
+    assert cf.get_config().temperature_default != LIFECYCLE_SENTINEL, (
+        "the dirtied global leaked across the fixture boundary"
+    )
+    assert cf.get_config().temperature_default == CONTAINED_CONFIG_SEED["temperature_default"]
+
+    cached = cf._factory._cached_config
+    assert cached is None or cached.temperature_default != LIFECYCLE_SENTINEL, (
+        "the dirtied factory cache leaked across the fixture boundary"
+    )

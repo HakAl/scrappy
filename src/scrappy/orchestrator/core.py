@@ -122,8 +122,12 @@ class AgentOrchestrator:
         provider_status_tracker: Optional[ProviderStatusTrackerProtocol] = None,
         model_selector: Optional[ModelSelectionServiceProtocol] = None,
         path_provider: Optional[PathProviderProtocol] = None,
-        cli_config: Optional["CLIConfig"] = None,
         api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
+        # APPENDED after the existing final parameter. Inserting it earlier
+        # silently rebinds old POSITIONAL callers: an existing positional
+        # api_key_service would have bound to cli_config and the service would
+        # have defaulted, selecting a different API-key service.
+        cli_config: Optional["CLIConfig"] = None,
     ):
         """
         Initialize orchestrator (dependencies only - NO side effects).

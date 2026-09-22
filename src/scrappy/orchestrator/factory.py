@@ -144,10 +144,13 @@ class OrchestratorFactory:
         created_at: Optional[datetime] = None,
         path_provider: Optional[PathProviderProtocol] = None,
         config: Optional[OrchestratorConfig] = None,
-        cli_config: Optional["CLIConfig"] = None,
         enable_semantic_search: bool = True,
         *,
         api_key_service: ApiKeyConfigServiceProtocol,
+        # KEYWORD-ONLY. Placed here, not before enable_semantic_search, because
+        # an existing positional `False` for enable_semantic_search would
+        # otherwise bind to cli_config and leave semantic search enabled.
+        cli_config: Optional["CLIConfig"] = None,
     ):
         """
         Initialize factory with configuration.
