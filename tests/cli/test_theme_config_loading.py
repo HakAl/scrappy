@@ -5,6 +5,8 @@ Verifies that theme settings load correctly from YAML and JSON config files,
 including all 10 color properties and preset selection.
 """
 
+import pytest
+
 import json
 from pathlib import Path
 
@@ -16,6 +18,12 @@ from scrappy.infrastructure.theme import (
 )
 
   # Ignore if directory still locked or not empty
+
+
+# Seed-only opt-out (PR-7 brief S4a): direct-parser tests load theme configuration from real files through CLIConfigFactory.
+# Layer-1 containment still applies, so this file never reads developer
+# configuration; it only declines the seeded global.
+pytestmark = pytest.mark.no_contained_config_seed
 
 
 class TestThemeLoadingFromYAML:

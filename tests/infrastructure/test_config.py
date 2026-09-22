@@ -24,6 +24,11 @@ from scrappy.infrastructure.config import (
     default_validator,
 )
 
+# Seed-only opt-out (PR-7 brief S4a): direct-parser tests over ConfigLoader.
+# Layer-1 containment still applies, so this file never reads developer
+# configuration; it only declines the seeded global.
+pytestmark = pytest.mark.no_contained_config_seed
+
 
 # Test Config Classes
 

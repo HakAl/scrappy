@@ -1,5 +1,7 @@
 """Tests for agent rules loader (AGENTS.md support)."""
 
+import pytest
+
 from pathlib import Path
 
 from scrappy.context.agent_rules_loader import (
@@ -9,6 +11,12 @@ from scrappy.context.agent_rules_loader import (
     AgentRulesLoaderProtocol,
     AGENT_FILES,
 )
+
+
+# Seed-only opt-out (PR-7 brief S4a): discovery tests must exercise real discovery with controlled inputs.
+# Layer-1 containment still applies, so this file never reads developer
+# configuration; it only declines the seeded global.
+pytestmark = pytest.mark.no_contained_config_seed
 
 
 class TestAgentRulesLoader:
