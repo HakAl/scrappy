@@ -119,8 +119,12 @@ def roots(tmp_path, monkeypatch):
     # USERPROFILE is what Windows consults. Binding BOTH makes every home lookup
     # under these tests land in the disposable profile, so this root governs the
     # exercised paths instead of merely being asserted distinct from them.
-    # ScrappyPathProvider.command_history_file() (paths.py:139) resolves through
-    # Path.home(), so that is a real consumer, not a hypothetical one.
+    # Binding the environment is NECESSARY BUT NOT SUFFICIENT on its own: the
+    # production defaults also resolve through LEGACY_USER_DIR and
+    # USER_CONFIG_FILE, which are bound AT IMPORT and so are already fixed
+    # before this fixture runs, and Windows platform-directory discovery never
+    # consults USERPROFILE. Those compositions are bound by INJECTING a
+    # controlled provider, which is what `make_cli` now does.
     #
     # This also removes the defect behind PR53. The fixture previously read
     # os.environ["HOME"] UNCONDITIONALLY. HOME is POSIX-only and UNSET on
@@ -621,9 +625,15 @@ def test_default_orchestrator_reuses_the_same_captured_root(roots, monkeypatch):
         "OrchestratorFactory.ensure_user_dir did not land in the disposable "
         f"profile; {user_dir} absent"
     )
-    assert not (Path.home() / ".scrappy_user").exists() or Path.home() == roots.profile, (
-        "a user level write escaped to the resolved home profile"
-    )
+    # The previous companion assertion here was VACUOUS: it allowed the case
+    # Path.home() == roots.profile, which this fixture GUARANTEES, so the `or`
+    # short-circuited and nothing could ever fail it. Replaced with a check that
+    # can actually fail: the user-level write must not have landed in any of the
+    # other three roots, which is where a misrouted provider would put it.
+    for other in (roots.code_root, roots.storage_root, roots.process_cwd):
+        assert not (other / ".scrappy_user").exists(), (
+            f"user level write landed in the wrong root: {other}"
+        )
 
     assert moved, "Path.cwd was never read, so the capture seam went unexercised"
     # The capture ran before the move and still holds the code root.
@@ -739,7 +749,15 @@ def test_real_app_setup_interactive_mode_forwards_and_consumes_captured_root(roo
 
     cli = make_cli(roots, orchestrator=Mock())
 
-    app = ScrappyApp(cli_factory=lambda: Mock(), api_key_service=MockApiKeyConfigService())
+    # Provider passed EXPLICITLY. A bare ScrappyApp selects the production
+    # default, which resolves through import-bound module attributes the fixture
+    # cannot reach. Reusing the CLI's own injected provider also keeps the app
+    # and the CLI on ONE provider instead of two independently resolved ones.
+    app = ScrappyApp(
+        cli_factory=lambda: Mock(),
+        api_key_service=MockApiKeyConfigService(),
+        path_provider=cli._path_provider,
+    )
     app._cli = cli
     app.output_adapter = Mock()
 
@@ -1013,3 +1031,57 @@ def test_no_live_storage_is_serialized_into_agent_state(roots):
     assert all(value is not storage for value in dumped.values())
 
     assert final_state.working_dir == str(roots.code_root.resolve())
+
+
+# ---------------------------------------------------------------------------
+# PR53 regression: the fixture must survive a MISSING ambient home.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def no_ambient_home(monkeypatch):
+    """Remove both ambient home variables BEFORE the `roots` fixture runs."""
+    monkeypatch.delenv("HOME", raising=False)
+    monkeypatch.delenv("USERPROFILE", raising=False)
+
+
+def test_missing_ambient_home_still_routes_to_the_disposable_profile(
+    no_ambient_home, roots
+):
+    """PR53 regression, at the point that actually broke: FIXTURE SETUP.
+
+    ORDERING IS THE PROOF. `no_ambient_home` is requested BEFORE `roots`, so
+    pytest resolves it first and `roots` builds with no ambient home present.
+    That is the Windows condition. Every contained baseline run has HOME
+    assigned by the launcher, so without this test that path is exercised on no
+    platform we measure, which is exactly how the original defect survived.
+
+    A REAL consumer is then driven rather than Path.home() alone:
+    OrchestratorFactory calls path_provider.ensure_user_dir() (factory.py:353),
+    and the destination is CHECKED ON DISK, both positively and against the
+    three other roots.
+    """
+    from scrappy.infrastructure.paths import TempPathProvider
+    from scrappy.orchestrator.factory import OrchestratorFactory
+    from tests.cli.helpers import MockApiKeyConfigService
+
+    # The fixture rebound both variables despite neither existing beforehand.
+    assert Path(os.environ["HOME"]).resolve() == roots.profile.resolve()
+    assert Path(os.environ["USERPROFILE"]).resolve() == roots.profile.resolve()
+
+    factory = OrchestratorFactory(
+        project_path=str(roots.code_root),
+        path_provider=TempPathProvider(roots.profile),
+        enable_semantic_search=False,
+        api_key_service=MockApiKeyConfigService(),
+    )
+    factory.create_all_components(task_history_recorder=lambda task: None)
+
+    user_dir = roots.profile / ".scrappy_user"
+    assert user_dir.is_dir(), (
+        f"real consumer did not write to the disposable profile; {user_dir} absent"
+    )
+    for other in (roots.code_root, roots.storage_root, roots.process_cwd):
+        assert not (other / ".scrappy_user").exists(), (
+            f"user level write landed in the wrong root: {other}"
+        )
