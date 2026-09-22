@@ -55,7 +55,7 @@ class TextualInteractiveMode:
         logger: "CLILogger",
         io: UnifiedIO,
         cli: "CLI" = None,
-        config: "CLIConfig" = None,
+        config: Optional["CLIConfig"] = None,
         path_provider: Optional[PathProviderProtocol] = None,
         api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
         code_root: Optional[str] = None
