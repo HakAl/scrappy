@@ -32,6 +32,7 @@ from .protocols import (
 )
 
 if TYPE_CHECKING:
+    from ..cli.config_factory import CLIConfig
     from ..cli.protocols import CLIIOProtocol
     from .semantic.config import SemanticIndexConfig
     from .protocols import (
@@ -71,6 +72,7 @@ class CodebaseContext:
         semantic_manager: Optional[SemanticSearchManagerProtocol] = None,
         context_augmenter: Optional[ContextAugmenterProtocol] = None,
         staleness_checker: Optional[StalenessCheckerProtocol] = None,
+        cli_config: Optional["CLIConfig"] = None,
     ):
         """
         Initialize codebase context (dependencies only - NO file I/O by default).
@@ -92,9 +94,17 @@ class CodebaseContext:
             semantic_manager: Injectable semantic search manager (default: creates SemanticSearchManager)
             context_augmenter: Injectable context augmenter (default: creates ContextAugmenter)
             staleness_checker: Injectable staleness checker for detecting file changes (default: creates StalenessChecker)
+            cli_config: CLI configuration SELECTED AT COMPOSITION, threaded down
+                from the command entry. Held with an `is None` check so a
+                falsey-but-valid object is never discarded. When None, the
+                scanner helpers keep their existing standalone fallback, so
+                behaviour is unchanged for every caller that does not supply it.
+                Named cli_config, NOT config, because OrchestratorFactory
+                already carries an unrelated `config: OrchestratorConfig`.
         """
         # Store config for factory methods
         self._initial_project_path = project_path
+        self._cli_config = cli_config
 
         self.project_path = Path(project_path or ".").resolve()
 
@@ -658,7 +668,7 @@ class CodebaseContext:
 
         # Build file contents section (limited)
         file_contents = ""
-        defaults = get_truncation_defaults()
+        defaults = get_truncation_defaults(self._cli_config)
         truncate_limit = defaults['research_large']
         for filename, content in list(self.key_files.items())[:5]:
             # Truncate to avoid token explosion
@@ -732,8 +742,26 @@ Be concise and technical. No fluff."""
         return augmenter.get_relevant_context(query, max_tokens=max_tokens)
 
     def _scan_files(self) -> dict:
-        """Scan project for source files."""
-        return self._file_scanner.scan_files(self.project_path)
+        """Scan project for source files.
+
+        Derives the scan inputs from the SELECTED configuration and passes them
+        EXPLICITLY, rather than letting FileScanner fall back to its own
+        standalone lookup. FileScanner is deliberately not modified: scan_files
+        already accepts both values, so the forwarding stays confined to this
+        caller. When no configuration was selected, both stay None and the
+        scanner's existing fallback applies unchanged.
+        """
+        extensions_by_category = None
+        skip_dirs = None
+        if self._cli_config is not None:
+            extensions_by_category, _ = get_extensions_config(self._cli_config)
+            skip_dirs = get_paths_config(self._cli_config)
+
+        return self._file_scanner.scan_files(
+            self.project_path,
+            extensions_by_category=extensions_by_category,
+            skip_dirs=skip_dirs,
+        )
 
     def _analyze_structure(self) -> dict:
         """Analyze project structure using file_index data."""
@@ -754,7 +782,7 @@ Be concise and technical. No fluff."""
 
         # Get directories (only if path is valid)
         if self._path_valid and self.project_path.exists() and self.project_path.is_dir():
-            skip_dirs = get_paths_config()
+            skip_dirs = get_paths_config(self._cli_config)
             for item in self.project_path.iterdir():
                 if item.is_dir() and not item.name.startswith('.') and item.name not in skip_dirs:
                     structure['directories'].append(item.name)
@@ -784,8 +812,8 @@ Be concise and technical. No fluff."""
 
         # Read main Python entry points
         py_files = self.file_index.get('python', [])
-        _, entry_point_files = get_extensions_config()
-        defaults = get_truncation_defaults()
+        _, entry_point_files = get_extensions_config(self._cli_config)
+        defaults = get_truncation_defaults(self._cli_config)
         truncate_priority = defaults['priority_file']
 
         for entry in entry_point_files:
@@ -885,7 +913,7 @@ Be concise and technical. No fluff."""
         # Check for config-related queries
         if any(word in query_lower for word in ['config', 'setup', 'install', 'dependency', 'require']):
             if 'requirements.txt' in self.key_files:
-                defaults = get_truncation_defaults()
+                defaults = get_truncation_defaults(self._cli_config)
                 deps = self.key_files['requirements.txt'][:defaults['error_message']]
                 relevant_parts.append(f"Dependencies:\n{deps}")
 

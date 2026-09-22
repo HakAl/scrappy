@@ -10,6 +10,7 @@ from typing import Optional, TYPE_CHECKING
 
 
 if TYPE_CHECKING:
+    from .config_factory import CLIConfig
     from .textual import ThreadSafeAsyncBridge
     from .textual.langgraph_bridge import LangGraphBridge
 
@@ -49,7 +50,8 @@ class CLI:
         theme: Optional[ThemeProtocol] = None,
         conversation_store: Optional[ConversationStoreProtocol] = None,
         path_provider: Optional[PathProviderProtocol] = None,
-        api_key_service: Optional[ApiKeyConfigServiceProtocol] = None
+        api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
+        cli_config: Optional["CLIConfig"] = None
     ):
         """
         Initialize CLI with orchestrator and component handlers.
@@ -83,6 +85,11 @@ class CLI:
                 default orchestrator, the display handler and the command router
                 (default: creates the production one).
         """
+        # Configuration SELECTED AT COMMAND ENTRY and threaded down. Held with
+        # `is None` so a falsey-but-valid object survives; when None every
+        # consumer keeps its existing standalone fallback.
+        self._cli_config = cli_config
+
         # Store config for factory methods and initialization
         self._brain = brain
         self._auto_explore = auto_explore
@@ -294,6 +301,7 @@ class CLI:
             # re-resolve later, and the default and injected orchestrator paths now
             # agree on exactly one captured value.
             project_path=self._code_root,
+            cli_config=self._cli_config,
             context_aware=self._context_aware,
             enable_semantic_search=True,  # Enable for CLI usage
             path_provider=self._path_provider,
@@ -372,6 +380,7 @@ class CLI:
             logger=self.logger,
             io=self.io,  # Pass existing TextualIO created before initialize()
             cli=self,  # Pass CLI reference for handler reinitialization with bridge
+            config=self._cli_config,
             path_provider=self._path_provider,
             api_key_service=self._api_key_service,
             code_root=self._code_root,

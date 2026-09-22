@@ -44,11 +44,52 @@ def cli(ctx, resume, no_save):
 
     # If no subcommand, start TUI
     if ctx.invoked_subcommand is None:
-        config = get_config()
-        start_tui_deferred(ctx, config.theme, resume)
+        # SELECT before the first get_config() so the cache is populated from
+        # the captured code root rather than ambient process state.
+        config = get_config(config_path=_select_config_at_entry())
+        start_tui_deferred(ctx, config.theme, resume, cli_config=config)
 
 
-def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
+def _select_config_at_entry():
+    """Select the configuration SOURCE against the captured code root, once.
+
+    Returns an absolute path string, or None to leave today's behaviour
+    untouched.
+
+    Why this must run BEFORE the first get_config(): the factory caches on the
+    first uncached call (config_factory.py:248-249), and its default-file scan
+    reads the AMBIENT process directory (`Path.cwd() / filename`,
+    config_factory.py:156-159). Whichever call happens first fixes the object
+    for the process, so an unselected first read would cache a selection made
+    against wherever the process happened to be standing, and every downstream
+    hop would then faithfully forward that wrong object.
+
+    PRECEDENCE IS PRESERVED EXACTLY, not re-ordered:
+      - An explicit CLI_CONFIG_PATH keeps its precedence: we return None and let
+        the factory honour the environment, rather than overriding it here.
+      - Otherwise the same DEFAULT_CONFIG_FILES are searched in the same order,
+        but against the code root captured ONCE here and resolved to absolute,
+        so a later CWD change cannot retarget it.
+      - If no candidate exists we return None, preserving missing-file
+        behaviour and environment merging unchanged.
+    """
+    import os
+    from pathlib import Path
+
+    from .config_factory import CLIConfigFactory
+
+    if 'CLI_CONFIG_PATH' in os.environ:
+        return None
+
+    code_root = Path.cwd().resolve()
+    for filename in CLIConfigFactory.DEFAULT_CONFIG_FILES:
+        candidate = code_root / filename
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def start_tui_deferred(ctx, theme, resume: bool = False, cli_config=None) -> None:
     """Start TUI with deferred CLI initialization.
 
     Shows the TUI skeleton instantly while CLI/orchestrator loads in background.
@@ -83,6 +124,7 @@ def start_tui_deferred(ctx, theme, resume: bool = False) -> None:
             theme=theme,
             path_provider=path_provider,
             api_key_service=api_key_service,
+            cli_config=cli_config,
         )
         cli_instance.auto_save = ctx.obj.get('auto_save', True)
 
@@ -184,7 +226,8 @@ def main():
     OutputModeContext.set_tui_mode(False)
 
     try:
-        config = get_config()
+        # Direct Click entry: same selection, same reason as the main() path.
+        config = get_config(config_path=_select_config_at_entry())
         config.validate()
     except Exception as e:
         from .logging import get_logger

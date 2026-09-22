@@ -26,6 +26,7 @@ from scrappy.infrastructure.protocols import PathProviderProtocol
 from scrappy.infrastructure.theme import ThemeProtocol, DEFAULT_THEME
 
 if TYPE_CHECKING:
+    from ..config_factory import CLIConfig
     from ..core import CLI
     from ...orchestrator.protocols import Orchestrator
     from ..textual import ThreadSafeAsyncBridge
@@ -190,7 +191,8 @@ def create_cli_from_context(
     io: Optional[CLIIOProtocol] = None,
     theme: Optional[ThemeProtocol] = None,
     path_provider: Optional[PathProviderProtocol] = None,
-    api_key_service: Optional[ApiKeyConfigServiceProtocol] = None
+    api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
+    cli_config: Optional["CLIConfig"] = None
 ) -> "CLI":
     """
     Create CLI instance from Click context object.
@@ -219,7 +221,8 @@ def create_cli_from_context(
         io=io,
         theme=theme,
         path_provider=path_provider,
-        api_key_service=api_key_service
+        api_key_service=api_key_service,
+        cli_config=cli_config
     )
     cli.initialize()
     return cli

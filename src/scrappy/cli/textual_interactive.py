@@ -98,7 +98,10 @@ class TextualInteractiveMode:
         self._api_key_service = api_key_service
         self._code_root = code_root
         # Load config from parameter or default locations
-        self._config = config or get_config()
+        # `is None`, NOT `or`. A falsey-but-valid CLIConfig must not be
+        # discarded in favour of a rediscovered global; that is the defect
+        # PR-6 fixed in tier-1 storage selection.
+        self._config = config if config is not None else get_config()
 
     def run(self) -> None:
         """Launch the Textual TUI application.
