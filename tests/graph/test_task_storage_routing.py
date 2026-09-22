@@ -102,26 +102,34 @@ def roots(tmp_path, monkeypatch):
     code_root    the directory the agent operates on
     storage_root where the selected task storage persists
     process_cwd  ambient CWD, moved here so that any code re-reading it is caught
-    profile      the ACTUAL profile root this run is executing under, resolved
-                 through Path.home() rather than an invented directory that
-                 nothing ever uses. Under the contained launcher that IS the
-                 launcher-assigned HOME, so the contained meaning is unchanged.
+    profile      a CONTROLLED DISPOSABLE profile, created here and BOUND to the
+                 platform's home resolution, so it GOVERNS what the exercised
+                 code actually sees rather than labelling a directory nothing
+                 consumes
     """
     code_root = tmp_path / "code_root"
     storage_root = tmp_path / "storage_root"
     process_cwd = tmp_path / "process_cwd"
-    for directory in (code_root, storage_root, process_cwd):
+    profile = tmp_path / "profile"
+    for directory in (code_root, storage_root, process_cwd, profile):
         directory.mkdir()
 
-    # Path.home(), NOT os.environ["HOME"]. HOME is POSIX-only and is UNSET on
-    # Windows, where the profile lives at USERPROFILE, so the direct lookup
-    # raised KeyError during FIXTURE SETUP and errored all 18 nodes in this file
-    # on every Windows CI job (PR53, run 35668397221). Nothing was asserted
-    # there; the file never ran. Path.home() resolves both platforms, and under
-    # the contained launcher it still returns the launcher-assigned HOME, so the
-    # contained measurement is unchanged. Assertions and node count are intact.
-    profile = Path.home()
-    assert profile.is_dir(), "profile root should already exist"
+    # BIND the disposable profile to the platform's home resolution, through the
+    # monkeypatch seam this fixture already uses. HOME is what POSIX consults;
+    # USERPROFILE is what Windows consults. Binding BOTH makes every home lookup
+    # under these tests land in the disposable profile, so this root governs the
+    # exercised paths instead of merely being asserted distinct from them.
+    # ScrappyPathProvider.command_history_file() (paths.py:139) resolves through
+    # Path.home(), so that is a real consumer, not a hypothetical one.
+    #
+    # This also removes the defect behind PR53. The fixture previously read
+    # os.environ["HOME"] UNCONDITIONALLY. HOME is POSIX-only and UNSET on
+    # Windows, so the lookup raised KeyError during FIXTURE SETUP and ERRORED
+    # all 18 nodes in this file; they never ran on Windows at all. Resolving to
+    # the REAL profile instead would turn CI green while pointing this root at
+    # the user's actual home, which inverts the containment intent.
+    monkeypatch.setenv("HOME", str(profile))
+    monkeypatch.setenv("USERPROFILE", str(profile))
 
     resolved = [str(d.resolve()) for d in (code_root, storage_root, process_cwd, profile)]
     assert len(set(resolved)) == 4, f"roots must be distinct, got {resolved}"
