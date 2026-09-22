@@ -15,7 +15,7 @@ Features:
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from scrappy.graph.protocols import ToolContextFactory, ToolContextProtocol, WorkingMemoryProtocol
 from scrappy.graph.run_context import AgentRunContextProtocol
@@ -23,6 +23,10 @@ from scrappy.graph.state import AgentState, Message, ToolCall, ToolResult
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.infrastructure.exceptions import CancelledException
 from scrappy.infrastructure.logging import get_logger
+
+if TYPE_CHECKING:
+    # Type-only: the graph package takes no runtime dependency on scrappy.cli.
+    from scrappy.cli.protocols import TaskStorageProtocol
 
 
 class WorkingMemoryAdapter:
@@ -326,6 +330,8 @@ def _default_context_factory(
     working_dir: str,
     working_memory: Optional[WorkingMemoryProtocol] = None,
     run_context: Optional[AgentRunContextProtocol] = None,
+    *,
+    task_storage: Optional["TaskStorageProtocol"] = None,
 ) -> ToolContextProtocol:
     """
     Default factory for creating tool contexts.
@@ -337,6 +343,8 @@ def _default_context_factory(
         working_dir: Working directory for file operations
         working_memory: Optional working memory for tracking tool results
         run_context: Optional ephemeral run context for file caching/status
+        task_storage: Optional explicitly selected task storage. Keyword-only so
+            that existing positional callers keep their argument meaning.
     """
     from scrappy.agent_config import AgentConfig
     from scrappy.agent_tools.tools.base import ToolContext
@@ -356,6 +364,7 @@ def _default_context_factory(
         orchestrator=orchestrator,
         run_context=run_context,
         semantic_search=semantic_search,
+        task_storage=task_storage,
     )
 
 
@@ -365,6 +374,8 @@ def execute_node(
     context_factory: Optional[ToolContextFactory] = None,
     working_memory: Optional[WorkingMemoryProtocol] = None,
     run_context: Optional[AgentRunContextProtocol] = None,
+    *,
+    task_storage: Optional["TaskStorageProtocol"] = None,
 ) -> AgentState:
     """
     Execute node - tool execution step.
@@ -378,6 +389,9 @@ def execute_node(
         context_factory: Factory to create ToolContext (uses default if not provided)
         working_memory: Optional working memory for tracking tool results
         run_context: Optional ephemeral run context for file caching/status
+        task_storage: Optional explicitly selected task storage, forwarded to the
+            default context factory. Keyword-only so that the existing positional
+            callers of this node keep their argument meaning.
 
     Returns:
         Updated AgentState with tool results appended to messages
@@ -418,11 +432,19 @@ def execute_node(
 
     # Create context using factory
     # If custom factory provided, use it (won't have working_memory or run_context)
+    # A custom factory owns its context entirely, including task storage: the
+    # one-argument call and its returned context are preserved as-is even when
+    # task_storage was supplied separately.
     # Otherwise use default factory with full support
     if context_factory:
         context = context_factory(state.working_dir)
     else:
-        context = _default_context_factory(state.working_dir, working_memory, run_context)
+        context = _default_context_factory(
+            state.working_dir,
+            working_memory,
+            run_context,
+            task_storage=task_storage,
+        )
 
     # Execute tools sequentially (not parallel to avoid file conflicts)
     # Wrap in try/except to prevent graph crash on tool adapter failures

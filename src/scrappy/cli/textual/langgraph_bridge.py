@@ -15,6 +15,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable, cast
 
 from textual import work
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     from scrappy.graph.state import AgentState
     from scrappy.graph.tools import ToolAdapterProtocol
 
+    from ..protocols import TaskStorageProtocol
     from .bridge import ThreadSafeAsyncBridge
     from .event_sink import TuiEventHostProtocol
     from .output_adapter import TextualOutputAdapter
@@ -116,6 +118,7 @@ class LangGraphBridge:
         output_adapter: "TextualOutputAdapter",
         orchestrator: "StreamingOrchestratorProtocol",
         tool_adapter: "ToolAdapterProtocol",
+        task_storage: Optional["TaskStorageProtocol"] = None,
     ) -> None:
         """
         Initialize the LangGraph bridge.
@@ -126,12 +129,18 @@ class LangGraphBridge:
             output_adapter: TextualOutputAdapter for thread-safe output
             orchestrator: Orchestrator for streaming completions with fallback
             tool_adapter: Tool adapter for agent tool execution (required)
+            task_storage: Optional explicitly selected task storage, carried into
+                the graph so task tools persist where the application selected
+                rather than at a location derived from the code working directory.
+                Optional and defaulting to None so existing construction sites are
+                unaffected. The bridge never learns about path providers.
         """
         self.app = app
         self._bridge = bridge
         self._output_adapter = output_adapter
         self._orchestrator = orchestrator
         self._tool_adapter = tool_adapter
+        self._task_storage = task_storage
 
         # Track current worker for cancellation
         self._current_worker: Optional[Worker[AgentResult]] = None
@@ -661,6 +670,14 @@ class LangGraphBridge:
         from scrappy.graph.agent import create_agent_runner
         from scrappy.graph.state import AgentState
 
+        # Resolve the code working directory ONCE, at entry, BEFORE _is_running is
+        # set below. Path.resolve() can raise OSError/ValueError, and the block that
+        # follows the flag sits outside the try/finally that clears it, so resolving
+        # any later would strand _is_running and permanently block subsequent runs.
+        # This is ordinary resolution only: existence, directory-type and forbidden-
+        # directory policy belong to graph.run_agent and are deliberately not adopted here.
+        resolved_working_dir = str(Path(working_dir).resolve())
+
         # Concurrency guard - reject if already running
         if self._is_running:
             logger.warning("Agent run rejected: another run is already in progress")
@@ -679,7 +696,7 @@ class LangGraphBridge:
         self._confirmation_handler = ToolConfirmationHandler(
             output_callback=self._output_callback,
             confirm_callback=self._bridge.blocking_confirm_yna,
-            working_dir=working_dir,
+            working_dir=resolved_working_dir,
         )
 
         # Always enable tool confirmation (default behavior)
@@ -702,9 +719,8 @@ class LangGraphBridge:
             self._run_context.set_status_callback(self._show_provider_status)
 
             # Load project rules from AGENTS.md or similar
-            from pathlib import Path
             rules_loader = AgentRulesLoader()
-            rules = rules_loader.load(Path(working_dir))
+            rules = rules_loader.load(Path(resolved_working_dir))
             if rules:
                 rules_content = rules.get_combined_content()
                 self._run_context.project_rules = rules_content
@@ -729,10 +745,11 @@ class LangGraphBridge:
             graph, checkpointer = create_agent_runner(
                 orchestrator=self._orchestrator,
                 tool_adapter=self._tool_adapter,
+                task_storage=self._task_storage,
             )
 
             # Create initial state with tier selection
-            initial_state = AgentState.create_initial(task, working_dir)
+            initial_state = AgentState.create_initial(task, resolved_working_dir)
             initial_state = initial_state.model_copy(update={"current_tier": tier})
 
             # Configure graph execution
@@ -756,7 +773,7 @@ class LangGraphBridge:
 
             # Start timing, set working dir, and show initial activity
             self._start_time = time.time()
-            self._working_dir = working_dir
+            self._working_dir = resolved_working_dir
             self._post_activity(ActivityState.THINKING)
             # Metrics will be updated after first LLM call with actual model
 

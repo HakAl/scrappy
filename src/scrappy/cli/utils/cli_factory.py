@@ -137,6 +137,7 @@ def initialize_cli_handlers(
     theme: Optional[ThemeProtocol] = None,
     *,
     api_key_service: ApiKeyConfigServiceProtocol,
+    code_root: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create and return all CLI component handlers.
@@ -148,6 +149,9 @@ def initialize_cli_handlers(
         bridge: Optional ThreadSafeAsyncBridge for TUI mode modal dialogs
         theme: Optional theme for styling. Defaults to DEFAULT_THEME.
         api_key_service: API key config service handed to the display handler
+        code_root: Code working directory captured once at CLI composition, forwarded
+            to CLIAgentManager. Keyword-only, joining the existing keyword-only
+            section, so no positional caller is affected.
 
     Returns:
         Dict with all 8 standard handlers
@@ -177,7 +181,7 @@ def initialize_cli_handlers(
         'session_mgr': session_mgr,
         'codebase': CLICodebaseAnalysis(orchestrator, io),
         'tasks': CLITaskExecution(orchestrator, io),
-        'agent_mgr': CLIAgentManager(orchestrator, io, interaction),
+        'agent_mgr': CLIAgentManager(orchestrator, io, interaction, code_root=code_root),
     }
 
 

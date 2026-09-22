@@ -22,12 +22,20 @@ of the selection it names, never hand-authored in advance.
 `escape-baseline.darwin.default.json` is the CURRENT measurement, taken at the TRUE
 DEFAULT SELECTION. The instrument was included after the last production helper that took
 no provider, `create_orchestrator()` in `orchestrator/core.py`, was given an optional one
-and the tests that reached its default were routed to disposable providers. It was
-RE-MEASURED at the PR-5 candidate, which routes semantic storage through the injected
-provider and adds the project-root routing cases: 5419 selected, 5411 passed, 8 skipped,
-0 failures, 0 errors, 106 deselected. Six of the eight skips are the differential scanner
-cases in `test_launcher_validation.py` that argparse rejects outright; the other two
-pre-date the instrument. It records NO escapes.
+and the tests that reached its default were routed to disposable providers.
+
+It was RE-MEASURED at the PR-6 candidate, which threads selected task storage through the
+existing graph execution context and captures the CLI code root at composition: 5437
+selected, 5429 passed, 8 skipped, 0 failures, 0 errors, 106 deselected. It records NO
+escapes. Six of the eight skips are the differential scanner cases in
+`test_launcher_validation.py` that argparse rejects outright; the other two pre-date the
+instrument.
+
+The PR-5 measurement it supersedes recorded 5419 selected, 5411 passed, 8 skipped, and
+likewise NO escapes. The +18 node delta is SOLELY the new routing tests in
+`tests/graph/test_task_storage_routing.py`; the PR-6 maintenance edits changed assertions in
+existing tests and added NO nodes, and PR-6 removed no tests. An unchanged empty set across
+that delta is the expected result, not a new claim: see the node-count note immediately below.
 
 The node count moving does NOT change what an empty set means. Added tests can only widen
 what was exercised; they cannot evidence that an unexercised path is contained. Re-read the
@@ -37,8 +45,9 @@ An EMPTY set here means exactly one thing: NO DETECTABLE NET FILE CHANGE between
 and after snapshots of the measured profile region. It is NOT a completion certificate, and
 it is not a claim that nothing happened during the run. Read it with three limits in mind:
 
-- It does NOT complete `scrappy-i2jo` and does NOT retire the containment boundary. PR-5
-  through PR-7 and final acceptance remain.
+- It does NOT complete `scrappy-i2jo` and does NOT retire the containment boundary. PR-6 is
+  the candidate being measured here and is NOT landed yet; it, PR-7 and final acceptance all
+  remain.
 - A before/after diff sees NET STATE, not events. A file created and removed inside the run
   is invisible, and so are a `mkdir` that leaves no file and any read. Tests that still
   construct CLI, ScrappyApp or AgentOrchestrator bare can still create the user directories
@@ -51,12 +60,29 @@ selection is load-bearing for comparability. A run that hashes only the seeds re
 `sha256: null` for any surviving copy, which looks like a content change against a baseline
 that hashed it and is not one. Keep the extension when re-measuring.
 
-The PREVIOUS measurement recorded ONE escape: `Library/Application Support/scrappy/command_history`
+MEASUREMENT HISTORY, read from this file's own git history, in order:
+
+| published at | escapes | passed | slice |
+|---|---|---|---|
+| `747bb64`, `4aff5ff`, `032ab5e` | 1 | 5354, 5356, 5356 | before PR-4b |
+| `1420986`, `df6d263` | 0 | 5390 | PR-4b, merged at `f33748a` |
+| `c7bbfe4`, `d5baf28` | 0 | 5411 | PR-5, merged at `c5c9be0` |
+| `e8933be`, `139d2c4`, `fb21307`, `4e07d07`, `e83259d`, `9903a0e` | 0 | 5429 | PR-6 |
+| `9370342` | 0 | 5430 | PR-6 + 1 Windows regression node |
+
+The empty set was FIRST ACHIEVED at `1420986`, which landed with PR-4b. PR-4b, PR-5 and PR-6
+have all since PRESERVED zero. Do NOT attribute the removal to PR-5 or to PR-6; neither
+earned it, and both merely held it across a growing node count.
+
+The last NON-EMPTY measurement, at `032ab5e` and earlier, recorded ONE escape:
+`Library/Application Support/scrappy/command_history`
 CREATED at 32 bytes, the legacy migration copying the seed into the platform data directory,
 triggered by the mock-mode selection tests through the then-providerless `create_orchestrator()`.
-Its disappearance is this slice's acceptance delta, and the delta was falsified rather than
-assumed: pointing ONE mock-mode test back at the default provider and re-measuring brings the
-same 32-byte copy back, so the instrument is sensitive to precisely the routing that removed it.
+Its disappearance was the acceptance delta of THAT earlier provider-routing work, and the
+delta was falsified rather than assumed: pointing ONE mock-mode test back at the default
+provider and re-measuring brings the same 32-byte copy back, so the instrument is sensitive to
+precisely the routing that removed it. PR-5 and PR-6 change nothing about that routing and so
+inherit the result rather than re-earning it.
 The measurement BEFORE that one recorded TWO escapes, the same copy at 101 bytes and
 `.scrappy/command_history` MODIFIED from 32 to 122 bytes with a changed hash. That modification
 was the reproduced command-history damage, and it is why seeding with known bytes rather than

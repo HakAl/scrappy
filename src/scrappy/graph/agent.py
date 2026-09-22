@@ -30,7 +30,7 @@ from __future__ import annotations
 import os
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
@@ -50,6 +50,10 @@ from scrappy.graph.state import AgentState
 from scrappy.graph.tools import ToolAdapterProtocol
 from scrappy.graph.tracing import get_langfuse_callback
 from scrappy.infrastructure.logging import get_logger
+
+if TYPE_CHECKING:
+    # Type-only: the graph package takes no runtime dependency on scrappy.cli.
+    from scrappy.cli.protocols import TaskStorageProtocol
 
 logger = get_logger(__name__)
 
@@ -209,6 +213,8 @@ def _wrap_execute_node(
     tool_adapter: ToolAdapterProtocol,
     context_factory: Optional[Any] = None,
     working_memory: Optional[WorkingMemoryProtocol] = None,
+    *,
+    task_storage: Optional["TaskStorageProtocol"] = None,
 ) -> Any:
     """
     Create a wrapped execute node with injected dependencies.
@@ -217,6 +223,8 @@ def _wrap_execute_node(
         tool_adapter: Tool adapter for execution
         context_factory: Optional factory for creating ToolContext
         working_memory: Optional working memory for tracking tool results
+        task_storage: Optional explicitly selected task storage, forwarded to the
+            execute node. Keyword-only so existing positional callers are unaffected.
 
     Returns:
         Node function compatible with LangGraph
@@ -230,7 +238,12 @@ def _wrap_execute_node(
             run_context = config["configurable"].get("run_context")
 
         return execute_node(
-            state, tool_adapter, context_factory, working_memory, run_context=run_context
+            state,
+            tool_adapter,
+            context_factory,
+            working_memory,
+            run_context=run_context,
+            task_storage=task_storage,
         )
     return wrapped
 
@@ -333,6 +346,8 @@ def build_graph(
     context_factory: Optional[Any] = None,
     working_memory: Optional[WorkingMemoryProtocol] = None,
     rag_context_factory: Optional[ContextFactoryProtocol] = None,
+    *,
+    task_storage: Optional["TaskStorageProtocol"] = None,
 ) -> CompiledStateGraph:
     """
     Build and compile the agent graph.
@@ -361,6 +376,9 @@ def build_graph(
         context_factory: Factory for creating ToolContext (default: uses agent_tools ToolContext)
         working_memory: Optional working memory for session context and tool tracking
         rag_context_factory: Factory for RAG context augmentation in think node
+        task_storage: Optional explicitly selected task storage, forwarded to the
+            execute node so tools persist tasks where the caller selected rather
+            than at a location derived from the code working directory
 
     Returns:
         Compiled StateGraph ready for execution
@@ -374,7 +392,10 @@ def build_graph(
 
     # Add nodes with wrapped functions that have dependencies injected
     builder.add_node("think", _wrap_think_node(orchestrator, tool_adapter, working_memory, rag_context_factory))
-    builder.add_node("execute", _wrap_execute_node(tool_adapter, context_factory, working_memory))
+    builder.add_node(
+        "execute",
+        _wrap_execute_node(tool_adapter, context_factory, working_memory, task_storage=task_storage),
+    )
     builder.add_node("verify", _wrap_verify_node(run_mypy_check))
     builder.add_node("confirm", confirm_node)
     builder.add_node("error", error_node)
@@ -561,6 +582,8 @@ def create_agent_runner(
     enable_hitl: bool = True,
     working_memory: Optional[WorkingMemoryProtocol] = None,
     rag_context_factory: Optional[ContextFactoryProtocol] = None,
+    *,
+    task_storage: Optional["TaskStorageProtocol"] = None,
 ) -> tuple[CompiledStateGraph, MemorySaver]:
     """
     Create an agent runner with shared checkpointer.
@@ -583,6 +606,8 @@ def create_agent_runner(
         enable_hitl: Whether to enable human-in-the-loop interrupts (default: True)
         working_memory: Optional working memory for session context and tool tracking
         rag_context_factory: Factory for RAG context augmentation in think node
+        task_storage: Optional explicitly selected task storage, forwarded into the
+            graph so task tools persist where the caller selected
 
     Returns:
         Tuple of (compiled_graph, checkpointer)
@@ -613,6 +638,7 @@ def create_agent_runner(
         enable_hitl=enable_hitl,
         working_memory=working_memory,
         rag_context_factory=rag_context_factory,
+        task_storage=task_storage,
     )
 
     return graph, checkpointer

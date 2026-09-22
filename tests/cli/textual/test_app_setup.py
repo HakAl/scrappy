@@ -53,6 +53,7 @@ def test_setup_interactive_mode_uses_shared_helpers():
         tasks=cli.tasks,
         logger=cli.logger,
         output_adapter=app.output_adapter,
+        code_root=cli._code_root,
     )
     mock_wire.assert_called_once_with(
         app=app,
