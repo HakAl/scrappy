@@ -411,13 +411,37 @@ def test_relative_working_dir_resolved_once_and_shared(roots, monkeypatch):
     assert expected != str(roots.storage_root.resolve())
 
 
-def test_resolution_failure_does_not_strand_running_flag(roots):
-    """Resolution sits before the running flag, so a failure leaves it clear."""
+def test_resolution_failure_does_not_strand_running_flag(roots, monkeypatch):
+    """Resolution sits before the running flag, so a failure leaves it clear.
+
+    The failure is INJECTED AT THE FILESYSTEM BOUNDARY rather than provoked by
+    feeding a NUL byte in the path. A NUL path is not a portable way to make
+    resolution fail: it raised on POSIX and on Windows CPython 3.11/3.12, but
+    3.13 accepted it and returned normally, so the original form was measuring
+    platform-specific string validation rather than the contract under test, and
+    it failed on exactly one job (PR53 CI run 35673539588, Windows 3.13).
+
+    Injecting OSError at Path.resolve exercises the SAME seam deterministically
+    on every platform. Both original assertions are preserved: the exception
+    still propagates, and the running flag must still be clear afterwards. The
+    patch is narrowed to the path under test so unrelated resolution inside the
+    run is untouched.
+    """
     orchestrator = StreamingModelBoundary([[]])
     bridge = make_bridge(orchestrator)
 
-    with pytest.raises((OSError, ValueError)):
-        bridge.run_agent(task="noop", working_dir="\x00invalid")
+    target = str(roots.code_root)
+    real_resolve = Path.resolve
+
+    def failing_resolve(self, *args, **kwargs):
+        if str(self) == target:
+            raise OSError("injected resolution failure")
+        return real_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", failing_resolve)
+
+    with pytest.raises(OSError):
+        bridge.run_agent(task="noop", working_dir=target)
 
     assert bridge._is_running is False, "a failed resolution stranded _is_running"
 
