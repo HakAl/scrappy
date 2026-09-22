@@ -68,6 +68,7 @@ MEASUREMENT HISTORY, read from this file's own git history, in order:
 | `1420986`, `df6d263` | 0 | 5390 | PR-4b, merged at `f33748a` |
 | `c7bbfe4`, `d5baf28` | 0 | 5411 | PR-5, merged at `c5c9be0` |
 | `e8933be`, `139d2c4`, `fb21307`, `4e07d07`, `e83259d`, `9903a0e` | 0 | 5429 | PR-6 |
+| `9370342` | 0 | 5430 | PR-6 + 1 Windows regression node |
 
 The empty set was FIRST ACHIEVED at `1420986`, which landed with PR-4b. PR-4b, PR-5 and PR-6
 have all since PRESERVED zero. Do NOT attribute the removal to PR-5 or to PR-6; neither
