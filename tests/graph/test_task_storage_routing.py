@@ -102,9 +102,10 @@ def roots(tmp_path, monkeypatch):
     code_root    the directory the agent operates on
     storage_root where the selected task storage persists
     process_cwd  ambient CWD, moved here so that any code re-reading it is caught
-    profile      the ACTUAL contained profile root this run is executing under,
-                 taken from the launcher-assigned HOME rather than an invented
-                 directory that nothing ever uses
+    profile      the ACTUAL profile root this run is executing under, resolved
+                 through Path.home() rather than an invented directory that
+                 nothing ever uses. Under the contained launcher that IS the
+                 launcher-assigned HOME, so the contained meaning is unchanged.
     """
     code_root = tmp_path / "code_root"
     storage_root = tmp_path / "storage_root"
@@ -112,8 +113,15 @@ def roots(tmp_path, monkeypatch):
     for directory in (code_root, storage_root, process_cwd):
         directory.mkdir()
 
-    profile = Path(os.environ["HOME"])
-    assert profile.is_dir(), "contained profile HOME should already exist"
+    # Path.home(), NOT os.environ["HOME"]. HOME is POSIX-only and is UNSET on
+    # Windows, where the profile lives at USERPROFILE, so the direct lookup
+    # raised KeyError during FIXTURE SETUP and errored all 18 nodes in this file
+    # on every Windows CI job (PR53, run 35668397221). Nothing was asserted
+    # there; the file never ran. Path.home() resolves both platforms, and under
+    # the contained launcher it still returns the launcher-assigned HOME, so the
+    # contained measurement is unchanged. Assertions and node count are intact.
+    profile = Path.home()
+    assert profile.is_dir(), "profile root should already exist"
 
     resolved = [str(d.resolve()) for d in (code_root, storage_root, process_cwd, profile)]
     assert len(set(resolved)) == 4, f"roots must be distinct, got {resolved}"
