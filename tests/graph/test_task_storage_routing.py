@@ -486,11 +486,28 @@ def test_wire_textual_runtime_composes_storage_from_injected_app_provider(roots)
 
 
 def make_cli(roots, orchestrator=None):
-    """Build a real CLI rooted at code_root, with CWD already elsewhere."""
+    """Build a real CLI rooted at code_root, with CWD already elsewhere.
+
+    The provider and API key service are INJECTED, not defaulted. A bare
+    construction here would select the production defaults, and those resolve
+    through module attributes bound AT IMPORT (`LEGACY_USER_DIR`,
+    `USER_CONFIG_FILE`) plus platform-directory discovery. Neither is redirected
+    by setting HOME/USERPROFILE in the fixture, because both are already bound
+    by the time the fixture runs, and Windows platform-directory lookup does not
+    consult USERPROFILE at all. Injecting is what actually binds these
+    compositions to the disposable profile.
+    """
     from scrappy.cli.core import CLI
+    from scrappy.infrastructure.paths import TempPathProvider
+    from tests.cli.helpers import MockApiKeyConfigService
 
     os.chdir(roots.code_root)
-    cli = CLI(orchestrator=orchestrator, io=Mock())
+    cli = CLI(
+        orchestrator=orchestrator,
+        io=Mock(),
+        path_provider=TempPathProvider(roots.profile),
+        api_key_service=MockApiKeyConfigService(),
+    )
     # Move the process CWD AFTER composition. Nothing downstream may notice.
     os.chdir(roots.process_cwd)
     return cli
@@ -590,7 +607,22 @@ def test_default_orchestrator_reuses_the_same_captured_root(roots, monkeypatch):
         orchestrator=None,
         io=Mock(),
         api_key_service=api_key_service,
-        path_provider=TempPathProvider(roots.storage_root),
+        path_provider=TempPathProvider(roots.profile),
+    )
+
+    # ACTUAL EXERCISED CONSUMER, with a CHECKED disposable destination. The real
+    # OrchestratorFactory calls path_provider.ensure_user_dir() (factory.py:353)
+    # while building the components above, so this directory exists only because
+    # production code ran. It proves the disposable profile GOVERNS a real user
+    # level write rather than merely being asserted distinct, and it is the same
+    # call that runs the legacy migration when the provider is default-resolved.
+    user_dir = roots.profile / ".scrappy_user"
+    assert user_dir.is_dir(), (
+        "OrchestratorFactory.ensure_user_dir did not land in the disposable "
+        f"profile; {user_dir} absent"
+    )
+    assert not (Path.home() / ".scrappy_user").exists() or Path.home() == roots.profile, (
+        "a user level write escaped to the resolved home profile"
     )
 
     assert moved, "Path.cwd was never read, so the capture seam went unexercised"
