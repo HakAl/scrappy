@@ -309,36 +309,34 @@ CONTAINED_CONFIG_SEED = {
 }
 
 
-def _selector_is_demonstrably_controlled() -> bool:
-    """True ONLY for a selector this code can SHOW is contained.
+def _selector_is_repository_owned(selector, repo_root) -> bool:
+    """True ONLY for a selector inside the repository-owned disposable profile.
 
-    PRESENCE IS NOT SUFFICIENT, which was the F5 gap. Outside the launcher an
-    inherited CLI_CONFIG_PATH can name any developer file, and preserving it
-    because it merely exists leaves that file reachable through
-    config_factory's environment branch on any reload.
+    A SESSION LABEL IS NOT PROVENANCE. scripts/contained-pytest.sh:72-78
+    explicitly READS AND ADOPTS an inherited SCRAPPY_TEST_SESSION_ID, so its
+    presence proves nothing about who assigned the selector. Membership of HOME
+    proves nothing either, because a direct pytest run has an ordinary HOME.
 
-    Controlled means BOTH: the launcher marked this run
-    (SCRAPPY_TEST_SESSION_ID, scripts/contained-pytest.sh:182), AND the
-    selector resolves inside the HOME that same launcher assigned
-    (CLI_CONFIG_ABSENT is derived from HOME_DIR, :94). Anything else is
-    treated as hostile and replaced with a disposable source.
+    The launcher's real provenance is its repository-derived layout:
+    PROFILE_ROOT="${REPO_ROOT}/.pytest_profile/${SESSION_ID}" and
+    HOME_DIR="${PROFILE_ROOT}/home" (:88-89). This binds to that layout and
+    nothing else.
+
+    Both sides are RESOLVED before comparison, so a selector that sits inside
+    the profile directory but symlinks out of it resolves outside the anchor
+    and is rejected.
     """
-    value = os.environ.get("CLI_CONFIG_PATH")
-    if value is None:
+    if selector is None or repo_root is None:
         return False
-    if not os.environ.get("SCRAPPY_TEST_SESSION_ID"):
-        return False
-    home = os.environ.get("HOME")
-    if not home:
-        return False
+    anchor = Path(repo_root) / ".pytest_profile"
     try:
-        return Path(value).resolve().is_relative_to(Path(home).resolve())
-    except (OSError, ValueError):
+        return Path(selector).resolve().is_relative_to(anchor.resolve())
+    except (OSError, ValueError, RuntimeError, TypeError):
         return False
 
 
 @contextlib.contextmanager
-def contained_cli_config_scope(disposable_dir, seed: bool = True):
+def contained_cli_config_scope(disposable_dir, seed: bool = True, repo_root=None):
     """The fixture's ENTIRE lifecycle, as one directly testable unit.
 
     Extracted from the fixture so restoration can be observed IMMEDIATELY after
@@ -360,12 +358,13 @@ def contained_cli_config_scope(disposable_dir, seed: bool = True):
     env_replaced = False
 
     try:
-        # LAYER 1: own the configuration SOURCE unless it is demonstrably
-        # controlled already. A launcher assignment is kept; absent and hostile
-        # selectors are both replaced with a disposable, non-existent path,
-        # which config_factory skips gracefully while still displacing any CWD
-        # scan. CLI_CONFIG_PATH is never removed globally.
-        if not _selector_is_demonstrably_controlled():
+        # LAYER 1: own the configuration SOURCE unless it is anchored to the
+        # repository-owned disposable profile. A genuine launcher assignment is
+        # kept; absent, inherited and hostile selectors are all replaced with a
+        # disposable non-existent path, which config_factory skips gracefully at
+        # its exists() gate while still displacing any CWD scan.
+        # CLI_CONFIG_PATH is never removed globally.
+        if not _selector_is_repository_owned(saved_env, repo_root):
             os.environ["CLI_CONFIG_PATH"] = str(disposable_dir / "contained-absent.json")
             env_replaced = True
 
@@ -401,6 +400,8 @@ def contained_cli_config(request, tmp_path_factory):
     """Thin wrapper: all behaviour lives in contained_cli_config_scope."""
     seed = request.node.get_closest_marker("no_contained_config_seed") is None
     with contained_cli_config_scope(
-        tmp_path_factory.mktemp("contained-cli-config"), seed=seed
+        tmp_path_factory.mktemp("contained-cli-config"),
+        seed=seed,
+        repo_root=request.config.rootpath,
     ):
         yield

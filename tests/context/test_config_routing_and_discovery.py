@@ -378,56 +378,118 @@ def test_orchestrator_old_positional_call_still_binds_the_api_key_service():
 
 
 @pytest.mark.no_contained_config_seed
-def test_scope_replaces_a_hostile_inherited_selector(tmp_path, monkeypatch):
-    """A selector we cannot show is contained must NOT survive into the body.
+def test_hostile_selector_under_a_synthetic_home_is_rejected_and_not_consumed(
+    tmp_path, monkeypatch, request
+):
+    """An inherited session label plus an ordinary HOME is NOT provenance.
 
-    This is the F5 gap: presence was previously treated as sufficient, so an
-    inherited path naming a developer file stayed live for any reload.
+    This reproduces the case the previous predicate accepted: a NONEMPTY
+    inherited SCRAPPY_TEST_SESSION_ID (the launcher itself adopts inherited
+    labels, contained-pytest.sh:72-78), a synthetic stand-in for an
+    uncontrolled real home, and a VALID conflicting configuration file inside
+    it. None of that is the repository-owned disposable profile.
+
+    Rejection alone is not enough, so this also proves the file is NOT
+    CONSUMED: it drives the real get_config reload path and asserts the hostile
+    marker never appears. theme_config is used deliberately because it SURVIVES
+    current merge semantics, unlike a scalar such as temperature_default which
+    the environment merge overwrites regardless (scrappy-bj58).
     """
+    from scrappy.cli.config_factory import get_config
     from tests.conftest import contained_cli_config_scope
 
-    hostile = tmp_path / "hostile.json"
-    hostile.write_text(json.dumps({"temperature_default": 0.99}))
-    monkeypatch.setenv("CLI_CONFIG_PATH", str(hostile))
-    monkeypatch.delenv("SCRAPPY_TEST_SESSION_ID", raising=False)
+    fake_home = tmp_path / "synthetic_real_home"
+    fake_home.mkdir()
+    hostile = fake_home / ".scrappy.json"
+    hostile.write_text(json.dumps({"theme_config": {"preset": "hostile-marker"}}))
 
-    with contained_cli_config_scope(tmp_path / "disposable", seed=False):
-        inside = os.environ["CLI_CONFIG_PATH"]
-        assert Path(inside) != hostile, "hostile selector survived into the test body"
-        assert not Path(inside).exists(), "replacement selector should name no real file"
+    # A SYNTHETIC disposable repository root. Under the contained launcher the
+    # real tmp_path already lives inside <repo>/.pytest_profile, so anchoring on
+    # the live root would make this "outside" directory genuinely inside it and
+    # the test would assert nothing.
+    synthetic_repo = tmp_path / "synthetic_repo"
+    (synthetic_repo / ".pytest_profile").mkdir(parents=True)
+
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("SCRAPPY_TEST_SESSION_ID", "inherited-label")
+    monkeypatch.setenv("CLI_CONFIG_PATH", str(hostile))
+
+    with contained_cli_config_scope(
+        tmp_path / "disposable", seed=False, repo_root=synthetic_repo
+    ):
+        assert Path(os.environ["CLI_CONFIG_PATH"]) != hostile, (
+            "an inherited label plus HOME membership was accepted as provenance"
+        )
+        reloaded = get_config(reload=True)
+        assert reloaded.theme_config.get("preset") != "hostile-marker", (
+            "the hostile configuration was actually CONSUMED through reload"
+        )
 
     assert os.environ["CLI_CONFIG_PATH"] == str(hostile), "original selector not restored"
 
 
 @pytest.mark.no_contained_config_seed
-def test_scope_establishes_a_selector_when_absent(tmp_path, monkeypatch):
-    """Absent selector: the scope must own one rather than leave branch 3 open."""
+def test_repository_owned_launcher_selector_is_preserved_and_consumed(tmp_path, monkeypatch, request):
+    """POSITIVE case: a genuine launcher assignment is kept and remains usable.
+
+    Anchored to the real layout, REPO_ROOT/.pytest_profile/<session>/home/...,
+    rather than to HOME membership. Disposable throughout: the file lives under
+    the repository-owned profile directory and is removed with it.
+    """
+    from scrappy.cli.config_factory import get_config
     from tests.conftest import contained_cli_config_scope
 
-    monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    # Synthetic disposable repository root, mirroring the launcher's real
+    # layout REPO_ROOT/.pytest_profile/<session>/home/. Nothing is written into
+    # the live .pytest_profile, which the containment baseline measures.
+    synthetic_repo = tmp_path / "synthetic_repo"
+    legit_dir = synthetic_repo / ".pytest_profile" / "session" / "home" / ".config" / "scrappy"
+    legit_dir.mkdir(parents=True)
+    legit = legit_dir / "contained-cli-config.json"
+    legit.write_text(json.dumps({"theme_config": {"preset": "launcher-marker"}}))
 
-    with contained_cli_config_scope(tmp_path / "disposable", seed=False):
-        assert "CLI_CONFIG_PATH" in os.environ
+    monkeypatch.setenv("CLI_CONFIG_PATH", str(legit))
 
-    assert "CLI_CONFIG_PATH" not in os.environ, "established selector not removed"
+    with contained_cli_config_scope(
+        tmp_path / "disposable", seed=False, repo_root=synthetic_repo
+    ):
+            assert os.environ["CLI_CONFIG_PATH"] == str(legit), (
+                "a repository-owned launcher assignment must be preserved"
+            )
+            reloaded = get_config(reload=True)
+            assert reloaded.theme_config.get("preset") == "launcher-marker", (
+                "the legitimate launcher selection was not usable"
+            )
 
 
 @pytest.mark.no_contained_config_seed
-def test_scope_preserves_a_demonstrably_controlled_launcher_selector(tmp_path, monkeypatch):
-    """A launcher assignment inside the assigned HOME is kept as-is."""
+def test_symlink_escape_out_of_the_profile_is_rejected(tmp_path, monkeypatch, request):
+    """A selector INSIDE the profile that symlinks OUT of it must be rejected.
+
+    Membership by unresolved path is not containment: both sides are resolved
+    before comparison, so the escape is caught.
+    """
     from tests.conftest import contained_cli_config_scope
 
-    home = tmp_path / "contained_home"
-    (home / ".config" / "scrappy").mkdir(parents=True)
-    controlled = home / ".config" / "scrappy" / "contained-cli-config.absent.json"
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("SCRAPPY_TEST_SESSION_ID", "test-session")
-    monkeypatch.setenv("CLI_CONFIG_PATH", str(controlled))
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "escaped.json").write_text(json.dumps({"theme_config": {"preset": "escaped"}}))
 
-    with contained_cli_config_scope(tmp_path / "disposable", seed=False):
-        assert os.environ["CLI_CONFIG_PATH"] == str(controlled), (
-            "a controlled launcher assignment must be preserved, not replaced"
-        )
+    synthetic_repo = tmp_path / "synthetic_repo"
+    profile = synthetic_repo / ".pytest_profile"
+    profile.mkdir(parents=True)
+    link = profile / "link-to-outside"
+    link.symlink_to(outside, target_is_directory=True)
+
+    monkeypatch.setenv("CLI_CONFIG_PATH", str(link / "escaped.json"))
+
+    with contained_cli_config_scope(
+        tmp_path / "disposable", seed=False, repo_root=synthetic_repo
+    ):
+            inside = Path(os.environ["CLI_CONFIG_PATH"]).resolve()
+            assert not inside.is_relative_to(outside.resolve()), (
+                "a symlink escape out of the profile was accepted"
+            )
 
 
 @pytest.mark.no_contained_config_seed
