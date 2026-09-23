@@ -49,6 +49,10 @@ def roots(tmp_path, monkeypatch):
         d.mkdir()
     resolved = [str(d.resolve()) for d in (code_root, other_cwd, storage_root, profile)]
     assert len(set(resolved)) == 4, f"roots must be distinct, got {resolved}"
+    # The profile GOVERNS home resolution for these tests, so it has an
+    # exercised role rather than being a fourth named directory.
+    monkeypatch.setenv("HOME", str(profile))
+    monkeypatch.setenv("USERPROFILE", str(profile))
     monkeypatch.chdir(code_root)
     return type("Roots", (), {
         "code_root": code_root,
@@ -570,9 +574,22 @@ def test_scope_restores_even_when_setup_fails(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
+# Distinct primary colours per marker, so resolving config.theme is a real
+# OPERATION with observable output rather than a field read.
+MARKER_COLOURS = {
+    "from-code-root": "magenta",
+    "from-elsewhere": "green",
+    "rewritten-after-main-captured": "yellow",
+    "from-environment": "blue",
+}
+
+
 def write_marked_config(directory: Path, marker: str) -> Path:
     path = directory / ".scrappy.json"
-    path.write_text(json.dumps({"theme_config": {"preset": marker}}))
+    theme = {"preset": marker}
+    if marker in MARKER_COLOURS:
+        theme["primary"] = MARKER_COLOURS[marker]
+    path.write_text(json.dumps({"theme_config": theme}))
     return path
 
 
@@ -742,12 +759,18 @@ def run_main_capturing_the_deferred_factory(monkeypatch, roots):
         "scrappy.orchestrator.api_key_composition.create_api_key_service",
         lambda *a, **k: MockApiKeyConfigService(),
     )
+    # The disposable PROFILE governs the user-path route here; storage_root
+    # stays the storage role, so the two are not conflated.
     monkeypatch.setattr(
         "scrappy.infrastructure.paths.create_default_path_provider",
-        lambda *a, **k: TempPathProvider(roots.storage_root),
+        lambda *a, **k: TempPathProvider(roots.profile),
     )
-    # Provider probing and history I/O are external; composition stays real.
-    monkeypatch.setattr("scrappy.cli.core.CLI.initialize", lambda self: None)
+    # NARROWED. Only provider probing is replaced, which is the genuinely
+    # external operation. initialize() itself still runs, so conversation and
+    # command-history loading execute for real against the injected provider.
+    # Replacing initialize wholesale would have skipped application
+    # orchestration and been wrong to describe as external I/O only.
+    monkeypatch.setattr("scrappy.cli.core.CLI._initialize_orchestrator", lambda self: None)
     monkeypatch.setattr(sys, "argv", ["scrappy"])
 
     try:
@@ -810,10 +833,28 @@ def test_main_capture_reaches_the_real_deferred_cli_and_consumer(roots, monkeypa
         "discarded and Click selected again"
     )
 
-    # A REAL consumer, composed by the CLI itself.
+    # A REAL consumer, composed by the CLI itself, exercised through a real
+    # OPERATION rather than a field read: resolving .theme runs
+    # load_theme_from_config and yields a theme whose primary colour differs per
+    # selection. A consumer that ignored _config and read the ambient global
+    # would resolve the global's colour instead.
     interactive = cli._create_interactive_mode()
-    assert interactive._config.theme_config["preset"] == "from-code-root", (
-        "the selected configuration did not reach the interactive consumer"
+    resolved_theme = interactive._config.theme
+    assert resolved_theme.primary == MARKER_COLOURS["from-code-root"], (
+        "the interactive consumer resolved a theme from the wrong configuration"
+    )
+    assert resolved_theme.primary != MARKER_COLOURS["from-elsewhere"], (
+        "the consumer resolved the cached global's theme"
+    )
+    assert resolved_theme.primary != MARKER_COLOURS["rewritten-after-main-captured"], (
+        "the consumer resolved a re-selection made after main captured"
+    )
+
+    # The disposable PROFILE genuinely governs the user-path route, so it is an
+    # exercised role rather than a fourth named directory.
+    user_path = Path(cli._path_provider.command_history_file())
+    assert user_path.is_relative_to(roots.profile), (
+        f"user paths did not resolve under the disposable profile: {user_path}"
     )
 
 
@@ -845,4 +886,113 @@ def test_empty_environment_selector_preserves_production_precedence(roots, monke
     assert produced.theme_config.get("preset") != "from-code-root"
     assert captured_preset == produced.theme_config.get("preset"), (
         "the capture and production disagree on the empty-selector edge case"
+    )
+
+
+@pytest.mark.no_contained_config_seed
+def test_real_scanner_honours_an_explicitly_parsed_config_under_hostile_inputs(
+    roots, monkeypatch
+):
+    """REAL SCANNER OUTCOME from a directly parsed configuration.
+
+    Covers two obligations at once: direct create_from_file under HOSTILE
+    controlled environment inputs, and real context/scanner behaviour driven by
+    the resulting object rather than by the ambient global.
+
+    create_from_file is used deliberately: it bypasses the environment merge, so
+    the file's extension LISTS survive. Through create() they would be
+    overwritten by environment defaults (scrappy-bj58), which stays out of scope
+    and is not modified here.
+
+    The outcome is observable rather than inspected: a file whose suffix only
+    the injected configuration treats as Python is indexed, and a genuine .py
+    file is not.
+    """
+    from scrappy.context.codebase_context import CodebaseContext
+    from scrappy.infrastructure.paths import TempPathProvider
+
+    selected_file = roots.code_root / "selected.json"
+    selected_file.write_text(json.dumps({
+        "python_extensions": [".xyz"],
+        "theme_config": {"preset": "from-code-root", "primary": "magenta"},
+    }))
+
+    # HOSTILE ambient inputs: a conflicting environment selector pointing at a
+    # valid file, and a conflicting object already cached in the global.
+    hostile = write_marked_config(roots.other_cwd, "from-elsewhere")
+    monkeypatch.setenv("CLI_CONFIG_PATH", str(hostile))
+    set_config(CLIConfigFactory().create_from_file(str(hostile)))
+
+    parsed = CLIConfigFactory().create_from_file(str(selected_file))
+    assert parsed.python_extensions == [".xyz"], (
+        "direct parsing did not retain the file's extension list"
+    )
+
+    (roots.code_root / "probe.xyz").write_text("# indexed only under the selection\n")
+    (roots.code_root / "probe.py").write_text("# indexed only under the default\n")
+
+    context = CodebaseContext(
+        str(roots.code_root),
+        path_provider=TempPathProvider(roots.profile),
+        cli_config=parsed,
+    )
+    context.explore()
+    indexed = context.file_index.get("python", [])
+
+    assert "probe.xyz" in indexed, (
+        f"the scanner ignored the injected configuration; indexed {indexed}"
+    )
+    assert "probe.py" not in indexed, (
+        f"the scanner fell back to ambient defaults; indexed {indexed}"
+    )
+
+
+@pytest.mark.no_contained_config_seed
+def test_direct_click_fallback_reaches_the_same_consumer_boundary(roots, monkeypatch):
+    """Direct Click entry, with NO main above it, through the same consumer.
+
+    The callback must select for itself and the selection must reach the same
+    real interactive consumer, resolved as a theme operation. A conflicting
+    global is cached and a hostile environment selector is absent here so the
+    code-root scan is the path under test.
+    """
+    from click.testing import CliRunner
+
+    from scrappy.cli import commands as commands_module
+    from scrappy.cli.core import CLI
+    from scrappy.infrastructure.paths import TempPathProvider
+    from tests.cli.helpers import MockApiKeyConfigService
+
+    monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    write_marked_config(roots.code_root, "from-code-root")
+    other = write_marked_config(roots.other_cwd, "from-elsewhere")
+    set_config(CLIConfigFactory().create_from_file(str(other)))
+
+    seen = {}
+
+    def recording_start(ctx, theme, resume=False, cli_config=None):
+        seen["cli_config"] = cli_config
+
+    monkeypatch.setattr(commands_module, "start_tui_deferred", recording_start)
+
+    os.chdir(roots.code_root)
+    result = CliRunner().invoke(commands_module.cli, [], obj={})
+    assert result.exit_code == 0, f"direct Click entry failed: {result.output}"
+
+    captured = seen.get("cli_config")
+    assert captured is not None, "direct Click entry captured nothing"
+
+    # Same consumer boundary as the main() route.
+    cli = CLI(
+        orchestrator=Mock(),
+        io=Mock(),
+        api_key_service=MockApiKeyConfigService(),
+        path_provider=TempPathProvider(roots.profile),
+        cli_config=captured,
+    )
+    os.chdir(roots.other_cwd)
+
+    resolved_theme = cli._create_interactive_mode()._config.theme
+    assert resolved_theme.primary == MARKER_COLOURS["from-code-root"], (
+        "the direct Click selection did not reach the consumer's theme resolution"
     )
