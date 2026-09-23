@@ -294,30 +294,6 @@ def test_nearest_directory_wins_over_an_ancestor(tmp_path):
 
 
 @pytest.mark.no_contained_config_seed
-def test_orchestrator_positional_api_key_service_still_binds_to_the_service():
-    """An old positional api_key_service must NOT land on cli_config."""
-    import inspect
-    from unittest.mock import Mock
-
-    from scrappy.orchestrator.core import AgentOrchestrator
-
-    sig = inspect.signature(AgentOrchestrator.__init__)
-    names = [n for n, p in sig.parameters.items()
-             if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
-    assert names.index("cli_config") > names.index("api_key_service"), (
-        "cli_config must be appended AFTER api_key_service, or an existing "
-        "positional service rebinds to configuration"
-    )
-
-    service = Mock(name="api_key_service")
-    positional = [None] * (names.index("api_key_service") - 1) + [service]
-    bound = sig.bind(Mock(name="self"), *positional)
-
-    assert bound.arguments["api_key_service"] is service
-    assert "cli_config" not in bound.arguments, "cli_config must remain defaulted"
-
-
-@pytest.mark.no_contained_config_seed
 def test_factory_positional_semantic_search_flag_is_not_captured_by_cli_config():
     """An old positional enable_semantic_search=False must stay False.
 
@@ -351,42 +327,156 @@ def test_factory_positional_semantic_search_flag_is_not_captured_by_cli_config()
     assert factory._cli_config is None
 
 
+
+
 # ---------------------------------------------------------------------------
-# F5: fixture lifecycle. The fixture claims to restore the global AND the
-# factory cache. These two run in file order: the first deliberately dirties
-# both, the second asserts neither leaked. Restoring only the global would
-# leave _factory._cached_config cleared rather than restored, and this pair is
-# what detects that.
+# F3: a REAL old-style positional construction, not signature inspection.
+# All components are supplied so the injected-component branch runs and no
+# factory work is performed.
 # ---------------------------------------------------------------------------
 
-LIFECYCLE_SENTINEL = 0.4242
 
+@pytest.mark.no_contained_config_seed
+def test_orchestrator_old_positional_call_still_binds_the_api_key_service():
+    """An old positional api_key_service must reach the service, not cli_config.
 
-def test_lifecycle_a_dirties_both_the_global_and_the_factory_cache(tmp_path):
-    """Dirty both caches. Teardown must undo this before the next test."""
-    from scrappy.cli import config_factory as cf
+    This CONSTRUCTS the orchestrator with arguments in their historical
+    positional slots. If cli_config were reinserted before api_key_service the
+    service would land on configuration and _api_key_service would default,
+    which is a behaviour change no keyword-only test can see.
+    """
+    from unittest.mock import Mock
 
-    path = write_config(tmp_path, LIFECYCLE_SENTINEL)
-    dirty = cf.CLIConfigFactory().create_from_file(str(path))
+    from scrappy.orchestrator.core import AgentOrchestrator
 
-    cf.set_config(dirty)
-    cf._factory._cached_config = dirty
+    service = Mock(name="api_key_service")
+    components = [Mock(name=f"component{i}") for i in range(16)]  # output..model_selector
 
-    assert cf.get_config().temperature_default == LIFECYCLE_SENTINEL
-    assert cf._factory._cached_config is dirty
-
-
-def test_lifecycle_b_sees_no_leak_from_the_previous_test():
-    """Neither cache may carry the previous test's object."""
-    from tests.conftest import CONTAINED_CONFIG_SEED
-    from scrappy.cli import config_factory as cf
-
-    assert cf.get_config().temperature_default != LIFECYCLE_SENTINEL, (
-        "the dirtied global leaked across the fixture boundary"
+    orchestrator = AgentOrchestrator(
+        None,     # project_path
+        True,     # context_aware
+        True,     # enable_cache
+        24,       # cache_ttl_hours
+        False,    # enable_semantic_search
+        None,     # quality_mode
+        *components,
+        None,     # path_provider
+        service,  # api_key_service, historically the final positional slot
     )
-    assert cf.get_config().temperature_default == CONTAINED_CONFIG_SEED["temperature_default"]
 
-    cached = cf._factory._cached_config
-    assert cached is None or cached.temperature_default != LIFECYCLE_SENTINEL, (
-        "the dirtied factory cache leaked across the fixture boundary"
+    assert orchestrator._api_key_service is service, (
+        "the positional service was captured by a later-inserted parameter"
     )
+
+
+# ---------------------------------------------------------------------------
+# F5: controlled configuration inputs, and restoration observed IMMEDIATELY.
+# These drive tests/conftest.py's contained_cli_config_scope directly, so no
+# assertion depends on test ordering and no later fixture setup can mask a
+# restoration failure.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.no_contained_config_seed
+def test_scope_replaces_a_hostile_inherited_selector(tmp_path, monkeypatch):
+    """A selector we cannot show is contained must NOT survive into the body.
+
+    This is the F5 gap: presence was previously treated as sufficient, so an
+    inherited path naming a developer file stayed live for any reload.
+    """
+    from tests.conftest import contained_cli_config_scope
+
+    hostile = tmp_path / "hostile.json"
+    hostile.write_text(json.dumps({"temperature_default": 0.99}))
+    monkeypatch.setenv("CLI_CONFIG_PATH", str(hostile))
+    monkeypatch.delenv("SCRAPPY_TEST_SESSION_ID", raising=False)
+
+    with contained_cli_config_scope(tmp_path / "disposable", seed=False):
+        inside = os.environ["CLI_CONFIG_PATH"]
+        assert Path(inside) != hostile, "hostile selector survived into the test body"
+        assert not Path(inside).exists(), "replacement selector should name no real file"
+
+    assert os.environ["CLI_CONFIG_PATH"] == str(hostile), "original selector not restored"
+
+
+@pytest.mark.no_contained_config_seed
+def test_scope_establishes_a_selector_when_absent(tmp_path, monkeypatch):
+    """Absent selector: the scope must own one rather than leave branch 3 open."""
+    from tests.conftest import contained_cli_config_scope
+
+    monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+
+    with contained_cli_config_scope(tmp_path / "disposable", seed=False):
+        assert "CLI_CONFIG_PATH" in os.environ
+
+    assert "CLI_CONFIG_PATH" not in os.environ, "established selector not removed"
+
+
+@pytest.mark.no_contained_config_seed
+def test_scope_preserves_a_demonstrably_controlled_launcher_selector(tmp_path, monkeypatch):
+    """A launcher assignment inside the assigned HOME is kept as-is."""
+    from tests.conftest import contained_cli_config_scope
+
+    home = tmp_path / "contained_home"
+    (home / ".config" / "scrappy").mkdir(parents=True)
+    controlled = home / ".config" / "scrappy" / "contained-cli-config.absent.json"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("SCRAPPY_TEST_SESSION_ID", "test-session")
+    monkeypatch.setenv("CLI_CONFIG_PATH", str(controlled))
+
+    with contained_cli_config_scope(tmp_path / "disposable", seed=False):
+        assert os.environ["CLI_CONFIG_PATH"] == str(controlled), (
+            "a controlled launcher assignment must be preserved, not replaced"
+        )
+
+
+@pytest.mark.no_contained_config_seed
+def test_scope_restores_non_none_global_and_factory_cache_immediately(tmp_path):
+    """Restoration observed the instant the scope exits.
+
+    Both saved values are deliberately NON-None, so a teardown that merely
+    clears rather than restores is detected. The ordered-pair form this
+    replaces could not do that: the next test's own setup reseeded before it
+    could look.
+    """
+    from scrappy.cli import config_factory as cf
+    from tests.conftest import contained_cli_config_scope
+
+    prior = cf.CLIConfigFactory().create_from_file(str(write_config(tmp_path, 0.31)))
+    cf.set_config(prior)
+    cf._factory._cached_config = prior
+
+    with contained_cli_config_scope(tmp_path / "disposable", seed=True):
+        assert cf._global_config is not prior, "scope did not take over the global"
+
+    assert cf._global_config is prior, "global was cleared instead of restored"
+    assert cf._factory._cached_config is prior, "factory cache was cleared instead of restored"
+
+
+@pytest.mark.no_contained_config_seed
+def test_scope_restores_even_when_setup_fails(tmp_path, monkeypatch):
+    """A failure during seeding must still restore everything.
+
+    Failure is injected at the external boundary the scope calls during setup,
+    so the exception arrives before the body would run.
+    """
+    from scrappy.cli import config_factory as cf
+    from tests.conftest import contained_cli_config_scope
+
+    prior = cf.CLIConfigFactory().create_from_file(str(write_config(tmp_path, 0.31)))
+    cf.set_config(prior)
+    cf._factory._cached_config = prior
+    saved_env = os.environ.get("CLI_CONFIG_PATH")
+
+    def boom(*a, **k):
+        raise RuntimeError("injected setup failure")
+
+    monkeypatch.setattr(cf.CLIConfigFactory, "create_from_file", boom)
+
+    with pytest.raises(RuntimeError, match="injected setup failure"):
+        with contained_cli_config_scope(tmp_path / "disposable", seed=True):
+            pytest.fail("body must not run when setup fails")
+
+    assert cf._global_config is prior, "global not restored after setup failure"
+    assert cf._factory._cached_config is prior, "factory cache not restored after setup failure"
+    assert os.environ.get("CLI_CONFIG_PATH") == saved_env, "selector not restored"

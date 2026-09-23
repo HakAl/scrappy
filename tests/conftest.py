@@ -1,6 +1,7 @@
 """
 Pytest configuration and shared fixtures.
 """
+import contextlib
 import os
 import pytest
 import sys
@@ -308,81 +309,98 @@ CONTAINED_CONFIG_SEED = {
 }
 
 
-@pytest.fixture(autouse=True)
-def contained_cli_config(request, tmp_path_factory):
-    """Two layers, function-scoped, autouse.
+def _selector_is_demonstrably_controlled() -> bool:
+    """True ONLY for a selector this code can SHOW is contained.
 
-    LAYER 1, SOURCE CONTAINMENT. Under scripts/contained-pytest.sh the launcher
-    ALWAYS assigns CLI_CONFIG_PATH to a contained location, and config_factory
-    branch 2 makes that outrank the CWD scan. That assignment is left ALONE:
-    removing it suite-wide would hand the suite back real-profile discovery,
-    which the note above cwd_discovery_root warns against and
-    TestConfigDiscoveryPrecedence pins.
+    PRESENCE IS NOT SUFFICIENT, which was the F5 gap. Outside the launcher an
+    inherited CLI_CONFIG_PATH can name any developer file, and preserving it
+    because it merely exists leaves that file reachable through
+    config_factory's environment branch on any reload.
 
-    BUT THE LAUNCHER IS NOT ALWAYS PRESENT. .github/workflows/tests.yml invokes
-    pytest DIRECTLY, so on the ordinary CI matrix there is no launcher
-    assignment and branch 3 would scan the runner's working directory. When the
-    variable is ABSENT this fixture therefore ESTABLISHES containment itself by
-    pointing it at a disposable path, rather than asserting containment it does
-    not own. Only that case is covered; the claim is deliberately limited to
-    what this code enforces.
+    Controlled means BOTH: the launcher marked this run
+    (SCRAPPY_TEST_SESSION_ID, scripts/contained-pytest.sh:182), AND the
+    selector resolves inside the HOME that same launcher assigned
+    (CLI_CONFIG_ABSENT is derived from HOME_DIR, :94). Anything else is
+    treated as hostile and replaced with a disposable source.
+    """
+    value = os.environ.get("CLI_CONFIG_PATH")
+    if value is None:
+        return False
+    if not os.environ.get("SCRAPPY_TEST_SESSION_ID"):
+        return False
+    home = os.environ.get("HOME")
+    if not home:
+        return False
+    try:
+        return Path(value).resolve().is_relative_to(Path(home).resolve())
+    except (OSError, ValueError):
+        return False
 
-    LAYER 2, SEEDING, ON BY DEFAULT, opt out with
-    @pytest.mark.no_contained_config_seed. A disposable file with KNOWN values
-    is selected explicitly, so the fallback consumers that intentionally keep
-    their standalone lookup (context/config_loader.py, cli/tool_detector.py)
-    observe controlled values.
 
-    Clearing the cache alone would NOT be isolation on its own: the next call
-    would simply rediscover. It is isolation here because the launcher has
-    already contained the SOURCE and layer 2 supplies an explicit absolute
-    path that outranks it.
+@contextlib.contextmanager
+def contained_cli_config_scope(disposable_dir, seed: bool = True):
+    """The fixture's ENTIRE lifecycle, as one directly testable unit.
+
+    Extracted from the fixture so restoration can be observed IMMEDIATELY after
+    the scope exits, rather than inferred from a later test whose own setup
+    would mask a failure.
     """
     import json as _json
 
     from scrappy.cli import config_factory as _cf
 
-    # Save BOTH pieces of cached state. reset_config() clears the module global
-    # AND _factory._cached_config, so restoring only the global would leave the
-    # factory cache cleared rather than restored.
+    disposable_dir = Path(disposable_dir)
+    disposable_dir.mkdir(parents=True, exist_ok=True)
+
+    # reset_config() clears the module global AND _factory._cached_config, so
+    # both must be saved or teardown clears rather than restores.
     saved_global = _cf._global_config
     saved_factory_cache = getattr(_cf._factory, "_cached_config", None)
     saved_env = os.environ.get("CLI_CONFIG_PATH")
-    established_env = False
+    env_replaced = False
 
     try:
-        # LAYER 1. Leave a launcher-assigned value alone; establish one when it
-        # is absent, so an opt-out outside the launcher still cannot reach the
-        # developer's or runner's configuration.
-        if saved_env is None:
-            fallback_dir = tmp_path_factory.mktemp("contained-cli-config-source")
-            os.environ["CLI_CONFIG_PATH"] = str(fallback_dir / "absent.json")
-            established_env = True
+        # LAYER 1: own the configuration SOURCE unless it is demonstrably
+        # controlled already. A launcher assignment is kept; absent and hostile
+        # selectors are both replaced with a disposable, non-existent path,
+        # which config_factory skips gracefully while still displacing any CWD
+        # scan. CLI_CONFIG_PATH is never removed globally.
+        if not _selector_is_demonstrably_controlled():
+            os.environ["CLI_CONFIG_PATH"] = str(disposable_dir / "contained-absent.json")
+            env_replaced = True
 
         _cf.reset_config()
 
-        # LAYER 2
-        if request.node.get_closest_marker("no_contained_config_seed") is None:
-            seed_dir = tmp_path_factory.mktemp("contained-cli-config")
-            seed_file = seed_dir / ".scrappy.json"
+        # LAYER 2: seed known values for the fallback consumers.
+        # set_config with an explicitly parsed object, NOT get_config(..., reload=True):
+        # CLIConfigFactory.create() merges environment AFTER the file and overwrites
+        # explicit file values with environment defaults (measured: 0.7 with
+        # use_env=True versus 0.123 with use_env=False for the same file). That is
+        # pre-existing production behaviour, tracked separately as scrappy-bj58 and
+        # deliberately NOT changed here; seeding simply must not depend on it.
+        if seed:
+            seed_file = disposable_dir / ".scrappy.json"
             seed_file.write_text(_json.dumps(CONTAINED_CONFIG_SEED))
-        # set_config with an explicitly parsed object, NOT
-        # get_config(config_path=..., reload=True). The latter routes through
-        # CLIConfigFactory.create(), whose step-4 environment merge overwrites
-        # explicit file values with environment defaults (verified: create()
-        # yields 0.7 with use_env=True and 0.123 with use_env=False for the
-        # same file). That is a pre-existing production behaviour, reported
-        # separately and deliberately NOT changed here; seeding simply must not
-        # depend on it, or the seed would silently be defaults.
             _cf.set_config(_cf.CLIConfigFactory().create_from_file(str(seed_file)))
 
         yield
     finally:
-        # Restore the global AND the factory cache, and drop only an env value
-        # this fixture established. Setup is inside the try, so a failure while
-        # seeding still runs this cleanup.
+        # Restore global, factory cache and any selector THIS scope replaced.
         _cf.reset_config()
         _cf._global_config = saved_global
         _cf._factory._cached_config = saved_factory_cache
-        if established_env:
-            os.environ.pop("CLI_CONFIG_PATH", None)
+        if env_replaced:
+            if saved_env is None:
+                os.environ.pop("CLI_CONFIG_PATH", None)
+            else:
+                os.environ["CLI_CONFIG_PATH"] = saved_env
+
+
+@pytest.fixture(autouse=True)
+def contained_cli_config(request, tmp_path_factory):
+    """Thin wrapper: all behaviour lives in contained_cli_config_scope."""
+    seed = request.node.get_closest_marker("no_contained_config_seed") is None
+    with contained_cli_config_scope(
+        tmp_path_factory.mktemp("contained-cli-config"), seed=seed
+    ):
+        yield
