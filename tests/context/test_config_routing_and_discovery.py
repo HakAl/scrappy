@@ -773,8 +773,31 @@ def test_main_capture_reaches_the_real_deferred_cli_and_consumer(roots, monkeypa
     other = write_marked_config(roots.other_cwd, "from-elsewhere")
     set_config(CLIConfigFactory().create_from_file(str(other)))
 
+    # CHANGE A CONTROLLED INPUT BETWEEN main's CAPTURE AND THE CLICK CALLBACK.
+    # Without this the callback would re-select from the same directory and
+    # reach the same answer, so a discarded capture would be undetectable.
+    #
+    # The seam is the Click invocation itself: main() resolves `cli` from module
+    # globals at call time, so wrapping it fires AFTER main has captured and
+    # validated, and BEFORE the callback could select again. An earlier attempt
+    # hooked CLIConfig.validate, which is wrong: validate fires eight times
+    # during a single capture, the first before the file is even read, so it
+    # rewrote the input too early and the capture itself saw the new value.
+    from scrappy.cli import commands as commands_module
+
+    real_cli = commands_module.cli
+    rewritten = {"done": False}
+
+    def cli_after_inputs_change(*args, **kwargs):
+        rewritten["done"] = True
+        write_marked_config(roots.code_root, "rewritten-after-main-captured")
+        return real_cli(*args, **kwargs)
+
+    monkeypatch.setattr(commands_module, "cli", cli_after_inputs_change)
+
     os.chdir(roots.code_root)
     factory = run_main_capturing_the_deferred_factory(monkeypatch, roots)
+    assert rewritten["done"], "the input-change seam never fired"
 
     # The deferred factory runs LATER, from a different directory.
     os.chdir(roots.other_cwd)
@@ -782,7 +805,9 @@ def test_main_capture_reaches_the_real_deferred_cli_and_consumer(roots, monkeypa
 
     assert cli._cli_config is not None, "the capture never reached the deferred CLI"
     assert cli._cli_config.theme_config["preset"] == "from-code-root", (
-        "the deferred CLI used a re-selection or the cached global, not main's capture"
+        "the deferred CLI used a re-selection or the cached global, not main's "
+        "capture: seeing 'rewritten-after-main-captured' means the capture was "
+        "discarded and Click selected again"
     )
 
     # A REAL consumer, composed by the CLI itself.
