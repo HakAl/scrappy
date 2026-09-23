@@ -31,6 +31,12 @@ from scrappy.orchestrator.types import StreamChunk, ToolCallFragment
 CUSTOM_RULES_FILE = "TEAM_RULES.md"
 RULES_MARKER = "rule-marker-from-injected-loader"
 
+# A heading alone would be SKIPPED by ReminderManager (reminder_manager.py:78),
+# so a heading-only file cannot produce a reminder even when the code is
+# correct. This body is a bullet AND carries an imperative, so it matches
+# RULE_PATTERNS and must survive into get_reminder() output.
+RULES_BODY = f"# Team rules\n\n- always apply {RULES_MARKER}\n"
+
 
 class StreamingModelBoundary:
     """The only stubbed seam: the model boundary. Everything else is real."""
@@ -129,7 +135,7 @@ def test_injected_loader_rules_are_consumed_into_run_context_and_reminders(roots
     Not a constructor assertion. The bridge really runs, and the assertions read
     what the production code placed in the run context and the reminder manager.
     """
-    (roots.code_root / CUSTOM_RULES_FILE).write_text(f"# {RULES_MARKER}\n")
+    (roots.code_root / CUSTOM_RULES_FILE).write_text(RULES_BODY)
     captured = capture_run_context(monkeypatch)
 
     bridge = build_bridge(rules_loader=non_default_loader())
@@ -145,6 +151,12 @@ def test_injected_loader_rules_are_consumed_into_run_context_and_reminders(roots
     assert context.reminder_manager is not None, (
         "rules were loaded but no reminder manager was created"
     )
+    reminder = context.reminder_manager.get_reminder()
+    assert reminder, "no reminder was produced from the consumed rules"
+    assert RULES_MARKER in reminder, (
+        "the rules never reached the reminder manager: existence of a manager is "
+        "not consumption, and removing set_project_rules would leave it satisfied"
+    )
 
 
 def test_bare_default_loader_does_not_find_the_custom_rules(roots):
@@ -154,7 +166,7 @@ def test_bare_default_loader_does_not_find_the_custom_rules(roots):
     nothing, which is exactly why the previous test failing would be a real
     regression signal rather than an environment artefact.
     """
-    (roots.code_root / CUSTOM_RULES_FILE).write_text(f"# {RULES_MARKER}\n")
+    (roots.code_root / CUSTOM_RULES_FILE).write_text(RULES_BODY)
 
     loaded = create_default_agent_rules_loader().load(roots.code_root)
 
@@ -174,7 +186,7 @@ def test_bare_default_loader_does_not_find_the_custom_rules(roots):
 
 def test_absent_injection_composes_the_production_default(roots, monkeypatch):
     """No injection must behave exactly as before: AGENTS.md is still found."""
-    (roots.code_root / "AGENTS.md").write_text(f"# {RULES_MARKER}\n")
+    (roots.code_root / "AGENTS.md").write_text(RULES_BODY)
     captured = capture_run_context(monkeypatch)
 
     bridge = build_bridge()
@@ -193,8 +205,8 @@ def test_explicit_working_dir_still_wins_over_the_process_cwd(roots, monkeypatch
     passed working_dir, so an injected loader changes which loader runs, never
     which directory it starts from.
     """
-    (roots.code_root / CUSTOM_RULES_FILE).write_text(f"# {RULES_MARKER}\n")
-    (roots.process_cwd / CUSTOM_RULES_FILE).write_text("# decoy-from-process-cwd\n")
+    (roots.code_root / CUSTOM_RULES_FILE).write_text(RULES_BODY)
+    (roots.process_cwd / CUSTOM_RULES_FILE).write_text("- never apply decoy-from-process-cwd\n")
     captured = capture_run_context(monkeypatch)
 
     bridge = build_bridge(rules_loader=non_default_loader())
@@ -208,54 +220,88 @@ def test_explicit_working_dir_still_wins_over_the_process_cwd(roots, monkeypatch
     )
 
 
-def test_bridge_rules_loader_is_appended_after_the_existing_final_parameter():
-    """Old positional calls must be unaffected by the new dependency."""
-    import inspect
+def test_old_positional_bridge_call_still_binds_task_storage(roots):
+    """A REAL old-style positional construction, not signature inspection.
 
+    Constructs the bridge with arguments in their historical positional slots.
+    If rules_loader had been inserted before task_storage, the storage would
+    bind to the loader and default away, which is a behaviour change no
+    keyword-only test can see.
+    """
+    from scrappy.agent_tools.tools.task_tools import MarkdownTaskStorage
     from scrappy.cli.textual.langgraph_bridge import LangGraphBridge
+    from scrappy.graph.tools import ToolAdapter
 
-    names = [
-        n for n, p in inspect.signature(LangGraphBridge.__init__).parameters.items()
-        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
-    ]
-    assert names.index("rules_loader") > names.index("task_storage"), (
-        "rules_loader must come after the previously final parameter"
+    async_bridge = Mock()
+    async_bridge.blocking_confirm_yna.return_value = "a"
+    storage = MarkdownTaskStorage(roots.storage_root / "TODO.md")
+
+    bridge = LangGraphBridge(
+        Mock(),                                   # app
+        async_bridge,                             # bridge
+        Mock(),                                   # output_adapter
+        StreamingModelBoundary(),                 # orchestrator
+        ToolAdapter.create_default(profile="full"),  # tool_adapter
+        storage,                                  # task_storage, historical final slot
+    )
+
+    assert bridge._task_storage is storage, (
+        "the positional task storage was captured by a later-inserted parameter"
+    )
+    assert bridge._rules_loader is not None, (
+        "absent injection must still compose the production default"
     )
 
 
-def test_runtime_wiring_passes_a_loader_to_the_bridge(roots, monkeypatch):
-    """The production default is composed at RUNTIME WIRING, not in the bridge.
+def test_runtime_composed_bridge_delivers_usable_rules(roots, monkeypatch):
+    """RUNTIME COMPOSITION, end to end, with only external doubles.
 
-    Captures the real call so the composition point is evidenced rather than
-    assumed.
+    Drives the REAL bridge returned by wire_textual_runtime rather than
+    replacing LangGraphBridge with a recorder. The previous version asserted
+    argument identity, which showed forwarding but never that runtime
+    composition delivers USABLE rules to execution, and it mocked an internal
+    boundary the selected scope keeps real.
+
+    The decoy under the process CWD is retained, so a loader that started from
+    ambient state rather than the resolved run directory also fails.
     """
-    from scrappy.cli.textual import langgraph_bridge as lgb
     from scrappy.cli.textual import runtime_wiring as rw
+    from scrappy.graph.tools import ToolAdapter
 
-    captured = {}
-
-    class Recorder:
-        def __init__(self, **kwargs):
-            captured.update(kwargs)
-
-    # runtime_wiring imports LangGraphBridge INSIDE the function, so the name
-    # must be replaced at its defining module, not on runtime_wiring.
-    monkeypatch.setattr(lgb, "LangGraphBridge", Recorder)
+    (roots.code_root / CUSTOM_RULES_FILE).write_text(RULES_BODY)
+    (roots.process_cwd / CUSTOM_RULES_FILE).write_text("- never apply decoy-from-process-cwd\n")
+    captured = capture_run_context(monkeypatch)
 
     app = Mock()
-    app._path_provider = type("P", (), {"todo_file": lambda self: roots.storage_root / "TODO.md"})()
     app.bridge = Mock()
+    app.bridge.blocking_confirm_yna.return_value = "a"
+    app._path_provider = type(
+        "P", (), {"todo_file": lambda self: roots.storage_root / "TODO.md"}
+    )()
+    app._tool_adapter = ToolAdapter.create_default(profile="full")
 
-    injected = non_default_loader()
-    rw.wire_textual_runtime(
+    bridge = rw.wire_textual_runtime(
         app=app,
         interactive_mode=Mock(),
         io=Mock(),
         orchestrator=StreamingModelBoundary(),
         output_adapter=Mock(),
-        rules_loader=injected,
+        rules_loader=non_default_loader(),
     )
 
-    assert captured.get("rules_loader") is injected, (
-        "runtime wiring did not forward the loader to the bridge"
+    assert bridge is not None, "runtime wiring returned no bridge"
+
+    result = bridge.run_agent(task="noop", working_dir=str(roots.code_root))
+    assert result.success, f"agent run failed: {result.error}"
+
+    context = captured["context"]
+    assert RULES_MARKER in context.project_rules, (
+        "the runtime-composed loader's rules never reached the run context"
+    )
+    reminder = context.reminder_manager.get_reminder()
+    assert reminder and RULES_MARKER in reminder, (
+        "the runtime-composed loader's rules never reached get_reminder output"
+    )
+    assert "decoy-from-process-cwd" not in context.project_rules, (
+        "discovery started from the ambient CWD instead of the run directory"
     )
