@@ -44,49 +44,68 @@ def cli(ctx, resume, no_save):
 
     # If no subcommand, start TUI
     if ctx.invoked_subcommand is None:
-        # SELECT before the first get_config() so the cache is populated from
-        # the captured code root rather than ambient process state.
-        config = get_config(config_path=_select_config_at_entry())
-        start_tui_deferred(ctx, config.theme, resume, cli_config=config)
+        # CAPTURE ONCE, before any ambient read, and forward the SAME capture.
+        captured, _ = capture_configuration_at_entry()
+        config = captured if captured is not None else get_config()
+        start_tui_deferred(ctx, config.theme, resume, cli_config=captured)
 
 
-def _select_config_at_entry():
-    """Select the configuration SOURCE against the captured code root, once.
+def capture_configuration_at_entry(code_root=None):
+    """Capture the configuration selection ONCE, as an EXPLICIT OBJECT.
 
-    Returns an absolute path string, or None to leave today's behaviour
-    untouched.
+    Returns (config, source_path), or (None, None) when nothing is explicitly
+    selected. A returned object means "explicitly injected"; None means
+    "no injection, ordinary precedence applies". Downstream consumers keep their
+    standalone fallback in the None case, so behaviour is unchanged there.
 
-    Why this must run BEFORE the first get_config(): the factory caches on the
-    first uncached call (config_factory.py:248-249), and its default-file scan
-    reads the AMBIENT process directory (`Path.cwd() / filename`,
-    config_factory.py:156-159). Whichever call happens first fixes the object
-    for the process, so an unselected first read would cache a selection made
-    against wherever the process happened to be standing, and every downstream
-    hop would then faithfully forward that wrong object.
+    WHY AN OBJECT AND NOT A PATH. get_config(config_path=...) does NOT replace an
+    already-cached global (config_factory.py:248-251 only rebuilds when reload or
+    _global_config is None). Handing a path down therefore loses to any object
+    cached earlier in the process, even when the selection here is correct. The
+    captured object is forwarded directly instead, so an explicit selection wins
+    without changing get_config's cache or reload semantics.
 
-    PRECEDENCE IS PRESERVED EXACTLY, not re-ordered:
-      - An explicit CLI_CONFIG_PATH keeps its precedence: we return None and let
-        the factory honour the environment, rather than overriding it here.
-      - Otherwise the same DEFAULT_CONFIG_FILES are searched in the same order,
-        but against the code root captured ONCE here and resolved to absolute,
-        so a later CWD change cannot retarget it.
-      - If no candidate exists we return None, preserving missing-file
-        behaviour and environment merging unchanged.
+    CAPTURED ONCE, NOT RE-READ. The code root is resolved a single time and the
+    selection is resolved to an ABSOLUTE path against it, so a later CWD change
+    cannot retarget it, and both entry points forward the SAME capture rather
+    than each performing its own.
+
+    PRECEDENCE IS PRESERVED EXACTLY, mirroring CLIConfigFactory.create:
+      - CLI_CONFIG_PATH outranks the code-root scan.
+      - If CLI_CONFIG_PATH is set but names no existing file, we do NOT fall
+        through to the scan, because production does not either: branch 3 is an
+        `else`, so an unreadable environment selection yields defaults.
+      - Otherwise the same DEFAULT_CONFIG_FILES are searched in the same order.
+      - The object itself is built by the production factory, so parsing and
+        environment merging are untouched (scrappy-bj58 stays out of scope).
     """
     import os
     from pathlib import Path
 
     from .config_factory import CLIConfigFactory
 
-    if 'CLI_CONFIG_PATH' in os.environ:
-        return None
+    root = Path(code_root).resolve() if code_root is not None else Path.cwd().resolve()
 
-    code_root = Path.cwd().resolve()
-    for filename in CLIConfigFactory.DEFAULT_CONFIG_FILES:
-        candidate = code_root / filename
-        if candidate.exists():
-            return str(candidate)
-    return None
+    env_value = os.environ.get('CLI_CONFIG_PATH')
+    if env_value:
+        candidate = Path(env_value)
+        if not candidate.is_absolute():
+            candidate = root / candidate
+        candidate = candidate.resolve()
+        if not candidate.exists():
+            return None, None
+        selected = candidate
+    else:
+        selected = None
+        for filename in CLIConfigFactory.DEFAULT_CONFIG_FILES:
+            candidate = (root / filename).resolve()
+            if candidate.exists():
+                selected = candidate
+                break
+        if selected is None:
+            return None, None
+
+    return CLIConfigFactory().create(config_path=str(selected)), selected
 
 
 def start_tui_deferred(ctx, theme, resume: bool = False, cli_config=None) -> None:
@@ -226,8 +245,10 @@ def main():
     OutputModeContext.set_tui_mode(False)
 
     try:
-        # Direct Click entry: same selection, same reason as the main() path.
-        config = get_config(config_path=_select_config_at_entry())
+        # Direct Click entry: the SAME capture helper, so both entry points
+        # resolve one selection rather than each deriving its own.
+        captured, _ = capture_configuration_at_entry()
+        config = captured if captured is not None else get_config()
         config.validate()
     except Exception as e:
         from .logging import get_logger

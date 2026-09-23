@@ -23,10 +23,11 @@ profile region untouched.
 import json
 import os
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
-from scrappy.cli.commands import _select_config_at_entry
+from scrappy.cli.commands import capture_configuration_at_entry
 from scrappy.cli.config_factory import CLIConfigFactory, get_config, set_config
 from scrappy.context.agent_rules_loader import AgentRulesLoader
 
@@ -89,11 +90,12 @@ def test_entry_selects_against_the_code_root_and_returns_an_absolute_path(roots,
     monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
     expected = write_config(roots.code_root, 0.11)
 
-    selected = _select_config_at_entry()
+    config, selected = capture_configuration_at_entry()
 
     assert selected is not None, "a present config file must be selected"
     assert Path(selected).is_absolute(), "selection must be absolute, not CWD-relative"
     assert Path(selected).resolve() == expected.resolve()
+    assert config is not None, "an explicit selection must yield an OBJECT, not just a path"
 
 
 @pytest.mark.no_contained_config_seed
@@ -108,7 +110,7 @@ def test_entry_selection_survives_a_later_cwd_change(roots, monkeypatch):
     from_code_root = write_config(roots.code_root, 0.11)
     write_config(roots.other_cwd, 0.99)
 
-    selected = _select_config_at_entry()
+    _, selected = capture_configuration_at_entry()
     os.chdir(roots.other_cwd)
 
     assert Path(selected).resolve() == from_code_root.resolve(), (
@@ -126,7 +128,11 @@ def test_entry_selection_yields_to_an_explicit_environment_selector(roots, monke
     write_config(roots.code_root, 0.11)
     monkeypatch.setenv("CLI_CONFIG_PATH", str(roots.other_cwd / "hostile.json"))
 
-    assert _select_config_at_entry() is None
+    # The environment names a file that does not exist. Production does NOT fall
+    # through to the code-root scan in that case (branch 3 is an `else`), so no
+    # explicit selection is captured and ordinary precedence yields defaults.
+    config, selected = capture_configuration_at_entry()
+    assert config is None and selected is None
 
 
 @pytest.mark.no_contained_config_seed
@@ -137,7 +143,8 @@ def test_entry_selection_preserves_missing_file_behaviour(roots, monkeypatch):
                if (roots.code_root / n).exists()]
     assert not present, f"fixture must start clean, found {present}"
 
-    assert _select_config_at_entry() is None
+    config, selected = capture_configuration_at_entry()
+    assert config is None and selected is None
 
 
 # ---------------------------------------------------------------------------
@@ -542,3 +549,147 @@ def test_scope_restores_even_when_setup_fails(tmp_path, monkeypatch):
     assert cf._global_config is prior, "global not restored after setup failure"
     assert cf._factory._cached_config is prior, "factory cache not restored after setup failure"
     assert os.environ.get("CLI_CONFIG_PATH") == saved_env, "selector not restored"
+
+
+# ---------------------------------------------------------------------------
+# F2/F4: the capture must survive a DIFFERENT CACHED GLOBAL, and must reach a
+# real consumer through the real entry. These drive the actual Click group and
+# the real CLI composition rather than asserting below the entry boundary.
+#
+# The marker rides on theme_config deliberately: it SURVIVES current merge
+# semantics, while scalars are overwritten by the environment merge regardless
+# (scrappy-bj58, out of scope here). A scalar marker would prove nothing.
+# ---------------------------------------------------------------------------
+
+
+def write_marked_config(directory: Path, marker: str) -> Path:
+    path = directory / ".scrappy.json"
+    path.write_text(json.dumps({"theme_config": {"preset": marker}}))
+    return path
+
+
+@pytest.mark.no_contained_config_seed
+def test_capture_wins_over_a_different_already_cached_global(roots, monkeypatch):
+    """THE F2 CACHE CONFLICT, proven.
+
+    get_config(config_path=...) does NOT replace an already-cached global, so a
+    path-based selection loses to whatever was cached earlier. The capture
+    returns an OBJECT, so it wins. Both a conflicting cached global AND a valid
+    conflicting file elsewhere are present, so a dropped capture is detectable.
+    """
+    monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    write_marked_config(roots.code_root, "from-code-root")
+    other = write_marked_config(roots.other_cwd, "from-elsewhere")
+
+    set_config(CLIConfigFactory().create_from_file(str(other)))
+    assert get_config().theme_config["preset"] == "from-elsewhere"
+
+    captured, _ = capture_configuration_at_entry()
+
+    assert captured is not None, "no explicit selection was captured"
+    assert captured.theme_config["preset"] == "from-code-root", (
+        "the capture lost to the already-cached global"
+    )
+    # get_config cache/reload semantics are deliberately NOT changed by this.
+    assert get_config().theme_config["preset"] == "from-elsewhere", (
+        "capturing must not mutate the cached global"
+    )
+
+
+@pytest.mark.no_contained_config_seed
+def test_environment_selection_is_resolved_and_retained_by_the_capture(roots, monkeypatch):
+    """CLI_CONFIG_PATH keeps precedence AND is resolved into the capture.
+
+    Previously the helper returned None whenever the variable was set, which
+    ceded control to ambient discovery and left the two entry points deriving
+    their own answers.
+    """
+    env_file = write_marked_config(roots.other_cwd, "from-environment")
+    write_marked_config(roots.code_root, "from-code-root")
+    monkeypatch.setenv("CLI_CONFIG_PATH", str(env_file))
+
+    captured, selected = capture_configuration_at_entry()
+
+    assert selected is not None and Path(selected).is_absolute()
+    assert Path(selected).resolve() == env_file.resolve(), (
+        "the environment selection was not resolved and retained"
+    )
+    assert captured.theme_config["preset"] == "from-environment", (
+        "environment precedence over the code-root scan was not preserved"
+    )
+
+
+@pytest.mark.no_contained_config_seed
+def test_real_click_entry_forwards_one_capture_to_the_deferred_helper(roots, monkeypatch):
+    """ENTRY PROOF: the REAL Click group runs and hands on the SAME capture.
+
+    Invoked through click.testing.CliRunner, so the production group callback
+    executes. start_tui_deferred is recorded rather than run, because it would
+    launch a TUI; everything up to that handoff is real.
+    """
+    from click.testing import CliRunner
+
+    from scrappy.cli import commands as commands_module
+
+    monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    write_marked_config(roots.code_root, "from-code-root")
+    other = write_marked_config(roots.other_cwd, "from-elsewhere")
+    set_config(CLIConfigFactory().create_from_file(str(other)))
+
+    seen = {}
+
+    def recording_start(ctx, theme, resume=False, cli_config=None):
+        seen["cli_config"] = cli_config
+
+    monkeypatch.setattr(commands_module, "start_tui_deferred", recording_start)
+
+    result = CliRunner().invoke(commands_module.cli, [], obj={})
+
+    assert result.exit_code == 0, f"Click entry failed: {result.output}"
+    assert seen.get("cli_config") is not None, (
+        "the real Click entry forwarded no captured configuration"
+    )
+    assert seen["cli_config"].theme_config["preset"] == "from-code-root", (
+        "the entry forwarded the cached global instead of its own capture"
+    )
+
+
+@pytest.mark.no_contained_config_seed
+def test_captured_config_reaches_the_real_interactive_consumer(roots, monkeypatch):
+    """CONSUMER PROOF: the captured object reaches the real interactive mode.
+
+    Builds a REAL CLI through the production composition and drives the real
+    _create_interactive_mode, so the object is observed where a consumer
+    actually receives it. A conflicting global is cached and the CWD moves
+    afterwards, so a dropped capture or an ambient re-read both fail.
+    """
+    from scrappy.cli.core import CLI
+    from scrappy.infrastructure.paths import TempPathProvider
+    from tests.cli.helpers import MockApiKeyConfigService
+
+    monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    write_marked_config(roots.code_root, "from-code-root")
+    other = write_marked_config(roots.other_cwd, "from-elsewhere")
+    set_config(CLIConfigFactory().create_from_file(str(other)))
+
+    os.chdir(roots.code_root)
+    captured, _ = capture_configuration_at_entry()
+    assert captured is not None
+
+    cli = CLI(
+        orchestrator=Mock(),
+        io=Mock(),
+        api_key_service=MockApiKeyConfigService(),
+        path_provider=TempPathProvider(roots.other_cwd),
+        cli_config=captured,
+    )
+    os.chdir(roots.other_cwd)
+
+    interactive = cli._create_interactive_mode()
+
+    assert interactive._config is captured, (
+        "the interactive consumer did not receive the captured object"
+    )
+    assert interactive._config.theme_config["preset"] == "from-code-root", (
+        "the consumer observed the cached global instead of the selection"
+    )
