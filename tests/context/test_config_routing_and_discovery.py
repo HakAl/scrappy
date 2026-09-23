@@ -43,11 +43,19 @@ from scrappy.context.agent_rules_loader import AgentRulesLoader
 def roots(tmp_path, monkeypatch):
     code_root = tmp_path / "code_root"
     other_cwd = tmp_path / "other_cwd"
-    for d in (code_root, other_cwd):
+    storage_root = tmp_path / "storage_root"
+    profile = tmp_path / "profile"
+    for d in (code_root, other_cwd, storage_root, profile):
         d.mkdir()
-    assert code_root.resolve() != other_cwd.resolve()
+    resolved = [str(d.resolve()) for d in (code_root, other_cwd, storage_root, profile)]
+    assert len(set(resolved)) == 4, f"roots must be distinct, got {resolved}"
     monkeypatch.chdir(code_root)
-    return type("Roots", (), {"code_root": code_root, "other_cwd": other_cwd})()
+    return type("Roots", (), {
+        "code_root": code_root,
+        "other_cwd": other_cwd,
+        "storage_root": storage_root,
+        "profile": profile,
+    })()
 
 
 def write_config(directory: Path, temperature: float) -> Path:
@@ -692,4 +700,124 @@ def test_captured_config_reaches_the_real_interactive_consumer(roots, monkeypatc
     )
     assert interactive._config.theme_config["preset"] == "from-code-root", (
         "the consumer observed the cached global instead of the selection"
+    )
+
+
+# ---------------------------------------------------------------------------
+# F4 continuation: the COMPOSED route, end to end.
+#
+# Runs main(), the real Click callback, the real deferred closure, the real
+# create_cli_from_context and a real consumer. Only genuinely external
+# boundaries are replaced: the TUI app, provider probing, the API key service
+# and the path provider. Dropping cli_config anywhere along that chain fails
+# here, which the earlier tests could not detect because they stopped before
+# the closure or bypassed it.
+# ---------------------------------------------------------------------------
+
+
+def run_main_capturing_the_deferred_factory(monkeypatch, roots):
+    """Drive the REAL main() -> Click -> start_tui_deferred chain.
+
+    Returns the cli_factory closure that production built, without launching a
+    TUI. The app itself is the external boundary being replaced; every step up
+    to and including the closure's construction is production code.
+    """
+    import sys
+
+    from scrappy.cli import commands as commands_module
+    from scrappy.infrastructure.paths import TempPathProvider
+    from tests.cli.helpers import MockApiKeyConfigService
+
+    captured = {}
+
+    class RecordingApp:
+        def __init__(self, cli_factory=None, **kwargs):
+            captured["factory"] = cli_factory
+
+        def run(self):
+            captured["ran"] = True
+
+    monkeypatch.setattr("scrappy.cli.textual.app.ScrappyApp", RecordingApp)
+    monkeypatch.setattr(
+        "scrappy.orchestrator.api_key_composition.create_api_key_service",
+        lambda *a, **k: MockApiKeyConfigService(),
+    )
+    monkeypatch.setattr(
+        "scrappy.infrastructure.paths.create_default_path_provider",
+        lambda *a, **k: TempPathProvider(roots.storage_root),
+    )
+    # Provider probing and history I/O are external; composition stays real.
+    monkeypatch.setattr("scrappy.cli.core.CLI.initialize", lambda self: None)
+    monkeypatch.setattr(sys, "argv", ["scrappy"])
+
+    try:
+        commands_module.main()
+    except SystemExit as exc:
+        assert exc.code in (0, None), f"main() exited with {exc.code}"
+
+    assert captured.get("factory") is not None, "main() never reached the deferred factory"
+    return captured["factory"]
+
+
+@pytest.mark.no_contained_config_seed
+def test_main_capture_reaches_the_real_deferred_cli_and_consumer(roots, monkeypatch):
+    """COMPOSED PROOF: main's selection survives to a real consumer.
+
+    Hostile inputs are present throughout: a DIFFERENT valid config elsewhere, a
+    DIFFERENT object already cached in the global, and a CWD change after main
+    has run but before the deferred factory executes. Dropping cli_config at any
+    hop, or re-selecting later, yields the wrong marker here.
+    """
+    monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    write_marked_config(roots.code_root, "from-code-root")
+    other = write_marked_config(roots.other_cwd, "from-elsewhere")
+    set_config(CLIConfigFactory().create_from_file(str(other)))
+
+    os.chdir(roots.code_root)
+    factory = run_main_capturing_the_deferred_factory(monkeypatch, roots)
+
+    # The deferred factory runs LATER, from a different directory.
+    os.chdir(roots.other_cwd)
+    cli = factory()
+
+    assert cli._cli_config is not None, "the capture never reached the deferred CLI"
+    assert cli._cli_config.theme_config["preset"] == "from-code-root", (
+        "the deferred CLI used a re-selection or the cached global, not main's capture"
+    )
+
+    # A REAL consumer, composed by the CLI itself.
+    interactive = cli._create_interactive_mode()
+    assert interactive._config.theme_config["preset"] == "from-code-root", (
+        "the selected configuration did not reach the interactive consumer"
+    )
+
+
+@pytest.mark.no_contained_config_seed
+def test_empty_environment_selector_preserves_production_precedence(roots, monkeypatch):
+    """An EMPTY CLI_CONFIG_PATH must behave as production does.
+
+    The factory tests PRESENCE (config_factory.py:151-152), so an empty value
+    selects Path(''), fails to load and retains defaults plus environment
+    merging. It must NOT fall through to the code-root scan. Testing truthiness
+    here would have loaded the code-root file and silently changed precedence.
+    """
+    write_marked_config(roots.code_root, "from-code-root")
+    monkeypatch.setenv("CLI_CONFIG_PATH", "")
+
+    captured, _ = capture_configuration_at_entry()
+
+    # Path('') resolves to a DIRECTORY that exists, so neither production nor the
+    # capture returns None here: both attempt it, fail to parse and retain
+    # defaults plus environment merging. What must NOT happen is falling through
+    # to the code-root scan and loading that file.
+    captured_preset = None if captured is None else captured.theme_config.get("preset")
+    assert captured_preset != "from-code-root", (
+        "an empty environment selector fell through to the code-root scan"
+    )
+
+    # Production comparison, asserted rather than assumed.
+    produced = CLIConfigFactory().create()
+    assert produced.theme_config.get("preset") != "from-code-root"
+    assert captured_preset == produced.theme_config.get("preset"), (
+        "the capture and production disagree on the empty-selector edge case"
     )

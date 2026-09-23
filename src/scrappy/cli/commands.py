@@ -42,12 +42,26 @@ def cli(ctx, resume, no_save):
     ctx.obj['resume'] = resume
     ctx.obj['auto_save'] = not no_save
 
+    # SELECTION OWNERSHIP. main() captures before invoking Click and deposits the
+    # capture here, so an ordinary invocation performs ONE selection. Presence of
+    # the key, not truthiness, decides: a captured None is a real answer meaning
+    # "no explicit selection", and re-selecting would discard it. Direct Click
+    # entry, with no main() above it, finds no key and selects for itself.
+    if CONFIG_CAPTURE_KEY not in ctx.obj:
+        captured, source = capture_configuration_at_entry()
+        ctx.obj[CONFIG_CAPTURE_KEY] = captured
+        ctx.obj[CONFIG_SOURCE_KEY] = source
+
+    captured = ctx.obj[CONFIG_CAPTURE_KEY]
+
     # If no subcommand, start TUI
     if ctx.invoked_subcommand is None:
-        # CAPTURE ONCE, before any ambient read, and forward the SAME capture.
-        captured, _ = capture_configuration_at_entry()
         config = captured if captured is not None else get_config()
         start_tui_deferred(ctx, config.theme, resume, cli_config=captured)
+
+
+CONFIG_CAPTURE_KEY = 'cli_config'
+CONFIG_SOURCE_KEY = 'cli_config_source'
 
 
 def capture_configuration_at_entry(code_root=None):
@@ -86,9 +100,13 @@ def capture_configuration_at_entry(code_root=None):
 
     root = Path(code_root).resolve() if code_root is not None else Path.cwd().resolve()
 
-    env_value = os.environ.get('CLI_CONFIG_PATH')
-    if env_value:
-        candidate = Path(env_value)
+    # PRESENCE, not truthiness, to match CLIConfigFactory.create:151-152. With
+    # CLI_CONFIG_PATH set to the empty string, production selects Path(''),
+    # fails to load it and retains defaults plus environment merging; it does
+    # NOT fall through to the code-root scan. Testing truthiness here would have
+    # scanned instead, silently changing precedence in that edge case.
+    if 'CLI_CONFIG_PATH' in os.environ:
+        candidate = Path(os.environ['CLI_CONFIG_PATH'])
         if not candidate.is_absolute():
             candidate = root / candidate
         candidate = candidate.resolve()
@@ -245,17 +263,19 @@ def main():
     OutputModeContext.set_tui_mode(False)
 
     try:
-        # Direct Click entry: the SAME capture helper, so both entry points
-        # resolve one selection rather than each deriving its own.
-        captured, _ = capture_configuration_at_entry()
+        # main OWNS the selection. The captured object and its resolved source
+        # are handed to Click below, so the callback does not select again and
+        # the object validated here is the one the deferred CLI receives.
+        captured, source = capture_configuration_at_entry()
         config = captured if captured is not None else get_config()
         config.validate()
     except Exception as e:
         from .logging import get_logger
         logger = get_logger("cli.main")
         logger.error(f"Warning: Config validation failed: {e}")
+        captured, source = None, None
 
-    cli(obj={})
+    cli(obj={CONFIG_CAPTURE_KEY: captured, CONFIG_SOURCE_KEY: source})
 
 
 if __name__ == "__main__":
