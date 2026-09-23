@@ -996,3 +996,123 @@ def test_direct_click_fallback_reaches_the_same_consumer_boundary(roots, monkeyp
     assert resolved_theme.primary == MARKER_COLOURS["from-code-root"], (
         "the direct Click selection did not reach the consumer's theme resolution"
     )
+
+
+# ---------------------------------------------------------------------------
+# F4 final: execute the ACTUAL TextualInteractiveMode.run and observe the theme
+# where it leaves the application, at the external UI boundary.
+#
+# Reading _config.theme bypasses the consumer: run() is what actually selects
+# the theme and hands it to ScrappyApp (textual_interactive.py:138). Only the
+# UI boundary is replaced; create_textual_runtime_session and
+# wire_textual_runtime execute for real.
+# ---------------------------------------------------------------------------
+
+
+class ThemeObservingApp:
+    """Stand-in for ScrappyApp, the external UI boundary.
+
+    Records every construction so the deferred app and the one built by run()
+    can be told apart, and supplies the few attributes runtime wiring touches.
+    """
+
+    constructions = []
+
+    def __init__(self, *args, **kwargs):
+        from unittest.mock import Mock as _Mock
+
+        self.theme = kwargs.get("theme")
+        self.bridge = _Mock()
+        self._path_provider = kwargs.get("path_provider")
+        self._tool_adapter = None
+        self.cli_factory = kwargs.get("cli_factory")
+        type(self).constructions.append(self)
+
+    def set_codebase_context(self, context):
+        self.codebase_context = context
+
+    def launch_setup_wizard(self):
+        return None
+
+    def run(self):
+        return None
+
+
+def observe_theme_at_the_ui_boundary(monkeypatch, cli):
+    """Run the REAL TextualInteractiveMode.run and return the theme it handed on."""
+    ThemeObservingApp.constructions = []
+    monkeypatch.setattr("scrappy.cli.textual_interactive.ScrappyApp", ThemeObservingApp)
+
+    interactive = cli._create_interactive_mode()
+    interactive.run()
+
+    assert ThemeObservingApp.constructions, "run() never reached the UI boundary"
+    return ThemeObservingApp.constructions[-1].theme
+
+
+@pytest.mark.no_contained_config_seed
+def test_main_route_run_hands_the_selected_theme_to_the_ui(roots, monkeypatch):
+    """main -> Click -> deferred factory -> REAL run() -> UI boundary."""
+    monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    write_marked_config(roots.code_root, "from-code-root")
+    other = write_marked_config(roots.other_cwd, "from-elsewhere")
+    set_config(CLIConfigFactory().create_from_file(str(other)))
+
+    os.chdir(roots.code_root)
+    factory = run_main_capturing_the_deferred_factory(monkeypatch, roots)
+    os.chdir(roots.other_cwd)
+    cli = factory()
+
+    theme = observe_theme_at_the_ui_boundary(monkeypatch, cli)
+
+    assert theme is not None, "no theme reached the UI boundary"
+    assert theme.primary == MARKER_COLOURS["from-code-root"], (
+        "run() handed the UI a theme resolved from the wrong configuration"
+    )
+    assert theme.primary != MARKER_COLOURS["from-elsewhere"], (
+        "run() resolved the ambient cached global instead of the selection"
+    )
+
+
+@pytest.mark.no_contained_config_seed
+def test_direct_click_route_run_hands_the_selected_theme_to_the_ui(roots, monkeypatch):
+    """Direct Click, no main above it, through the REAL deferred factory and run()."""
+    from click.testing import CliRunner
+
+    from scrappy.cli import commands as commands_module
+    from scrappy.infrastructure.paths import TempPathProvider
+    from tests.cli.helpers import MockApiKeyConfigService
+
+    monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    write_marked_config(roots.code_root, "from-code-root")
+    other = write_marked_config(roots.other_cwd, "from-elsewhere")
+    set_config(CLIConfigFactory().create_from_file(str(other)))
+
+    ThemeObservingApp.constructions = []
+    monkeypatch.setattr("scrappy.cli.textual.app.ScrappyApp", ThemeObservingApp)
+    monkeypatch.setattr(
+        "scrappy.orchestrator.api_key_composition.create_api_key_service",
+        lambda *a, **k: MockApiKeyConfigService(),
+    )
+    monkeypatch.setattr(
+        "scrappy.infrastructure.paths.create_default_path_provider",
+        lambda *a, **k: TempPathProvider(roots.profile),
+    )
+    monkeypatch.setattr("scrappy.cli.core.CLI._initialize_orchestrator", lambda self: None)
+
+    os.chdir(roots.code_root)
+    result = CliRunner().invoke(commands_module.cli, [], obj={})
+    assert result.exit_code == 0, f"direct Click entry failed: {result.output}"
+
+    deferred = [a for a in ThemeObservingApp.constructions if a.cli_factory is not None]
+    assert deferred, "direct Click never reached the deferred factory"
+
+    os.chdir(roots.other_cwd)
+    cli = deferred[-1].cli_factory()
+
+    theme = observe_theme_at_the_ui_boundary(monkeypatch, cli)
+
+    assert theme is not None, "no theme reached the UI boundary"
+    assert theme.primary == MARKER_COLOURS["from-code-root"], (
+        "the direct Click selection did not survive to the UI boundary"
+    )
