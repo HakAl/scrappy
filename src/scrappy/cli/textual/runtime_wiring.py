@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional, Callable
 
+from scrappy.context.agent_rules_loader import (
+    AgentRulesLoaderProtocol,
+    create_default_agent_rules_loader,
+)
+
 if TYPE_CHECKING:
     from scrappy.cli.command_router import CommandRouter
     from scrappy.cli.core import CLI
@@ -68,6 +73,7 @@ def wire_textual_runtime(
     output_adapter: "TextualOutputAdapter",
     cli: Optional["CLI"] = None,
     setup_wizard_callback: Optional[Callable[[], None]] = None,
+    rules_loader: Optional["AgentRulesLoaderProtocol"] = None,
 ) -> Optional["Any"]:
     """Wire bridge, tool adapter, and handler state for Textual runtime."""
     # Pass codebase context for semantic search indexing.
@@ -104,6 +110,14 @@ def wire_textual_runtime(
             orchestrator=orchestrator,
             tool_adapter=app._tool_adapter,
             task_storage=task_storage,
+            # RUNTIME OWNS THE PRODUCTION DEFAULT. Composing it here keeps one
+            # composition point and lets a caller supply a bounded or custom
+            # loader without touching the bridge. `is None`, not `or`, so a
+            # falsey-but-valid loader is never discarded.
+            rules_loader=(
+                rules_loader if rules_loader is not None
+                else create_default_agent_rules_loader()
+            ),
         )
 
     if cli is not None:

@@ -276,6 +276,17 @@ class NullAgentRulesLoader:
 
 
 # Verify protocol compliance
+def create_default_agent_rules_loader() -> AgentRulesLoader:
+    """The production default loader, as a NAMED composition point.
+
+    Callers outside runtime wiring use this instead of constructing the class
+    bare, so the production default has exactly one definition. It takes the
+    module defaults unchanged: AGENT_FILES in priority order, RULES_DIR, and
+    max_depth, so behaviour is identical to the previous bare construction.
+    """
+    return AgentRulesLoader()
+
+
 def _verify_protocols() -> None:
     """Verify implementations satisfy the protocol."""
     assert isinstance(AgentRulesLoader(), AgentRulesLoaderProtocol)
