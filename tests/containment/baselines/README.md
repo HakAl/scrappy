@@ -62,14 +62,20 @@ it is not a claim that nothing happened during the run. Read it with three limit
 - LAUNCH PROVENANCE IS LIMITED FOR THIS MEASUREMENT, and that limit is recorded rather than
   omitted. The run's own artifacts are complete and were independently reconciled: the JUnit
   digest, the collection receipt, the before/after manifests, the seed hashes, the process
-  queries and the Git pins all agree. What could NOT be independently verified is the exact
-  OUTER invocation that started the approved wrapper: the original launch record was not
-  retrievable, and the reviewer accepted the run as Darwin net-change and local test evidence
-  WITH that limitation stated. Concretely unestablished: whether the invocation was detached
-  rather than foreground, whether shell no-clobber was in force, and whether the initial
-  directory change ran inside the output redirection. Measurement validity, control
-  compliance and selection integrity are NOT among the unestablished items. Do not read this
-  file as certifying how its measurement was launched.
+  queries and the Git pins all agree.
+
+  Independent rendered evidence CORROBORATES the approved command and its background launch.
+  Corroboration is the correct word and the ceiling: it does not prove the hidden native
+  invocation fields, the exact environment the command ran in, or timeout behaviour, none of
+  which this run exercised. What remains unestablished is therefore narrower than a bare
+  reading of the artifacts would suggest, but it is not empty.
+
+  HARNESS COMPLIANCE IS NOT CERTIFIED BY THIS FILE. Measurement validity and compliance are
+  distinct questions, and only the first is addressed here. Measurement validity and
+  selection integrity are NOT among the unestablished items; control compliance is NOT
+  established, and the review that accepted this measurement explicitly declined to certify
+  it. Do not read this file as certifying how its measurement was launched, nor as a
+  statement that the controls governing that launch were satisfied.
 
 The measurement that produced it used the EXTENDED hash selection: the two seeded paths plus
 the migration destination `Library/Application Support/scrappy/command_history`. That
@@ -141,21 +147,43 @@ an unmeasured baseline is not an empty one.
 
 Refusal and failed/interrupted execution are covered by `tests/containment/test_baseline.py`.
 
-### One disclosed deviation in how THIS file was installed
+### How THIS file was installed, and what carries the binding
 
-This baseline was installed from a RETAINED run rather than from a live one, by design: the
-measurement was reviewed and accepted before installation was authorized, and no rerun was
-permitted. `publish_baseline` and its full refusal gate were used unchanged, and the counts
-here were re-derived from the report bytes and content-hashed by that gate at publication
-time, exactly as for any other baseline.
+THE MEASUREMENT DID CALL `begin_run` BEFORE THE SUITE. The lifecycle above was followed by
+the run that produced this evidence: it claimed the report path and cleared any previous
+report before the contained suite started. This is not a baseline published without that
+step.
 
-What was NOT used is `begin_run`. It cannot be: it DELETES the report it claims, so calling
-it would have destroyed the accepted evidence. Its freshness guarantee was replaced by the
-run's own recorded start time, and the binding rests instead on three facts that do not
-depend on it: the report lives inside the run's exclusively reserved output directory, its
-mtime falls after that recorded start, and its digest matches the value the run itself
-recorded on completion and that review independently rechecked. This is a weaker claim than
-`begin_run` provides and is recorded here so nobody has to infer it from the file's history.
+INSTALLATION then REUSED that accepted report, because the measurement was reviewed and
+accepted before installation was authorized and no rerun was permitted. It did so by
+reconstructing a `RunEvidence` reference to the retained report and passing it through
+UNCHANGED validation: `publish_baseline` and its full refusal gate were used as committed,
+and the counts here were re-derived from the report bytes and content-hashed by that gate at
+publication time, exactly as for any other baseline. Reconstructing a reference to retained
+evidence is supported by the publisher; nothing in the gate was bypassed or weakened.
+
+Calling `begin_run` a SECOND time at installation would have been wrong, not merely
+unnecessary: it DELETES the report it claims, so a second call would have destroyed the very
+evidence being installed.
+
+WHAT THE SUBSTITUTED TIMESTAMP DOES AND DOES NOT DO. The installation supplied the wrapper's
+own start time rather than the measurement's original `begin_run` timestamp. That substituted
+value is EARLIER than the original, not later. An earlier start makes the gate's mtime check
+LOOSER, not stricter, so it must not be described as a conservative substitution. mtime alone
+therefore carries little here. What actually supports acceptance is the report DIGEST matching
+the value the run recorded on completion and that review independently rechecked, together
+with unique-run provenance: the report lives inside that run's exclusively reserved output
+directory, which no other run could occupy. Those two facts, not the timestamp, are the
+binding.
+
+CORRECTION TO THE INSTALLING COMMIT'S OWN MESSAGE. The commit that installed this file,
+`5018fa4`, states in its message that "measurement validity, control compliance and selection
+integrity are not among the unestablished items". The inclusion of CONTROL COMPLIANCE there
+is WRONG: compliance was never established, and the review that accepted this measurement
+explicitly declined to certify it. That message also describes the installation in terms this
+section supersedes. Commit messages are not amended here and history is not rewritten, so
+that wording remains in the repository permanently. Where the two disagree, THIS FILE is
+correct and `5018fa4`'s message is superseded.
 
 ## Lifecycle
 
