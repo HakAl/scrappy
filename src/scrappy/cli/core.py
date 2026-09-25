@@ -97,6 +97,14 @@ class CLI:
         self._show_provider_status = show_provider_status
         self._theme = theme or DEFAULT_THEME
 
+        # PROVENANCE, retained BEFORE default resolution (scrappy-su47). Whether a
+        # provider was EXPLICITLY supplied cannot be recovered afterwards, and it
+        # must not be guessed by comparing against the default: an explicit
+        # provider that happens to equal the default is still explicit. The
+        # conversation store's destination depends on this distinction, so it is
+        # captured here rather than re-derived.
+        self._explicit_path_provider = path_provider
+
         # Path provider is resolved once and threaded to the default orchestrator
         # (and thence to the cooldown file) and to the file-backed command history.
         # Use an explicit is-None check: a Protocol-typed provider with a falsy
@@ -217,7 +225,16 @@ class CLI:
         """
         store = self._conversation_store
         if store is None:
-            store = create_conversation_store(self.orchestrator)
+            # Contract B (scrappy-su47). An EXPLICITLY supplied provider owns the
+            # default store's destination; absent one, the helper keeps its legacy
+            # orchestrator-derived location. self._explicit_path_provider is used
+            # rather than self._path_provider precisely because the latter has
+            # already collapsed "supplied" and "defaulted from CWD" into one
+            # value, and routing the CWD-derived default here would MOVE existing
+            # storage whenever an injected orchestrator points elsewhere.
+            store = create_conversation_store(
+                self.orchestrator, path_provider=self._explicit_path_provider
+            )
             self._conversation_store = store
 
         loaded_history: list = []
