@@ -35,7 +35,7 @@ class CLICodebaseAnalysis:
         self.orchestrator = orchestrator
         self.io = io
 
-    def explore_codebase(self, path: str = ""):
+    def explore_codebase(self, raw_path: str = ""):
         """Explore and optionally generate a summary of a codebase.
 
         Scans the directory structure and reads key files. LLM summary generation
@@ -45,7 +45,7 @@ class CLICodebaseAnalysis:
         persistence. For external directories, performs standalone exploration.
 
         Args:
-            path: Directory path to explore. If empty, uses current directory.
+            raw_path: Directory path to explore. If empty, uses current directory.
 
         State Changes:
             - Adds discovery to orchestrator working memory
@@ -60,23 +60,23 @@ class CLICodebaseAnalysis:
         Returns:
             None
         """
-        if not path:
-            path = "."
+        if not raw_path:
+            raw_path = "."
 
-        path = Path(path).resolve()
-        if not path.exists():
-            self.io.secho(f"Path does not exist: {path}", fg=self.io.theme.error)
+        root = Path(raw_path).resolve()
+        if not root.exists():
+            self.io.secho(f"Path does not exist: {root}", fg=self.io.theme.error)
             return
 
-        if not path.is_dir():
-            self.io.secho(f"Not a directory: {path}", fg=self.io.theme.error)
+        if not root.is_dir():
+            self.io.secho(f"Not a directory: {root}", fg=self.io.theme.error)
             return
 
-        self.io.secho(f"\nExploring: {path}", bold=True)
+        self.io.secho(f"\nExploring: {root}", bold=True)
         self.io.echo("-" * 50)
 
         # Check if exploring current project or different directory
-        is_current_project = path == self.orchestrator.context.project_path
+        is_current_project = root == self.orchestrator.context.project_path
 
         summary = None
         structure = None
@@ -92,25 +92,25 @@ class CLICodebaseAnalysis:
             # Add discovery to working memory
             self.orchestrator.working_memory.add_discovery(
                 f"Explored codebase: {result.get('total_files', 0)} files, {', '.join(result.get('directories', [])[:5])}",
-                str(path)
+                str(root)
             )
         else:
             # For external directories, use standalone exploration (legacy behavior)
             self.io.echo("Exploring external directory (not persisted to context)...")
-            source_files = self._find_source_files(path)
-            structure = self._analyze_structure(path, source_files)
+            source_files = self._find_source_files(root)
+            structure = self._analyze_structure(root, source_files)
 
             # Still add to working memory as a discovery
             self.orchestrator.working_memory.add_discovery(
                 f"Explored external codebase: {structure.get('total_files', 0)} files",
-                str(path)
+                str(root)
             )
 
         # Display basic structure info (no LLM needed)
         self.io.echo()
         self.io.secho("Codebase Structure:", bold=True)
         self.io.echo("-" * 50)
-        self._display_basic_structure(structure, path)
+        self._display_basic_structure(structure, root)
 
         if is_current_project:
             self.io.secho("\nContext saved! Use /context to view status.", fg=self.io.theme.success)
@@ -132,8 +132,8 @@ class CLICodebaseAnalysis:
 
                 summary = self.orchestrator.context.generate_summary(llm_summary)
             else:
-                key_contents = self._read_key_files(path, source_files)
-                summary = self._generate_codebase_summary(path, structure, key_contents)
+                key_contents = self._read_key_files(root, source_files)
+                summary = self._generate_codebase_summary(root, structure, key_contents)
 
             self.io.echo()
             self.io.secho("Codebase Summary:", bold=True)
@@ -142,7 +142,7 @@ class CLICodebaseAnalysis:
 
             # Offer to save summary (only if generated)
             if self.io.confirm("\nSave summary to file?", default=False):
-                summary_file = path / "CODEBASE_SUMMARY.md"
+                summary_file = root / "CODEBASE_SUMMARY.md"
                 with open(summary_file, 'w', encoding='utf-8') as f:
                     f.write("# Codebase Summary\n\n")
                     f.write(f"Generated: {datetime.now().isoformat()}\n\n")
