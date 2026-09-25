@@ -22,6 +22,16 @@ precisely because the mapping exists. `test_expired_valid_state_resets_through_t
 exercises exactly that. `scrappy-cktc` remains a separate bug about genuinely
 malformed state, untouched here.
 
+TWO SEPARATE CLOCKS. The policy captures a DATE at construction; the tracker
+reads `datetime.now` independently when it writes. The routing tests pin only the
+policy date and assert no tracker timestamps. The expired-reset leaf pins BOTH,
+to deliberately different values, so its persisted dates are deterministic rather
+than dependent on the real calendar. A superseded version of that leaf asserted
+the persisted dates equalled the POLICY date with the tracker clock left
+unpatched; it passed only because the real date happened to match, and it
+contradicted this module's own stated claim. That is corrected, and the history
+is recorded rather than quietly dropped.
+
 WHAT THIS ESTABLISHES, and what it does not. It establishes that a routed
 tracker persists to the PROVIDER file while the pre-existing ambient file's FINAL
 BYTES are unchanged. It does NOT establish absence of reads, absence of a
@@ -31,7 +41,7 @@ full-workload rate-seed obligation. It does not close i2jo.
 
 import hashlib
 import json
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -44,9 +54,17 @@ from scrappy.orchestrator.core import create_orchestrator
 from scrappy.orchestrator.rate_limiting import httpx_patcher
 from scrappy.orchestrator.rate_limiting import policy as policy_module
 from scrappy.orchestrator.rate_limiting.policy import RateLimitPolicy
+from scrappy.orchestrator.rate_limiting import tracker as tracker_module
 from scrappy.orchestrator.rate_limiting.factory import create_rate_limit_tracker
 
 PINNED = date(2026, 9, 25)
+
+# DELIBERATELY DIFFERENT from PINNED. The policy date and the tracker's own
+# datetime.now are SEPARATE clocks, and the expired-reset proof pins the tracker
+# one so its persisted values are deterministic rather than whatever today
+# happens to be. Choosing a distinct date also makes the separation observable:
+# if the two were the same clock, the assertions below could not both hold.
+TRACKER_NOW = datetime(2026, 10, 3, 11, 22, 33)
 
 # Literal declared seeds. Exactly these bytes; any write is visible as a size or
 # digest change against the manifest.
@@ -146,8 +164,8 @@ def _pin_policy_date(monkeypatch) -> None:
     """Pin ONLY the external date boundary the policy reads.
 
     Real policy and real tracker logic stay intact. The tracker's own
-    datetime.now is a SEPARATE clock and is deliberately NOT pinned; nothing here
-    asserts tracker timestamps equal the policy date.
+    datetime.now is a SEPARATE clock and is NOT pinned by this helper; the
+    routing tests below do not assert tracker timestamps at all.
     """
     class _FixedDate(date):
         @classmethod
@@ -155,6 +173,23 @@ def _pin_policy_date(monkeypatch) -> None:
             return PINNED
 
     monkeypatch.setattr(policy_module, "date", _FixedDate)
+
+
+def _pin_tracker_clock(monkeypatch) -> None:
+    """Pin ONLY the external datetime boundary the TRACKER module reads.
+
+    Used by the expired-reset leaf test alone, so its persisted values are
+    deterministic instead of depending on whatever the real calendar says.
+    tracker.py does `from datetime import datetime`, so the module attribute is
+    the seam. monkeypatch restores it automatically; real tracker, policy and
+    storage logic are untouched and no production clock changes.
+    """
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return TRACKER_NOW
+
+    monkeypatch.setattr(tracker_module, "datetime", _FixedDateTime)
 
 
 def _digest(path: Path) -> str:
@@ -241,8 +276,21 @@ class TestFixtureValidity:
         Flags alone would not establish this. A real tracker loads the expired
         bytes and performs the reset, reaching tracker.py:472-473, which is safe
         because the last_reset MAPPING EXISTS. Validity does not imply no reset.
+
+        CALENDAR INDEPENDENCE. The persisted reset dates come from the TRACKER's
+        own datetime.now, NOT from the policy date, so this test pins the tracker
+        module's datetime boundary and asserts against THAT clock. An earlier
+        version asserted these fields equalled the POLICY date while leaving the
+        tracker clock unpatched: that passed only because the real date happened
+        to be 2026-09-25, and it contradicted this module's own claim not to
+        compare tracker timestamps to the policy date. Both clocks are pinned
+        here, to DELIBERATELY DIFFERENT values, which makes the proof
+        deterministic and makes their separation observable.
         """
-        _pin_policy_date(monkeypatch)
+        _pin_policy_date(monkeypatch)      # policy sees 2026-09-25
+        _pin_tracker_clock(monkeypatch)    # tracker sees 2026-10-03
+        assert TRACKER_NOW.date() != PINNED, "the two clocks must differ for this to discriminate"
+
         state_file = tmp_path / "rate_limits.json"
         state_file.write_bytes(EXPIRED_SEED)
         assert _digest(state_file) == EXPIRED_SEED_SHA256
@@ -251,8 +299,18 @@ class TestFixtureValidity:
         tracker.record_request(PROVIDER_NAME, MODEL_NAME, input_tokens=7)
 
         recorded = json.loads(state_file.read_text())
-        assert recorded["last_reset"]["daily"] == PINNED.isoformat()
-        assert recorded["last_reset"]["monthly"] == PINNED.strftime("%Y-%m")
+
+        # The reset actually happened: the stored dates moved off the expired
+        # seed's August values, which is what discriminates a reset from a no-op.
+        seeded = json.loads(EXPIRED_SEED)["last_reset"]
+        assert recorded["last_reset"]["daily"] != seeded["daily"]
+        assert recorded["last_reset"]["monthly"] != seeded["monthly"]
+
+        # And they carry the TRACKER's clock, not the policy's.
+        assert recorded["last_reset"]["daily"] == TRACKER_NOW.date().isoformat()
+        assert recorded["last_reset"]["monthly"] == TRACKER_NOW.strftime("%Y-%m")
+        assert recorded["last_reset"]["daily"] != PINNED.isoformat()
+
         assert recorded["providers"][PROVIDER_NAME][MODEL_NAME]["requests_today"] == 1
 
 
