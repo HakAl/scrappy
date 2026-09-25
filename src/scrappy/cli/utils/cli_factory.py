@@ -32,20 +32,48 @@ if TYPE_CHECKING:
     from ..textual import ThreadSafeAsyncBridge
 
 
-def create_conversation_store(orchestrator: "Orchestrator") -> Optional[ConversationStore]:
+def create_conversation_store(
+    orchestrator: "Orchestrator",
+    *,
+    path_provider: Optional[PathProviderProtocol] = None,
+) -> Optional[ConversationStore]:
     """
-    Create ConversationStore from orchestrator's project path.
+    Create ConversationStore, preferring an explicitly supplied path provider.
+
+    CONTRACT B (scrappy-su47). When a provider is EXPLICITLY supplied it owns the
+    destination and the store is created under ``provider.data_dir()``, which is
+    where ``conversations.db`` and its companion ``config.json`` project identity
+    belong. When no provider is supplied the LEGACY destination is preserved
+    exactly: ``orchestrator.context.project_path / ".scrappy"``.
+
+    That distinction is load-bearing and is why the parameter is the CALLER'S
+    EXPLICIT provider rather than a resolved one. ``CLI`` builds its default
+    provider from the CWD, while this helper has always followed the
+    orchestrator's project path. Forwarding a CWD-derived default here would MOVE
+    the database for the supported configuration where an injected orchestrator
+    points somewhere other than the CWD.
+
+    ``data_dir()`` is an existing member of ``PathProviderProtocol``; no new
+    protocol member is introduced. The parameter is KEYWORD-ONLY and appended
+    after the existing positional one, so every standalone
+    ``create_conversation_store(orchestrator)`` call keeps working unchanged.
 
     Args:
         orchestrator: AgentOrchestrator instance with context
+        path_provider: Explicitly supplied provider, or None to preserve the
+            legacy orchestrator-derived destination. Held with an ``is None``
+            check so a falsey-but-valid provider is not silently discarded.
 
     Returns:
         Initialized ConversationStore or None if creation fails
     """
     try:
-        # Get .scrappy directory from project path
-        project_path = orchestrator.context.project_path
-        scrappy_dir = project_path / ".scrappy"
+        if path_provider is not None:
+            scrappy_dir = path_provider.data_dir()
+        else:
+            # Get .scrappy directory from project path
+            project_path = orchestrator.context.project_path
+            scrappy_dir = project_path / ".scrappy"
 
         # Use factory method for initialization
         return ConversationStore.create(scrappy_dir)
