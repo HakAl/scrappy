@@ -6,11 +6,14 @@ Central coordinator for multi-provider LLM agent team using composition.
 
 import threading
 import time
-from typing import Awaitable, Callable, Optional, Iterator, AsyncIterator, TypeVar
+from typing import Awaitable, Callable, Optional, Iterator, AsyncIterator, TypeVar, TYPE_CHECKING
 from datetime import datetime
 from uuid import uuid4
 
 from .provider_types import LLMResponse, LLMProviderProtocol
+if TYPE_CHECKING:
+    from ..cli.config_factory import CLIConfig
+
 from ..infrastructure.exceptions import (
     ProviderNotFoundError,
     FailureKind,
@@ -120,6 +123,11 @@ class AgentOrchestrator:
         model_selector: Optional[ModelSelectionServiceProtocol] = None,
         path_provider: Optional[PathProviderProtocol] = None,
         api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
+        # APPENDED after the existing final parameter. Inserting it earlier
+        # silently rebinds old POSITIONAL callers: an existing positional
+        # api_key_service would have bound to cli_config and the service would
+        # have defaulted, selecting a different API-key service.
+        cli_config: Optional["CLIConfig"] = None,
     ):
         """
         Initialize orchestrator (dependencies only - NO side effects).
@@ -190,6 +198,7 @@ class AgentOrchestrator:
                 context_aware=context_aware,
                 created_at=self.created_at,
                 path_provider=path_provider,
+                cli_config=cli_config,
                 enable_semantic_search=enable_semantic_search,
                 api_key_service=self._api_key_service,
             )

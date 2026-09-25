@@ -34,6 +34,17 @@ jobs:
       run: |
         python -m pytest tests/ -v --tb=short --ignore=tests/cli/textual/
 
+    # scrappy-6aua DELIVERY GAP. The step above ignores tests/cli/textual/
+    # wholesale, so the six rules-composition cases proving PR-7's runtime-owned
+    # loader injection were selected by NO matrix job. The broad TUI exclusion is
+    # RETAINED above for the ordinary suite; this step adds back only that one
+    # file, explicitly, in EVERY matrix job including Windows 3.11/3.12/3.13.
+    # Same interpreter and same controlled setup as the step above. No
+    # continue-on-error and no deselection, so a failure here FAILS THE JOB.
+    - name: Run rules-composition tests (restored from the TUI exclusion)
+      run: |
+        python -m pytest tests/cli/textual/test_rules_loader_composition.py -v --tb=short
+
     - name: Run tests with coverage
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       run: |

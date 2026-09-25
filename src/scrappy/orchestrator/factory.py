@@ -8,11 +8,14 @@ Following SOLID principles:
 """
 
 import logging
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, TYPE_CHECKING
 from datetime import datetime
 from pathlib import Path
 
 from ..infrastructure.logging import StructuredLogger
+
+if TYPE_CHECKING:
+    from ..cli.config_factory import CLIConfig
 
 from .provider_types import ProviderRegistry
 from ..context import CodebaseContext
@@ -144,6 +147,10 @@ class OrchestratorFactory:
         enable_semantic_search: bool = True,
         *,
         api_key_service: ApiKeyConfigServiceProtocol,
+        # KEYWORD-ONLY. Placed here, not before enable_semantic_search, because
+        # an existing positional `False` for enable_semantic_search would
+        # otherwise bind to cli_config and leave semantic search enabled.
+        cli_config: Optional["CLIConfig"] = None,
     ):
         """
         Initialize factory with configuration.
@@ -169,6 +176,11 @@ class OrchestratorFactory:
         self.enable_semantic_search = enable_semantic_search
         self.created_at = created_at or datetime.now()
         self.config = config or OrchestratorConfig()
+        # DISTINCT from self.config above. That one is an OrchestratorConfig and
+        # its consumers (for example quality_mode below) depend on that type;
+        # this is the CLIConfig selected at command entry. Held with `is None`,
+        # NOT the `or` on the line above, so a falsey-but-valid object survives.
+        self._cli_config = cli_config
 
         # Create path provider if not provided
         if path_provider is None:
@@ -299,6 +311,7 @@ class OrchestratorFactory:
         context = CodebaseContext(
             self.project_path,
             path_provider=self._path_provider,
+            cli_config=self._cli_config,
         )
 
         # The project_path gate preserves today's behaviour: the previous

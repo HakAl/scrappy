@@ -1,6 +1,7 @@
 """
 Pytest configuration and shared fixtures.
 """
+import contextlib
 import os
 import pytest
 import sys
@@ -41,6 +42,14 @@ def _configure_test_temp_dirs(root_path: Path) -> tuple[Path, Path]:
 
 def pytest_configure(config):
     """Configure pytest and tempfile to use repo-local temp directories."""
+    config.addinivalue_line(
+        "markers",
+        "no_contained_config_seed: opt OUT of the seeded global CLI configuration "
+        "(layer 2 only). Layer 1 containment of the configuration SOURCE still "
+        "applies, so an opted-out test never reads developer configuration; it "
+        "drives its own seeding/reset lifecycle with controlled inputs. For "
+        "discovery, direct-parser and cache/reload tests.",
+    )
     pytest_temp, _ = _configure_test_temp_dirs(Path(config.rootpath))
 
     if not config.option.basetemp:
@@ -283,3 +292,116 @@ def mock_tool_registry():
         "Response format: {\"thought\": \"...\", \"action\": \"...\", \"parameters\": {...}, \"is_complete\": true/false}"
     )
     return mock
+
+
+# ---------------------------------------------------------------------------
+# Contained CLI configuration (PR-7, brief S4a). Implements i2jo D4(iii):
+# fallback consumers must see CONTAINED configuration across the suite, not
+# whatever discovery finds on the developer's machine.
+# ---------------------------------------------------------------------------
+
+# Known values, deliberately distinct from any plausible real configuration so
+# a test that accidentally reads the developer's file fails loudly rather than
+# passing on a coincidence.
+CONTAINED_CONFIG_SEED = {
+    "temperature_default": 0.123,
+    "max_tokens_query": 4321,
+}
+
+
+def _selector_is_repository_owned(selector, repo_root) -> bool:
+    """True ONLY for a selector inside the repository-owned disposable profile.
+
+    A SESSION LABEL IS NOT PROVENANCE. scripts/contained-pytest.sh:72-78
+    explicitly READS AND ADOPTS an inherited SCRAPPY_TEST_SESSION_ID, so its
+    presence proves nothing about who assigned the selector. Membership of HOME
+    proves nothing either, because a direct pytest run has an ordinary HOME.
+
+    The launcher's real provenance is its repository-derived layout:
+    PROFILE_ROOT="${REPO_ROOT}/.pytest_profile/${SESSION_ID}" and
+    HOME_DIR="${PROFILE_ROOT}/home" (:88-89). This binds to that layout and
+    nothing else.
+
+    Both sides are RESOLVED before comparison, so a selector that sits inside
+    the profile directory but symlinks out of it resolves outside the anchor
+    and is rejected.
+    """
+    if selector is None or repo_root is None:
+        return False
+    anchor = Path(repo_root) / ".pytest_profile"
+    try:
+        return Path(selector).resolve().is_relative_to(anchor.resolve())
+    except (OSError, ValueError, RuntimeError, TypeError):
+        return False
+
+
+@contextlib.contextmanager
+def contained_cli_config_scope(disposable_dir, seed: bool = True, repo_root=None):
+    """The fixture's ENTIRE lifecycle, as one directly testable unit.
+
+    Extracted from the fixture so restoration can be observed IMMEDIATELY after
+    the scope exits, rather than inferred from a later test whose own setup
+    would mask a failure.
+    """
+    import json as _json
+
+    from scrappy.cli import config_factory as _cf
+
+    disposable_dir = Path(disposable_dir)
+    disposable_dir.mkdir(parents=True, exist_ok=True)
+
+    # reset_config() clears the module global AND _factory._cached_config, so
+    # both must be saved or teardown clears rather than restores.
+    saved_global = _cf._global_config
+    saved_factory_cache = getattr(_cf._factory, "_cached_config", None)
+    saved_env = os.environ.get("CLI_CONFIG_PATH")
+    env_replaced = False
+
+    try:
+        # LAYER 1: own the configuration SOURCE unless it is anchored to the
+        # repository-owned disposable profile. A genuine launcher assignment is
+        # kept; absent, inherited and hostile selectors are all replaced with a
+        # disposable non-existent path, which config_factory skips gracefully at
+        # its exists() gate while still displacing any CWD scan.
+        # CLI_CONFIG_PATH is never removed globally.
+        if not _selector_is_repository_owned(saved_env, repo_root):
+            os.environ["CLI_CONFIG_PATH"] = str(disposable_dir / "contained-absent.json")
+            env_replaced = True
+
+        _cf.reset_config()
+
+        # LAYER 2: seed known values for the fallback consumers.
+        # set_config with an explicitly parsed object, NOT get_config(..., reload=True):
+        # CLIConfigFactory.create() merges environment AFTER the file and overwrites
+        # explicit file values with environment defaults (measured: 0.7 with
+        # use_env=True versus 0.123 with use_env=False for the same file). That is
+        # pre-existing production behaviour, tracked separately as scrappy-bj58 and
+        # deliberately NOT changed here; seeding simply must not depend on it.
+        if seed:
+            seed_file = disposable_dir / ".scrappy.json"
+            seed_file.write_text(_json.dumps(CONTAINED_CONFIG_SEED))
+            _cf.set_config(_cf.CLIConfigFactory().create_from_file(str(seed_file)))
+
+        yield
+    finally:
+        # Restore global, factory cache and any selector THIS scope replaced.
+        _cf.reset_config()
+        _cf._global_config = saved_global
+        _cf._factory._cached_config = saved_factory_cache
+        if env_replaced:
+            if saved_env is None:
+                os.environ.pop("CLI_CONFIG_PATH", None)
+            else:
+                os.environ["CLI_CONFIG_PATH"] = saved_env
+
+
+@pytest.fixture(autouse=True)
+def contained_cli_config(request, tmp_path_factory):
+    """Thin wrapper: all behaviour lives in contained_cli_config_scope."""
+    seed = request.node.get_closest_marker("no_contained_config_seed") is None
+    with contained_cli_config_scope(
+        tmp_path_factory.mktemp("contained-cli-config"),
+        seed=seed,
+        repo_root=request.config.rootpath,
+    ):
+        yield

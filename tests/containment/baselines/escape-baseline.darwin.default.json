@@ -6,19 +6,19 @@
       "-p",
       "no:randomly",
       "-q",
-      "--junit-xml=.pytest_profile/baseline-default/junit-default.xml"
+      "--junit-xml=.docs/scratch/pr7-seeded-v3-20260924T121518Z/junit-seeded.xml"
     ],
     "errors": 0,
     "failures": 0,
-    "non_skipped": 5430,
-    "passed": 5430,
-    "report_path": ".pytest_profile/baseline-default/junit-default.xml",
-    "report_sha256": "9d96558aaaa8b3ed7653470ca1cf43f1fa6f2521131183809e0532881156b405",
+    "non_skipped": 5467,
+    "passed": 5467,
+    "report_path": ".docs/scratch/pr7-seeded-v3-20260924T121518Z/junit-seeded.xml",
+    "report_sha256": "d6a95ca719e3016ca5bf705078d1307a81c2d9405642bb74245e030ebafe48a1",
     "returncode": 0,
     "selection": "default",
     "skipped": 8,
-    "started_at": 1790037886.070633,
-    "tests": 5438
+    "started_at": 1790252118.0,
+    "tests": 5475
   },
   "selection": "default"
 }

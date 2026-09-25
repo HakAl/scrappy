@@ -21,7 +21,10 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable, ca
 from textual import work
 from textual.worker import Worker, WorkerCancelled, get_current_worker
 
-from scrappy.context.agent_rules_loader import AgentRulesLoader
+from scrappy.context.agent_rules_loader import (
+    AgentRulesLoaderProtocol,
+    create_default_agent_rules_loader,
+)
 from scrappy.context.reminder_manager import ReminderManager
 from scrappy.graph.run_context import AgentRunContext
 from scrappy.infrastructure.threading import CancellationToken
@@ -119,6 +122,7 @@ class LangGraphBridge:
         orchestrator: "StreamingOrchestratorProtocol",
         tool_adapter: "ToolAdapterProtocol",
         task_storage: Optional["TaskStorageProtocol"] = None,
+        rules_loader: Optional["AgentRulesLoaderProtocol"] = None,
     ) -> None:
         """
         Initialize the LangGraph bridge.
@@ -129,6 +133,11 @@ class LangGraphBridge:
             output_adapter: TextualOutputAdapter for thread-safe output
             orchestrator: Orchestrator for streaming completions with fallback
             tool_adapter: Tool adapter for agent tool execution (required)
+            rules_loader: Optional agent-rules loader. APPENDED after the
+                existing final parameter so old positional calls are unaffected.
+                Selected with `is None`, so a falsey-but-valid loader is never
+                discarded. When absent the production default is composed here,
+                which is exactly the previous behaviour.
             task_storage: Optional explicitly selected task storage, carried into
                 the graph so task tools persist where the application selected
                 rather than at a location derived from the code working directory.
@@ -141,6 +150,13 @@ class LangGraphBridge:
         self._orchestrator = orchestrator
         self._tool_adapter = tool_adapter
         self._task_storage = task_storage
+        # Composed ONCE here. `is None`, not `or`, so a falsey-but-valid loader
+        # survives. Absent injection composes the production default through the
+        # named factory, which is byte-for-byte the previous bare construction.
+        self._rules_loader = (
+            rules_loader if rules_loader is not None
+            else create_default_agent_rules_loader()
+        )
 
         # Track current worker for cancellation
         self._current_worker: Optional[Worker[AgentResult]] = None
@@ -718,9 +734,11 @@ class LangGraphBridge:
             self._run_context = AgentRunContext()
             self._run_context.set_status_callback(self._show_provider_status)
 
-            # Load project rules from AGENTS.md or similar
-            rules_loader = AgentRulesLoader()
-            rules = rules_loader.load(Path(resolved_working_dir))
+            # Load project rules from AGENTS.md or similar, through the loader
+            # composed at construction. Explicit working_dir still wins: the
+            # resolved run directory is passed on every call, so an injected
+            # loader changes WHICH loader runs, never WHERE it starts.
+            rules = self._rules_loader.load(Path(resolved_working_dir))
             if rules:
                 rules_content = rules.get_combined_content()
                 self._run_context.project_rules = rules_content

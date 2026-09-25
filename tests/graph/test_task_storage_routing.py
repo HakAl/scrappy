@@ -181,7 +181,7 @@ def make_tool_adapter():
     return ToolAdapter.create_default(profile="full")
 
 
-def make_bridge(orchestrator, task_storage=None):
+def make_bridge(orchestrator, task_storage=None, rules_loader=None):
     """Construct a REAL LangGraphBridge with a real tool adapter.
 
     Only the app shell, the async bridge and the output adapter are doubles;
@@ -202,6 +202,7 @@ def make_bridge(orchestrator, task_storage=None):
         orchestrator=orchestrator,
         tool_adapter=make_tool_adapter(),
         task_storage=task_storage,
+        rules_loader=rules_loader,
     )
 
 
@@ -355,8 +356,9 @@ def test_relative_working_dir_resolved_once_and_shared(roots, monkeypatch):
     decoy = decoy_parent / roots.code_root.name
     decoy.mkdir(parents=True)
 
+    from scrappy.context.agent_rules_loader import AgentRulesLoader as real_loader
+
     real_handler = bridge_module.ToolConfirmationHandler
-    real_loader = bridge_module.AgentRulesLoader
 
     def recording_handler(*args, **kwargs):
         observed_confirmation_dirs.append(kwargs.get("working_dir"))
@@ -370,7 +372,6 @@ def test_relative_working_dir_resolved_once_and_shared(roots, monkeypatch):
             return super().load(path)
 
     monkeypatch.setattr(bridge_module, "ToolConfirmationHandler", recording_handler)
-    monkeypatch.setattr(bridge_module, "AgentRulesLoader", RecordingRulesLoader)
 
     # Relative path, from a CWD that is NOT the code root.
     monkeypatch.chdir(roots.code_root.parent)
@@ -380,8 +381,14 @@ def test_relative_working_dir_resolved_once_and_shared(roots, monkeypatch):
     assert expected != decoy_resolved, "decoy must differ from the real code root"
 
     orchestrator = StreamingModelBoundary([[]])
+    # PR-7: the bridge composes its loader ONCE at construction instead of
+    # building one per run, so the recording loader is INJECTED here rather
+    # than patched onto the module. What this test observes is unchanged: the
+    # path handed to load(), and the CWD move performed mid-run.
     bridge = make_bridge(
-        orchestrator, task_storage=make_storage(roots.storage_root / "tasks.md")
+        orchestrator,
+        task_storage=make_storage(roots.storage_root / "tasks.md"),
+        rules_loader=RecordingRulesLoader(),
     )
 
     # _working_dir is cleared in run_agent's finally block, and the initial state

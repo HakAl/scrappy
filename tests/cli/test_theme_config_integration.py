@@ -46,6 +46,12 @@ from scrappy.infrastructure.theme import (
 # ---------------------------------------------------------------------------
 
 
+# Seed-only opt-out (PR-7 brief S4a): cache/reload and CWD-discovery precedence tests drive their own configuration lifecycle.
+# Layer-1 containment still applies, so this file never reads developer
+# configuration; it only declines the seeded global.
+pytestmark = pytest.mark.no_contained_config_seed
+
+
 @pytest.fixture
 def cwd_discovery_root(tmp_path: Path, monkeypatch):
     """A disposable CWD with controlled discovery inputs and no CLI_CONFIG_PATH.
