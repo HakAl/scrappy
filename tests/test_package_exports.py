@@ -53,12 +53,21 @@ def _checkout_bound_env(ambient_pythonpath: str | None = None) -> dict[str, str]
 
 
 def _run_export_probe(env: dict[str, str]) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
+    """Run the probe with the child's FIRST import path pinned to the checkout.
+
+    `python -c` sets sys.path[0] to the child's working directory, and that entry
+    precedes PYTHONPATH. Binding PYTHONPATH alone therefore loses to a decoy
+    `scrappy/` sitting in whatever directory the caller happened to be in. Running
+    the child IN the checkout src makes sys.path[0] the checkout itself, so
+    selection is deterministic no matter where the suite is invoked from.
+    """
     result = subprocess.run(
         [sys.executable, "-c", _EXPORT_PROBE],
         capture_output=True,
         text=True,
         timeout=120,
         env=env,
+        cwd=CHECKOUT_SRC,
     )
     lines = result.stdout.strip().splitlines()
     origin = Path(lines[0]).resolve() if lines else Path()
@@ -111,14 +120,16 @@ def test_unknown_attribute_raises_attribute_error():
         scrappy.DoesNotExist
 
 
-def test_fresh_interpreter_ignores_a_misleading_ambient_scrappy(tmp_path):
-    """A hostile ambient PYTHONPATH must not displace the checkout under test.
+@pytest.mark.parametrize("poison", ["pythonpath", "cwd", "both"])
+def test_fresh_interpreter_ignores_a_misleading_decoy(tmp_path, monkeypatch, poison):
+    """A decoy must not displace the checkout, whichever channel delivers it.
 
-    Without the checkout binding this test fails loudly: the child resolves the
-    decoy and reports its sentinel export instead of the real package. That is the
-    same failure mode as the real defect, where an ambient editable install pointed
-    a worktree's child at a DIFFERENT checkout's source and the suite passed while
-    validating the wrong tree.
+    Both channels matter and they are not equivalent. PYTHONPATH is the obvious
+    one; the caller's WORKING DIRECTORY is the one that actually bites, because
+    `python -c` puts cwd at sys.path[0] ahead of PYTHONPATH, so a decoy there beat
+    an earlier PYTHONPATH-only binding. Each case reproduces the real defect: an
+    ambient path pointing a worktree's child at source that is not under test,
+    with the suite still reporting success.
     """
     decoy_root = tmp_path / "decoy"
     (decoy_root / "scrappy").mkdir(parents=True)
@@ -127,13 +138,15 @@ def test_fresh_interpreter_ignores_a_misleading_ambient_scrappy(tmp_path):
         encoding="utf-8",
     )
 
-    result, origin, names = _run_export_probe(
-        _checkout_bound_env(ambient_pythonpath=str(decoy_root))
-    )
+    ambient = str(decoy_root) if poison in ("pythonpath", "both") else None
+    if poison in ("cwd", "both"):
+        monkeypatch.chdir(decoy_root)
+
+    result, origin, names = _run_export_probe(_checkout_bound_env(ambient_pythonpath=ambient))
 
     assert result.returncode == 0, result.stderr.strip()
     assert origin.is_relative_to(CHECKOUT_SRC), (
-        f"a misleading ambient PYTHONPATH won: child imported {origin}"
+        f"decoy via {poison} won: child imported {origin}"
     )
     assert "SENTINEL_WRONG_CHECKOUT" not in names, names
     assert names == list(scrappy.__all__), names
