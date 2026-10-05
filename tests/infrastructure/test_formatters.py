@@ -16,6 +16,7 @@ from scrappy.infrastructure.theme import (
     LightTheme,
     NoColorTheme,
 )
+from scrappy.cli.unified_io import UnifiedIO
 from tests.helpers import MockIO
 
 
@@ -673,6 +674,88 @@ class TestCacheFormatterColorDisabled:
         assert "80.0%" in result
         assert "Enabled" in result
         assert "\x1b" not in result  # No ANSI codes
+
+
+class TestCacheFormatterRealUnifiedIO:
+    """Regression: CacheFormatter must work against the real production UnifiedIO.
+
+    UnifiedIO (and the FormatterOutputProtocol it satisfies) exposes only
+    theme/style; it has no ``use_color`` attribute. A prior implementation of
+    format_hit_rate read ``self._io.use_color``, which raised AttributeError
+    against real IO and was only masked because MockIO happens to expose that
+    attribute. These tests pin the behavior to the actual style contract, with
+    no real UI/API/profile activity (styling only, through an injected theme).
+    """
+
+    def test_format_hit_rate_high_rate_uses_success_color(self):
+        """High rate (> 50%) is styled via the real style contract, no AttributeError."""
+        io = UnifiedIO(theme=DEFAULT_THEME)
+        formatter = CacheFormatter(io)
+
+        result = formatter.format_hit_rate("75.0%", "Exact Hit Rate")
+
+        expected = f"Exact Hit Rate: [{DEFAULT_THEME.success}]75.0%[/{DEFAULT_THEME.success}]"
+        assert result == expected
+
+    def test_format_hit_rate_low_rate_uses_warning_color(self):
+        """Low rate (<= 50%) is styled with the warning color through real IO."""
+        io = UnifiedIO(theme=DEFAULT_THEME)
+        formatter = CacheFormatter(io)
+
+        result = formatter.format_hit_rate("25.0%", "Exact Hit Rate")
+
+        expected = f"Exact Hit Rate: [{DEFAULT_THEME.warning}]25.0%[/{DEFAULT_THEME.warning}]"
+        assert result == expected
+
+    def test_format_hit_rate_boundary_50_uses_warning(self):
+        """Root semantics: exactly 50% is in the warning band (not > 50)."""
+        io = UnifiedIO(theme=DEFAULT_THEME)
+        formatter = CacheFormatter(io)
+
+        result = formatter.format_hit_rate("50.0%", "Hit Rate")
+
+        expected = f"Hit Rate: [{DEFAULT_THEME.warning}]50.0%[/{DEFAULT_THEME.warning}]"
+        assert result == expected
+
+    def test_format_hit_rate_invalid_rate_uses_warning_without_crash(self):
+        """Invalid rate parses to 0.0 (warning band); text preserved, no crash."""
+        io = UnifiedIO(theme=DEFAULT_THEME)
+        formatter = CacheFormatter(io)
+
+        result = formatter.format_hit_rate("N/A", "Hit Rate")
+
+        expected = f"Hit Rate: [{DEFAULT_THEME.warning}]N/A[/{DEFAULT_THEME.warning}]"
+        assert result == expected
+
+    def test_format_hit_rate_plain_text_with_nocolor_theme(self):
+        """No-color style contract: empty theme colors make style() return text unchanged."""
+        io = UnifiedIO(theme=NoColorTheme())
+        formatter = CacheFormatter(io)
+
+        assert formatter.format_hit_rate("75.0%", "Hit Rate") == "Hit Rate: 75.0%"
+        assert formatter.format_hit_rate("25.0%", "Hit Rate") == "Hit Rate: 25.0%"
+
+    def test_format_stats_runs_against_real_io(self):
+        """Full format_stats path (which calls format_hit_rate) runs against real IO."""
+        io = UnifiedIO(theme=NoColorTheme())
+        formatter = CacheFormatter(io)
+        stats = {
+            'exact_cache_entries': 10,
+            'intent_cache_entries': 5,
+            'exact_hits': 8,
+            'intent_hits': 3,
+            'exact_misses': 2,
+            'saves': 15,
+            'exact_hit_rate': '80.0%',
+            'intent_hit_rate': '40.0%',
+            'cache_file': '/path/to/cache.json',
+        }
+
+        result = formatter.format_stats(stats, enabled=True)
+
+        assert "Exact Hit Rate: 80.0%" in result
+        assert "Intent Hit Rate: 40.0%" in result
+        assert "Caching:" in result
 
 
 class TestExtractTimeFromTimestamp:
