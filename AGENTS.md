@@ -57,7 +57,7 @@ Independent review is required for architectural decisions, plan revisions, and 
 - The reviewer must be a DIFFERENT MODEL FAMILY from the author of the artifact. Same-family review shares the author's blind spots and does not count as independent.
 - Address findings at the root in the artifact. Do not just patch the wording that was criticized.
 - Verify claimed checks by re-running them or reading their output. Verify by OUTPUT, never by prose.
-- Design and test-quality review criteria live in `.docs/REVIEW-CHECKLIST.md`. The reviewer applies them; implementers do not recite them, they survive them.
+- Design and test-quality review criteria live in `docs/REVIEW-CHECKLIST.md`. The reviewer applies them; implementers do not recite them, they survive them.
 
 ## Quality Gate (Before Claiming Done)
 
@@ -83,7 +83,7 @@ A change is not done until:
 
 - NEVER make real API calls in tests. Mock only at external boundaries (APIs, file system, network); use real objects for business logic.
 - Write behavior tests and edge-case tests. Before writing a test, ask: would this fail if the feature broke? If no, do not write it.
-- Structure-only tests, initialization tests, and over-mocked tests do not get written. Definitions and examples are in `.docs/REVIEW-CHECKLIST.md`; the reviewer rejects violations.
+- Structure-only tests, initialization tests, and over-mocked tests do not get written. Definitions and examples are in `docs/REVIEW-CHECKLIST.md`; the reviewer rejects violations.
 
 ## Issue Discovery (Mandatory)
 
