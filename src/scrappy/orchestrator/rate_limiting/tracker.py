@@ -1,6 +1,7 @@
 """Rate limit tracker facade."""
 from __future__ import annotations
-from datetime import datetime, timedelta
+import logging
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from .protocols import (
@@ -11,6 +12,8 @@ from .protocols import (
 )
 from scrappy.orchestrator.provider_types import ProviderLimits
 from ..config import OrchestratorConfig
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimitTracker:
@@ -59,20 +62,198 @@ class RateLimitTracker:
             self.restore_from_disk()
 
     def restore_from_disk(self) -> RateLimitTracker:
-        """Load usage data from storage."""
+        """Load usage data from storage, guarding against malformed persisted state."""
         blob = self._storage.load()
-        if blob:
-            self._usage = blob
-            self._check_and_reset()
+        self._adopt_if_restorable(blob)
         return self
 
     async def restore_from_disk_async(self) -> RateLimitTracker:
-        """Load usage data from storage asynchronously."""
+        """Load usage data from storage asynchronously, with the same guard."""
         blob = await self._storage.load_async()
-        if blob:
+        self._adopt_if_restorable(blob)
+        return self
+
+    def _adopt_if_restorable(self, blob: Any) -> None:
+        """Shared startup gate for both restore paths.
+
+        storage.load() returns {} for a missing file, a parse error, or an on-disk
+        "{}" -- the existing missing/empty sentinel -- which stays a silent no-op.
+        Any other value is validated against the accepted-document contract before
+        adoption: a malformed document is rejected as a no-op that preserves the
+        current in-memory counters and does NOT overwrite the stored file (no
+        _check_and_reset runs, so no save fires). Only accepted data is adopted and
+        passed to the existing reset logic.
+        """
+        if isinstance(blob, dict) and not blob:
+            return  # {} sentinel: silent no-op, exactly as before
+
+        if self._is_restorable(blob):
             self._usage = blob
             self._check_and_reset()
-        return self
+        else:
+            # Pathless, content-free warning: does not read self._storage.path
+            # (not promised by StorageProtocol) and does not echo file content.
+            logger.warning(
+                "Ignoring malformed persisted rate-limit state; retaining current "
+                "in-memory counters and not overwriting stored state"
+            )
+
+    # --- Accepted-document contract (foreign/corrupt-schema rejection) ----------
+
+    # The eight per-model counters the tracker writes and its consumers require.
+    _REQUIRED_MODEL_COUNTERS = (
+        "requests_today",
+        "requests_this_month",
+        "tokens_today",
+        "tokens_this_month",
+        "input_tokens_today",
+        "output_tokens_today",
+        "total_requests",
+        "total_tokens",
+    )
+
+    # The numeric provider-header keys consumed by the quota/limit paths. The parser
+    # emits the 16 generic/day/hour/minute keys; remaining_requests_month is an
+    # additional CONSUMED key (tracker.py get-remaining -> calculator) not emitted by
+    # the parser. Each permits an int (bool excluded) or null; signed/zero accepted.
+    _NUMERIC_HEADER_KEYS = (
+        "remaining_requests",
+        "remaining_requests_day",
+        "remaining_requests_hour",
+        "remaining_requests_minute",
+        "remaining_requests_month",
+        "remaining_tokens",
+        "remaining_tokens_day",
+        "remaining_tokens_hour",
+        "remaining_tokens_minute",
+        "limit_requests",
+        "limit_requests_day",
+        "limit_requests_hour",
+        "limit_requests_minute",
+        "limit_tokens",
+        "limit_tokens_day",
+        "limit_tokens_hour",
+        "limit_tokens_minute",
+    )
+
+    def _is_restorable(self, blob: Any) -> bool:
+        """Accept or reject the WHOLE persisted document before any adoption.
+
+        Validates exactly the fields the current tracker writes and its consumers
+        require. Does NOT coerce, salvage, or migrate; unknown metadata is retained
+        opaque. Returns a single accept/reject boolean and mutates nothing.
+        """
+        if not isinstance(blob, dict):
+            return False
+
+        # last_reset is REQUIRED: a mapping with canonical, real-calendar stamps.
+        last_reset = blob.get("last_reset")
+        if not isinstance(last_reset, dict):
+            return False
+        if not self._is_daily_stamp(last_reset.get("daily")):
+            return False
+        if not self._is_monthly_stamp(last_reset.get("monthly")):
+            return False
+
+        # providers MAY be absent; when present it must be a mapping of
+        # provider -> (model -> model_entry).
+        if "providers" in blob:
+            providers = blob["providers"]
+            if not isinstance(providers, dict):
+                return False
+            for model_map in providers.values():
+                if not isinstance(model_map, dict):
+                    return False
+                for entry in model_map.values():
+                    if not self._is_model_entry(entry):
+                        return False
+
+        # provider_headers is an optional persisted key.
+        if "provider_headers" in blob:
+            provider_headers = blob["provider_headers"]
+            if not isinstance(provider_headers, dict):
+                return False
+            for header_map in provider_headers.values():
+                if not isinstance(header_map, dict):
+                    return False
+                if not self._is_header_mapping(header_map):
+                    return False
+
+        return True
+
+    @staticmethod
+    def _is_int(value: Any) -> bool:
+        """True for a real int, excluding bool (bool is an int subclass in Python)."""
+        return isinstance(value, int) and not isinstance(value, bool)
+
+    @classmethod
+    def _is_model_entry(cls, entry: Any) -> bool:
+        if not isinstance(entry, dict):
+            return False
+        for counter in cls._REQUIRED_MODEL_COUNTERS:
+            value = entry.get(counter)
+            # isinstance is inline rather than delegated to _is_int because a
+            # bool-returning helper does not narrow Any | None, so the comparison
+            # below would be unchecked. bool stays rejected: it is an int subclass.
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                return False
+        if not isinstance(entry.get("errors"), list):
+            return False
+        if "last_request" in entry:
+            last_request = entry["last_request"]
+            if last_request is not None and not isinstance(last_request, str):
+                return False
+        return True
+
+    @classmethod
+    def _is_header_mapping(cls, header_map: dict[str, Any]) -> bool:
+        for key in cls._NUMERIC_HEADER_KEYS:
+            if key in header_map:
+                value = header_map[key]
+                if value is not None and not cls._is_int(value):
+                    return False
+        for timestamp_key in ("last_updated", "retry_at"):
+            if timestamp_key in header_map:
+                if not cls._is_naive_iso_datetime(header_map[timestamp_key]):
+                    return False
+        return True
+
+    @staticmethod
+    def _is_daily_stamp(value: Any) -> bool:
+        """Exactly YYYY-MM-DD and a real calendar date (canonical roundtrip)."""
+        if not isinstance(value, str):
+            return False
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError:
+            return False
+        return parsed.isoformat() == value
+
+    @staticmethod
+    def _is_monthly_stamp(value: Any) -> bool:
+        """Exactly YYYY-MM and a real calendar month (validated via a first-of-month)."""
+        if not isinstance(value, str) or len(value) != 7 or value[4] != "-":
+            return False
+        try:
+            parsed = date.fromisoformat(f"{value}-01")
+        except ValueError:
+            return False
+        return parsed.strftime("%Y-%m") == value
+
+    @staticmethod
+    def _is_naive_iso_datetime(value: Any) -> bool:
+        """None, or a NAIVE isoformat datetime string as the current writer emits."""
+        if value is None:
+            return True
+        if not isinstance(value, str) or "T" not in value:
+            return False
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return False
+        if parsed.tzinfo is not None:
+            return False
+        return parsed.isoformat() == value
 
     def record_request(
         self,

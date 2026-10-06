@@ -37,6 +37,7 @@ from .manager_protocols import (
     UsageReporterProtocol,
     StatusReporterProtocol,
 )
+from .delegation import _validate_concrete_model_context
 from .factory import OrchestratorFactory
 from .model_selection import ModelSelectionServiceProtocol
 from .failure_policy import FailureRecord, SHOULD_RETRY_KINDS, get_failure_policy
@@ -317,9 +318,9 @@ class AgentOrchestrator:
         min_context: int,
     ) -> Optional[str]:
         """
-        Select the first model for a request.
-
-        Explicit concrete models are validated by DelegationManager downstream.
+        Select an initial model or return an explicit model unchanged. This helper
+        does not validate explicit models; request entry/dispatch paths own that
+        validation.
         """
         if explicit_model is not None:
             return explicit_model
@@ -1279,7 +1280,9 @@ class AgentOrchestrator:
 
         Raises:
             AllModelsRateLimitedError: If all models are rate limited
-            ValueError: If no models configured for selection type
+            ValueError: If no models configured for selection type, or if an
+                explicit concrete model's context is below the minimum required
+                for selection_type, or if it has no context metadata.
         """
         if self.llm_service is None:
             raise ValueError("LLM service not configured")
@@ -1290,6 +1293,13 @@ class AgentOrchestrator:
             selection_type = ModelSelectionType.INSTRUCT
 
         min_context = self._min_context_for(selection_type)
+
+        # This path dispatches to llm_service directly, bypassing
+        # DelegationManager, so the shared concrete-model context contract is
+        # enforced here on the caller-supplied model. Auto-selected and fallback
+        # models are already chosen with min_context.
+        if model is not None:
+            _validate_concrete_model_context(model, min_context)
 
         # Select model if not provided.
         model = self._select_initial_model(selection_type, model, min_context)

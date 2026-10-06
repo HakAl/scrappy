@@ -1273,3 +1273,282 @@ def test_refresh_provider_configuration_updates_selector_and_clears_auth():
     assert orchestrator.model_selector is selector
     assert selector.select(ModelSelectionType.FAST) == "cerebras/llama3.1-8b"
     assert selector.is_configured("groq/llama-3.1-8b-instant") is True
+
+
+# --- Explicit streaming model context contract (scrappy-27ho) -----------------
+#
+# stream_completion_with_fallback dispatches to llm_service.stream_completion_direct
+# directly, bypassing DelegationManager, so it owns validation of a caller-supplied
+# model. These oracles mock ONLY the external LLM boundary: the selector, catalog,
+# metadata, min-context method and shared validator are all real.
+
+STREAM_CONTENT = "streamed"
+
+
+class DownstreamProviderSentinel(RuntimeError):
+    """Stand-in for an existing downstream provider rejection."""
+
+
+class RecordingStreamLLMService:
+    """Records every dispatched model at the external streaming boundary."""
+
+    def __init__(self, *, rate_limited_models=None, sentinel_models=None) -> None:
+        self.calls: list[str] = []
+        self._rate_limited = set(rate_limited_models or ())
+        self._sentinel = set(sentinel_models or ())
+
+    def stream_completion_direct(self, model, messages, **kwargs):
+        self.calls.append(model)
+        if model in self._rate_limited:
+            # Raised before any semantic output, so fallback is still permitted.
+            raise RateLimitError(
+                f"Rate limit hit for {model}",
+                provider_name=model.split("/", 1)[0],
+            )
+        if model in self._sentinel:
+            raise DownstreamProviderSentinel(model)
+
+        yield StreamChunk(
+            content=STREAM_CONTENT,
+            model=model,
+            provider=model.split("/", 1)[0],
+        )
+
+
+def make_chat_selector_small_first() -> ModelSelectionService:
+    """Real CHAT selector whose top priority is below the CHAT minimum."""
+    return ModelSelectionService(
+        configured_models={CHAT_8K_MODEL, CHAT_32K_MODEL, FAST_128K_MODEL},
+        model_priorities={
+            ModelSelectionType.CHAT: [
+                CHAT_8K_MODEL,
+                CHAT_32K_MODEL,
+                FAST_128K_MODEL,
+            ],
+        },
+    )
+
+
+def make_chat_selector_eligible_first() -> ModelSelectionService:
+    """Real CHAT selector with an eligible head and a too-small middle candidate."""
+    return ModelSelectionService(
+        configured_models={CHAT_32K_MODEL, CHAT_8K_MODEL, FAST_128K_MODEL},
+        model_priorities={
+            ModelSelectionType.CHAT: [
+                CHAT_32K_MODEL,
+                CHAT_8K_MODEL,
+                FAST_128K_MODEL,
+            ],
+        },
+    )
+
+
+def test_stream_explicit_model_below_min_context_is_rejected_before_dispatch():
+    """An explicit CHAT model under the minimum must never reach the provider."""
+    llm_service = RecordingStreamLLMService()
+    orchestrator = make_orchestrator(
+        llm_service=llm_service,
+        # Eligible 32K/128K candidates exist, so a broken implementation that
+        # silently re-selected instead of raising would stream successfully.
+        model_selector=make_chat_selector_eligible_first(),
+        delegation_manager=Mock(),
+    )
+
+    stream = orchestrator.stream_completion_with_fallback(
+        messages=[{"role": "user", "content": "test"}],
+        model=CHAT_8K_MODEL,
+        selection_type=ModelSelectionType.CHAT,
+        auto_fallback=True,
+    )
+
+    # Both the entry point and the attempt are generators, so the contract is
+    # only exercised by consuming the iterator.
+    with pytest.raises(ValueError, match="8192 token context, below required 32768"):
+        list(stream)
+
+    assert llm_service.calls == []
+
+
+def test_stream_explicit_model_at_min_context_boundary_streams():
+    """context_length == min_context is sufficient, guarding a < to <= slip."""
+    llm_service = RecordingStreamLLMService()
+    orchestrator = make_orchestrator(
+        llm_service=llm_service,
+        model_selector=make_chat_selector_eligible_first(),
+        delegation_manager=Mock(),
+    )
+
+    chunks = list(orchestrator.stream_completion_with_fallback(
+        messages=[{"role": "user", "content": "test"}],
+        model=CHAT_32K_MODEL,
+        selection_type=ModelSelectionType.CHAT,
+    ))
+
+    assert llm_service.calls == [CHAT_32K_MODEL]
+    assert "".join(chunk.content for chunk in chunks) == STREAM_CONTENT
+
+
+def test_stream_explicit_small_model_allowed_when_min_context_is_zero():
+    """INSTRUCT yields a zero minimum, so the nonrestrictive path is unchanged."""
+    llm_service = RecordingStreamLLMService()
+    orchestrator = make_orchestrator(
+        llm_service=llm_service,
+        model_selector=make_model_selector(),
+        delegation_manager=Mock(),
+    )
+
+    chunks = list(orchestrator.stream_completion_with_fallback(
+        messages=[{"role": "user", "content": "test"}],
+        model=CHAT_8K_MODEL,
+        selection_type=ModelSelectionType.INSTRUCT,
+    ))
+
+    assert llm_service.calls == [CHAT_8K_MODEL]
+    assert "".join(chunk.content for chunk in chunks) == STREAM_CONTENT
+
+
+def test_stream_unknown_provider_shaped_model_allowed_when_min_context_is_zero():
+    """Nonrestrictive mode returns early even for unknown provider-shaped names."""
+    llm_service = RecordingStreamLLMService()
+    orchestrator = make_orchestrator(
+        llm_service=llm_service,
+        model_selector=make_model_selector(),
+        delegation_manager=Mock(),
+    )
+
+    chunks = list(orchestrator.stream_completion_with_fallback(
+        messages=[{"role": "user", "content": "test"}],
+        model="fakeprov/does-not-exist",
+        selection_type=ModelSelectionType.INSTRUCT,
+    ))
+
+    assert llm_service.calls == ["fakeprov/does-not-exist"]
+    assert "".join(chunk.content for chunk in chunks) == STREAM_CONTENT
+
+
+def test_stream_group_name_reaches_boundary_unchanged():
+    """A MODEL_GROUPS value is forwarded verbatim with no new context rejection.
+
+    This asserts forwarding only. It does NOT claim that a group alias is a
+    working direct-stream input: LiteLLMService.stream_completion_direct resolves
+    the provider from the model string and rejects unrecognized providers.
+    """
+    llm_service = RecordingStreamLLMService()
+    orchestrator = make_orchestrator(
+        llm_service=llm_service,
+        model_selector=make_chat_selector_eligible_first(),
+        delegation_manager=Mock(),
+    )
+
+    chunks = list(orchestrator.stream_completion_with_fallback(
+        messages=[{"role": "user", "content": "test"}],
+        model="chat",
+        selection_type=ModelSelectionType.CHAT,
+    ))
+
+    assert llm_service.calls == ["chat"]
+    assert "".join(chunk.content for chunk in chunks) == STREAM_CONTENT
+
+
+def test_stream_group_name_downstream_rejection_propagates_unchanged():
+    """An existing downstream provider rejection is not masked by the guard."""
+    llm_service = RecordingStreamLLMService(sentinel_models={"chat"})
+    orchestrator = make_orchestrator(
+        llm_service=llm_service,
+        model_selector=make_chat_selector_eligible_first(),
+        delegation_manager=Mock(),
+    )
+
+    stream = orchestrator.stream_completion_with_fallback(
+        messages=[{"role": "user", "content": "test"}],
+        model="chat",
+        selection_type=ModelSelectionType.CHAT,
+        auto_fallback=False,
+    )
+
+    with pytest.raises(DownstreamProviderSentinel, match="chat"):
+        list(stream)
+
+    assert llm_service.calls == ["chat"]
+
+
+def test_stream_bare_unknown_model_reaches_boundary_unchanged():
+    """A bare unknown name keeps the validator's existing leniency.
+
+    Forwarding only; this does not claim real alias streaming works.
+    """
+    llm_service = RecordingStreamLLMService()
+    orchestrator = make_orchestrator(
+        llm_service=llm_service,
+        model_selector=make_chat_selector_eligible_first(),
+        delegation_manager=Mock(),
+    )
+
+    chunks = list(orchestrator.stream_completion_with_fallback(
+        messages=[{"role": "user", "content": "test"}],
+        model="totally-unknown-model",
+        selection_type=ModelSelectionType.CHAT,
+    ))
+
+    assert llm_service.calls == ["totally-unknown-model"]
+    assert "".join(chunk.content for chunk in chunks) == STREAM_CONTENT
+
+
+def test_stream_unknown_provider_shaped_model_rejected_under_chat_minimum():
+    """Provider-shaped unknown models keep raising, with no provider dispatch."""
+    llm_service = RecordingStreamLLMService()
+    orchestrator = make_orchestrator(
+        llm_service=llm_service,
+        model_selector=make_chat_selector_eligible_first(),
+        delegation_manager=Mock(),
+    )
+
+    stream = orchestrator.stream_completion_with_fallback(
+        messages=[{"role": "user", "content": "test"}],
+        model="fakeprov/does-not-exist",
+        selection_type=ModelSelectionType.CHAT,
+    )
+
+    with pytest.raises(ValueError, match="No context metadata available"):
+        list(stream)
+
+    assert llm_service.calls == []
+
+
+def test_stream_auto_selection_still_skips_small_chat_candidate():
+    """With model=None the real selector must skip 8K and dispatch 32K."""
+    llm_service = RecordingStreamLLMService()
+    orchestrator = make_orchestrator(
+        llm_service=llm_service,
+        model_selector=make_chat_selector_small_first(),
+        delegation_manager=Mock(),
+    )
+
+    chunks = list(orchestrator.stream_completion_with_fallback(
+        messages=[{"role": "user", "content": "test"}],
+        selection_type=ModelSelectionType.CHAT,
+    ))
+
+    assert llm_service.calls == [CHAT_32K_MODEL]
+    assert "".join(chunk.content for chunk in chunks) == STREAM_CONTENT
+
+
+def test_stream_validated_explicit_model_still_falls_back_past_small_candidate():
+    """A passing explicit model still falls back, and 8K is never dispatched."""
+    llm_service = RecordingStreamLLMService(rate_limited_models={CHAT_32K_MODEL})
+    orchestrator = make_orchestrator(
+        llm_service=llm_service,
+        model_selector=make_chat_selector_eligible_first(),
+        delegation_manager=Mock(),
+    )
+
+    chunks = list(orchestrator.stream_completion_with_fallback(
+        messages=[{"role": "user", "content": "test"}],
+        model=CHAT_32K_MODEL,
+        selection_type=ModelSelectionType.CHAT,
+        auto_fallback=True,
+    ))
+
+    assert llm_service.calls == [CHAT_32K_MODEL, FAST_128K_MODEL]
+    assert CHAT_8K_MODEL not in llm_service.calls
+    assert "".join(chunk.content for chunk in chunks) == STREAM_CONTENT

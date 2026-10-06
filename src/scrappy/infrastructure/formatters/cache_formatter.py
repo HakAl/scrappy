@@ -118,11 +118,11 @@ class CacheFormatter(StatsFormatter):
             label: Label for the rate (default: "Hit Rate")
 
         Returns:
-            Formatted line with color (success > 50%, warning <= 50%) if use_color is True
+            Formatted line with the rate styled through the output's style
+            contract (success > 50%, warning <= 50%). Plain/no-color outputs
+            return the rate unchanged, because that decision lives in the
+            style implementation rather than in this formatter.
         """
-        if not self._io.use_color:
-            return f"{label}: {rate_str}"
-
         # Extract numeric value from string
         try:
             rate_value = float(rate_str.rstrip('%'))
