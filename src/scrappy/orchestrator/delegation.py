@@ -350,6 +350,8 @@ class DelegationManager:
             else:
                 effective_model = _resolve_model_group(provider_name)
 
+            _validate_concrete_model_context(effective_model, min_context)
+
             # Filter out internal kwargs
             filtered_kwargs = {k: v for k, v in kwargs.items() if k not in INTERNAL_KWARGS}
 
