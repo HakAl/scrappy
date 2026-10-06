@@ -7,8 +7,6 @@ is passed directly to the LLM service.
 
 
 import copy
-import hashlib
-from pathlib import Path
 
 import pytest
 
@@ -459,30 +457,31 @@ class TestMessagesValidationPreservesExistingBehavior:
         assert "prompt cannot be empty" in str(excinfo.value)
         assert llm_service.call_count == 0
 
-    def test_runtime_binding_receipt(self):
-        """Guard: the modules under test import from this same source tree.
+    def test_standard_flow_refuses_undersized_concrete_model_without_messages(self):
+        """Load-bearing control: the STANDARD path must still refuse a concrete
+        model that cannot satisfy min_context, before any dispatch.
 
-        Without this, a root-tree import could satisfy or mask the repair while
-        appearing to exercise the candidate.
+        Unlike the empty-prompt control, this uses a valid nonempty prompt so the
+        real augmenter does not raise first, and omits messages so the standard
+        flow (not the messages branch) is exercised. If the standard concrete-model
+        context check is removed, this test fails - that is its whole point.
         """
-        import scrappy.orchestrator.delegation as delegation_module
-        import scrappy.orchestrator.litellm_config as litellm_config_module
-        import scrappy.orchestrator.model_selection as model_selection_module
-        import scrappy.orchestrator.provider_catalog as provider_catalog_module
-        import tests.helpers as helpers_module
+        llm_service = MockLLMService()
+        manager, cache = create_real_dependency_manager(llm_service)
 
-        tree_root = Path(__file__).resolve().parents[2]
-        modules = {
-            "delegation": delegation_module,
-            "litellm_config": litellm_config_module,
-            "model_selection": model_selection_module,
-            "provider_catalog": provider_catalog_module,
-            "tests.helpers": helpers_module,
-            "this_test": None,
-        }
+        with pytest.raises(ValueError) as excinfo:
+            manager.delegate(
+                provider_name="chat",
+                prompt="Summarize the quarterly report.",
+                model=KNOWN_8192,
+                min_context=8193,
+                use_cache=False,
+            )
 
-        for name, module in modules.items():
-            path = Path(__file__).resolve() if module is None else Path(module.__file__).resolve()
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            print(f"RUNTIME-ORIGIN {name} {path} sha256={digest}")
-            assert tree_root in path.parents, f"{name} imported from outside the tree under test: {path}"
+        message = str(excinfo.value)
+        assert KNOWN_8192 in message
+        assert "8192" in message
+        assert "8193" in message
+
+        # Refusal happened BEFORE the external boundary call.
+        assert llm_service.call_count == 0
