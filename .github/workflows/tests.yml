@@ -10,6 +10,9 @@ jobs:
   test:
     name: Test on Python ${{ matrix.python-version }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -51,14 +54,176 @@ jobs:
         pip install pytest-cov
         python -m pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing --ignore=tests/cli/textual/
 
+    - name: Prepare isolated uploader environment
+      # scrappy build addendum 2026-10-05 (tiad). The pinned wrapper installs
+      # codecov-cli with a bare `pip install` into whatever Python is first on
+      # PATH; run in the tested environment it downgrades click and breaks
+      # instructor/huggingface-hub. This step captures the tested interpreter and
+      # a dynamic snapshot of its installed distributions, then creates a fresh
+      # upload-only venv WITHOUT system-site-packages under the runner's own temp
+      # and installs the pinned CLI using the venv's OWN absolute interpreter.
+      # The action is bound by an absolute `binary` path, so NO PATH is exported
+      # and the job/global PATH is never mutated. prepared=true is published only
+      # after every hard check below passes.
+      id: uploader_env
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      run: |
+        set -euo pipefail
+        APP_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+        echo "app interpreter : ${APP_PYTHON}"
+        SNAP_BEFORE="${RUNNER_TEMP}/app-dist-before.txt"
+        "${APP_PYTHON}" -m pip freeze --all > "${SNAP_BEFORE}"
+        SNAP_BEFORE_SHA="$(sha256sum "${SNAP_BEFORE}" | cut -d' ' -f1)"
+        echo "app-dist sha256 : ${SNAP_BEFORE_SHA}"
+        echo "--- key app versions BEFORE (dynamic, version-or-absent) ---"
+        "${APP_PYTHON}" -c '
+        import importlib.metadata as m
+        for n in ("codecov-cli", "click", "instructor", "huggingface-hub"):
+            try: print(n, m.version(n))
+            except m.PackageNotFoundError: print(n, "<absent>")
+        '
+        VENV_DIR="${RUNNER_TEMP}/codecov-uploader"
+        "${APP_PYTHON}" -m venv "${VENV_DIR}"
+        VENV_PYTHON="${VENV_DIR}/bin/python"
+        CLI_BIN="${VENV_DIR}/bin/codecovcli"
+        # The pinned wrapper expands CC_COMMAND UNQUOTED, so the absolute path
+        # must contain no whitespace or glob metacharacters. The standard Ubuntu
+        # runner temp path satisfies this; reject anything else rather than claim
+        # arbitrary absolute paths are supported.
+        case "${CLI_BIN}" in
+          *[[:space:]]*|*'*'*|*'?'*|*'['*) echo "FAIL: unsafe characters in CLI path: ${CLI_BIN}"; exit 1 ;;
+        esac
+        REPORT_DIR="${GITHUB_WORKSPACE}/.codecov-evidence"
+        mkdir -p "${REPORT_DIR}"
+        REPORT="${REPORT_DIR}/pip-install-report.json"
+        echo "--- pip invoker identity (the venv interpreter itself) ---"
+        "${VENV_PYTHON}" -c 'import sys; print("sys.executable  =", sys.executable); print("sys.prefix      =", sys.prefix); print("sys.base_prefix =", sys.base_prefix)'
+        "${VENV_PYTHON}" -m pip --version
+        echo "install command : ${VENV_PYTHON} -m pip install --report ${REPORT} codecov-cli==11.3.1"
+        set +e
+        "${VENV_PYTHON}" -m pip install --report "${REPORT}" "codecov-cli==11.3.1"
+        INSTALL_EXIT=$?
+        set -e
+        echo "install exit    : ${INSTALL_EXIT}"
+        test "${INSTALL_EXIT}" -eq 0 || { echo "FAIL: pinned codecov-cli install failed"; exit 1; }
+        echo "CODECOV_PIP_REPORT_BEGIN"
+        cat "${REPORT}"
+        echo ""
+        echo "CODECOV_PIP_REPORT_END"
+        # The direct requested item must be exactly the official pinned wheel.
+        # This pins the direct artifact only; it is NOT a full transitive hash
+        # lock and NOT GPG equivalence.
+        "${VENV_PYTHON}" -c '
+        import json, sys
+        want_url = "https://files.pythonhosted.org/packages/c1/6e/57c684d5f97f6b3d552b6c40b22743965eec109a00739fa075753accb6bd/codecov_cli-11.3.1-py3-none-any.whl"
+        want_sha = "69e2521a4904e15cc87e4bb71ad1ddcfa6a48f1340ec28a2419ed94c723c027d"
+        with open(sys.argv[1]) as fh:
+            report = json.load(fh)
+        direct = [i for i in report["install"]
+                  if i.get("requested")
+                  and i["metadata"]["name"].replace("_", "-").lower() == "codecov-cli"]
+        assert len(direct) == 1, "expected one requested codecov-cli item, got %d" % len(direct)
+        info = direct[0]["download_info"]
+        url = info["url"]
+        sha = info["archive_info"]["hash"].split("=", 1)[1]
+        print("direct codecov-cli version =", direct[0]["metadata"]["version"])
+        print("direct codecov-cli url     =", url)
+        print("direct codecov-cli sha256  =", sha)
+        assert direct[0]["metadata"]["version"] == "11.3.1"
+        assert url == want_url, url
+        assert sha == want_sha, sha
+        print("PASS: direct requested codecov-cli is the official pinned wheel.")
+        ' "${REPORT}"
+        echo "--- preflight: entrypoint binding (hard checks) ---"
+        test -f "${CLI_BIN}" || { echo "FAIL: codecovcli entrypoint missing"; exit 1; }
+        test -x "${CLI_BIN}" || { echo "FAIL: codecovcli entrypoint not executable"; exit 1; }
+        SHEBANG="$(head -n 1 "${CLI_BIN}")"
+        echo "entrypoint shebang : ${SHEBANG}"
+        test "${SHEBANG}" = "#!${VENV_PYTHON}" || { echo "FAIL: shebang is not #!${VENV_PYTHON}"; exit 1; }
+        # Metadata, active prefix and distribution location. A venv interpreter
+        # may symlink to the base executable; that is NOT a failure. Binding is
+        # established jointly by launch path, active prefix, metadata and
+        # entrypoint.
+        "${VENV_PYTHON}" -c 'import importlib.metadata as m, sys; from pathlib import Path; d=m.distribution("codecov-cli"); print(sys.executable, sys.prefix, sys.base_prefix, d.version, d.locate_file("")); assert d.version == "11.3.1"; assert Path(sys.prefix).resolve() == Path(sys.argv[1]).resolve(); assert sys.prefix != sys.base_prefix; assert Path(d.locate_file("")).resolve().is_relative_to(Path(sys.prefix).resolve())' "${VENV_DIR}"
+        # OUR preparation check. The pinned wrapper has NO --version invocation,
+        # so this receipt is ours, not the action's. The action's own absolute
+        # upload-command receipt stays separate in its step log.
+        echo "--- our explicit absolute CLI --version check ---"
+        "${CLI_BIN}" --version
+        {
+          echo "app_python=${APP_PYTHON}"
+          echo "venv_dir=${VENV_DIR}"
+          echo "venv_python=${VENV_PYTHON}"
+          echo "cli_bin=${CLI_BIN}"
+          echo "snap_before_file=${SNAP_BEFORE}"
+          echo "snap_before_sha=${SNAP_BEFORE_SHA}"
+          echo "prepared=true"
+        } >> "$GITHUB_OUTPUT"
+        echo "PASS: uploader prepared; absolute CLI bound at ${CLI_BIN}"
+
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
-        file: ./coverage.xml
+        # Absolute pre-installed CLI. In the pinned wrapper the binary branch
+        # PRECEDES use_pypi, assigns CC_COMMAND from this path and executes that
+        # command for upload, so no PATH ordering and no wrapper pip install is
+        # involved. use_pypi/version/PIP_REPORT/PATH are therefore inert and
+        # removed; the version pin lives in our own install step above.
+        # That branch also bypasses wrapper integrity validation: provenance
+        # rests on the official-index pin plus the recorded wheel URL/hash.
+        # This is NOT GPG equivalence. binary_location stays unset.
+        binary: ${{ steps.uploader_env.outputs.cli_bin }}
+        files: ./coverage.xml
+        # files: is additive; disable_search stops discovery of the .pytest_tmp
+        # fixture reports so exactly ./coverage.xml is selected for upload.
+        disable_search: true
+        use_oidc: true
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+
+    - name: Verify uploader isolation (evidence)
+      # Runs on a successful preparation EVEN IF the upload failed, so isolation
+      # and install are proven regardless of ingestion. Uses the captured
+      # absolute APP interpreter and the explicit absolute VENV path. The app
+      # distribution snapshot must be byte-identical before/after (hard check, no
+      # continue-on-error, no global pip health gate). This proves
+      # package-install isolation only, not that every uploader subprocess ran
+      # under the venv.
+      if: always() && steps.uploader_env.outputs.prepared == 'true'
+      run: |
+        set -euo pipefail
+        APP_PYTHON='${{ steps.uploader_env.outputs.app_python }}'
+        VENV_DIR='${{ steps.uploader_env.outputs.venv_dir }}'
+        VENV_PYTHON='${{ steps.uploader_env.outputs.venv_python }}'
+        CLI_BIN='${{ steps.uploader_env.outputs.cli_bin }}'
+        SNAP_BEFORE='${{ steps.uploader_env.outputs.snap_before_file }}'
+        SNAP_BEFORE_SHA='${{ steps.uploader_env.outputs.snap_before_sha }}'
+        SNAP_AFTER="${RUNNER_TEMP}/app-dist-after.txt"
+        "${APP_PYTHON}" -m pip freeze --all > "${SNAP_AFTER}"
+        SNAP_AFTER_SHA="$(sha256sum "${SNAP_AFTER}" | cut -d' ' -f1)"
+        echo "app-dist sha256 before=${SNAP_BEFORE_SHA}"
+        echo "app-dist sha256 after =${SNAP_AFTER_SHA}"
+        # Dynamic version-or-absent on the SAME keys captured before the install.
+        # A pre-existing codecov-cli in the app environment is permissible as
+        # long as it is unchanged; no universal-absence assumption is made.
+        echo "--- key app versions AFTER (dynamic, version-or-absent) ---"
+        "${APP_PYTHON}" -c '
+        import importlib.metadata as m
+        for n in ("codecov-cli", "click", "instructor", "huggingface-hub"):
+            try: print(n, m.version(n))
+            except m.PackageNotFoundError: print(n, "<absent>")
+        '
+        if ! diff -u "${SNAP_BEFORE}" "${SNAP_AFTER}"; then
+          echo "FAIL: tested application environment changed during upload; isolation breached."
+          exit 1
+        fi
+        echo "PASS: app environment unchanged before/after upload."
+        echo "--- uploader venv still holds the pinned CLI it was bound by ---"
+        "${VENV_PYTHON}" -c 'import importlib.metadata as m, sys; from pathlib import Path; d=m.distribution("codecov-cli"); print(sys.executable, sys.prefix, sys.base_prefix, d.version, d.locate_file("")); assert d.version == "11.3.1"; assert sys.prefix != sys.base_prefix; assert Path(d.locate_file("")).resolve().is_relative_to(Path(sys.prefix).resolve())'
+        test -x "${CLI_BIN}" || { echo "FAIL: bound CLI entrypoint missing after upload"; exit 1; }
+        echo "bound CLI entrypoint: ${CLI_BIN}"
 
   lint:
     name: Lint and Type Check
