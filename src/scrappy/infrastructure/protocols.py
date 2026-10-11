@@ -536,7 +536,9 @@ class PathProviderProtocol(Protocol):
             path.write_text(json.dumps(data))
 
         # In production
-        save_session(ScrappyPathProvider(project_root), data)
+        from scrappy.infrastructure.paths import create_default_path_provider
+
+        save_session(create_default_path_provider(project_root), data)
 
         # In tests
         save_session(TempPathProvider(tmp_path), data)
