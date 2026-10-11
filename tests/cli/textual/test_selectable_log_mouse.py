@@ -622,11 +622,13 @@ class TestSubprocessMissingTerminalIsolation:
         stdin=DEVNULL a subprocess can interact with the terminal and
         corrupt mouse tracking state (scrappy-8ebm).
 
-        Runs in tmp_path with a real .git directory because undo's lock,
-        precondition, and state paths are cwd-relative and require .git to
-        be a directory. Running against the ambient repo breaks under a git
-        worktree checkout, where .git is a file and undo_lock() raises
-        before any subprocess call is made.
+        Runs in tmp_path because the real undo helpers still do their own
+        filesystem work here: only the subprocess boundary is mocked.
+        fake_git returns empty stdout for "git rev-parse", so
+        _resolve_git_dir() yields Path("."), and the lock, precondition and
+        state paths therefore resolve directly beneath the current
+        directory. The chdir to tmp_path is what keeps those real writes
+        out of the working repository. No .git directory participates.
         """
         import subprocess
         from unittest.mock import patch
@@ -634,7 +636,6 @@ class TestSubprocessMissingTerminalIsolation:
         from scrappy import undo
 
         monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
 
         # Fake only the subprocess boundary; every undo helper runs for real.
         subprocess_calls = []
