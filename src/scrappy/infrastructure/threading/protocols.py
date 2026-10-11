@@ -317,3 +317,15 @@ class CancellationTokenProtocol(Protocol):
         Use this to reuse the token for a new operation.
         """
         ...
+
+    def wait(self, timeout: Optional[float] = None) -> bool:
+        """
+        Block until cancelled or timeout.
+
+        Args:
+            timeout: Maximum seconds to wait (None = wait forever)
+
+        Returns:
+            True if cancelled, False if timeout reached
+        """
+        ...
