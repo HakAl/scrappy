@@ -78,6 +78,7 @@ class SubprocessRunner:
 
         collector = ThreadSafeOutputCollector()
         process = None
+        elapsed_timeout: Optional[TimeoutError] = None
         start_time = time.time()
 
         try:
@@ -123,7 +124,8 @@ class SubprocessRunner:
 
                 if elapsed > timeout:
                     process.kill()
-                    raise TimeoutError(f"Command timed out after {timeout}s")
+                    elapsed_timeout = TimeoutError(f"Command timed out after {timeout}s")
+                    raise elapsed_timeout
 
                 # Check cancellation using Event.wait() instead of sleep+poll
                 # This wakes immediately on cancellation instead of waiting the interval
@@ -177,6 +179,9 @@ class SubprocessRunner:
             # Re-raise cancellation exceptions directly - don't wrap them
             raise
         except Exception as e:
+            if e is elapsed_timeout:
+                # Only the runner's own elapsed timeout keeps its documented type
+                raise
             if process:
                 process.kill()
             raise RuntimeError(f"Error running command: {str(e)}")
