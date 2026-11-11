@@ -808,7 +808,8 @@ class TestQuitCopyPins:
         mock_session_saver.save_session.assert_not_called()
         output = mock_io.get_output()
         assert "\nSession not saved (auto-save disabled).\n" in output
-        assert "Use '/session save' to manually save before quitting.\n" in output
+        assert "Start scrappy without --no-save to save the session when using /quit.\n" in output
+        assert "/session save" not in output
         assert "\nGoodbye!\n" in output
 
     def test_quit_autosave_writes_real_history(self, mock_io, tmp_path):

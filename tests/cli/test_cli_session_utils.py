@@ -523,7 +523,8 @@ class TestDisplaySessionNotSavedWarning:
         display_session_not_saved_warning(io)
         output = io.get_output()
 
-        assert '/session save' in output
+        assert 'without --no-save' in output
+        assert '/session save' not in output
 
 
 
