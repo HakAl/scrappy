@@ -163,7 +163,6 @@ def start_tui_deferred(ctx, theme, resume: bool = False, cli_config=None) -> Non
             api_key_service=api_key_service,
             cli_config=cli_config,
         )
-        cli_instance.auto_save = ctx.obj.get('auto_save', True)
 
         if resume:
             restore_session_to_cli(cli_instance, cli_instance.io)

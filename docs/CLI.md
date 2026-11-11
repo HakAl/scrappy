@@ -29,7 +29,7 @@ scrappy [OPTIONS]
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--resume` | `-r` | Resume from last saved session |
-| `--no-save` | | Currently does not prevent saving on `/quit` (scrappy-u2go) |
+| `--no-save` | | Disables the session save on exit (`/quit`, `/exit`, `/q`); per-message conversation persistence continues, so history may be restored on the next start |
 | `--help` | | Show help |
 
 **Example:**
@@ -37,8 +37,9 @@ scrappy [OPTIONS]
 # Resume previous session
 scrappy --resume
 
-# Currently does not prevent saving on /quit (scrappy-u2go)
-scrappy --no-save  # Ineffective for /quit saving (scrappy-u2go)
+# Disable the session save on exit (/quit, /exit, /q).
+# Per-message conversation persistence continues; history may be restored next start.
+scrappy --no-save
 ```
 
 ## One-Shot Commands

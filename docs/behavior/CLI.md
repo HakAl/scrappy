@@ -25,7 +25,9 @@ Run a single command and exit:
 
 ```
 --resume, -r          Resume from last saved session
---no-save             Currently does not prevent saving on /quit (scrappy-u2go)
+--no-save             Disables session save on exit (/quit, /exit, /q).
+                      Per-message conversation persistence continues;
+                      history may still be restored on the next start.
 --help                Show help
 ```
 
