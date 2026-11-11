@@ -721,6 +721,173 @@ def test_captured_config_reaches_the_real_interactive_consumer(roots, monkeypatc
 
 
 # ---------------------------------------------------------------------------
+# No semantic background start in the composed CLI cases (9a5g).
+#
+# Real default CLI construction reaches
+# SemanticSearchManager.start_background_init, which starts a
+# SemanticSearchInit worker that nothing in these cases owns or stops. A
+# leftover worker can then call lancedb.connect inside a LATER test's window.
+# The cases below test configuration routing, not semantic search, so the
+# initializer is replaced at its module attribute (the manager imports it at
+# call time, so the real composition above it still runs) and
+# ManagedThread.start is guarded. monkeypatch restores both on every path.
+# ---------------------------------------------------------------------------
+
+
+class RecordingSemanticInitializer:
+    """BackgroundInitializerProtocol double that records and never starts a thread.
+
+    Values deliberately match NullInitializer. With them the manager's
+    is_ready() is True although there is no provider and no callback ever
+    fires. That is acceptable only for the cases in this file, whose app
+    stand-ins never consult readiness; it is not a general stand-in for a real
+    in-progress initializer.
+    """
+
+    def __init__(self, project_path, event_queue=None, config=None, *, sink):
+        self.project_path = project_path
+        self.event_queue = event_queue
+        self.config = config
+        self.start_calls = 0
+        self.on_ready_callback = None
+        sink.append(self)
+
+    def start(self) -> None:
+        self.start_calls += 1
+
+    def is_complete(self) -> bool:
+        return True
+
+    def is_running(self) -> bool:
+        return False
+
+    def wait_for_completion(self, timeout=None) -> bool:
+        return False
+
+    def get_result(self):
+        return None
+
+    def get_error(self):
+        return None
+
+    def get_status(self) -> str:
+        return "disabled"
+
+    def shutdown(self, timeout: float = 5.0) -> bool:
+        return True
+
+    def is_shutdown_requested(self) -> bool:
+        return False
+
+    def set_on_ready_callback(self, callback) -> None:
+        self.on_ready_callback = callback
+
+
+def guard_managed_thread_starts(monkeypatch):
+    """Replace ManagedThread.start with a recorder that never launches a thread."""
+    import threading
+
+    from scrappy.infrastructure.threading.managed_thread import ManagedThread
+
+    starts = []
+
+    def recording_start(self):
+        starts.append((self._name, threading.get_ident()))
+
+    monkeypatch.setattr(ManagedThread, "start", recording_start)
+    return starts
+
+
+def isolate_semantic_start(monkeypatch):
+    """Install the recorder and the guard. Call before any CLI construction."""
+    import functools
+
+    from scrappy.context.semantic import initializer as initializer_module
+
+    initializers = []
+    monkeypatch.setattr(
+        initializer_module,
+        "SemanticSearchInitializer",
+        functools.partial(RecordingSemanticInitializer, sink=initializers),
+    )
+    thread_starts = guard_managed_thread_starts(monkeypatch)
+    return type("SemanticIsolation", (), {
+        "initializers": initializers,
+        "thread_starts": thread_starts,
+    })()
+
+
+def assert_no_semantic_start(isolation, roots):
+    """The guard is checked FIRST, so a missing recorder cannot hide a start.
+
+    Each case calls this right after CLI construction, for the clearest first
+    failure, and again after its last consumer operation, so a start attempted
+    by later work is not swallowed by the guard unobserved.
+    """
+    assert isolation.thread_starts == [], (
+        f"a managed thread start was attempted: {isolation.thread_starts}"
+    )
+    assert len(isolation.initializers) == 1, (
+        f"expected one semantic initializer, got {len(isolation.initializers)}"
+    )
+    recorded = isolation.initializers[0]
+    assert recorded.start_calls == 1, (
+        f"expected one start() call, got {recorded.start_calls}"
+    )
+    assert recorded.config is not None, "the real factory passed no config"
+    db_dir = Path(recorded.config.db_dir_name)
+    assert db_dir.is_absolute(), f"storage was not bound absolute: {db_dir}"
+    assert db_dir == (roots.profile / ".scrappy" / "lancedb").resolve(), (
+        f"storage did not route under this case's profile: {db_dir}"
+    )
+
+
+def test_thread_guard_detects_a_real_semantic_start(tmp_path, monkeypatch):
+    """CONTROL: the guard sees the real start path, and fails closed if it does not.
+
+    No recorder here, so the REAL initializer runs start(). A barrier below the
+    guard, on threading.Thread.start, raises for this test's own thread before
+    any OS thread launches. If the guard were missing, bypassed or delegated to
+    the original start, the barrier fails this test instead of letting a worker
+    run. Calls from other threads are delegated, so unrelated threads are not
+    disturbed.
+    """
+    import threading
+
+    from scrappy.context.semantic.config import SemanticIndexConfig
+    from scrappy.context.semantic_manager import SemanticSearchManager
+
+    test_ident = threading.get_ident()
+    barrier_hits = []
+    original_thread_start = threading.Thread.start
+
+    def barrier(self):
+        if threading.get_ident() == test_ident:
+            barrier_hits.append(self.name)
+            raise AssertionError(
+                "thread launch reached threading.Thread.start; guard failed open"
+            )
+        return original_thread_start(self)
+
+    monkeypatch.setattr(threading.Thread, "start", barrier)
+    starts = guard_managed_thread_starts(monkeypatch)
+
+    manager = SemanticSearchManager(
+        project_path=tmp_path,
+        config=SemanticIndexConfig(
+            db_dir_name=str(tmp_path / "db"),
+            fingerprint_file=str(tmp_path / "fp.json"),
+        ),
+    )
+    manager.start_background_init()
+
+    assert barrier_hits == [], f"the barrier was reached: {barrier_hits}"
+    assert starts == [("SemanticSearchInit", test_ident)], (
+        f"the guard did not record exactly the real semantic start: {starts}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # F4 continuation: the COMPOSED route, end to end.
 #
 # Runs main(), the real Click callback, the real deferred closure, the real
@@ -792,6 +959,7 @@ def test_main_capture_reaches_the_real_deferred_cli_and_consumer(roots, monkeypa
     hop, or re-selecting later, yields the wrong marker here.
     """
     monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    isolation = isolate_semantic_start(monkeypatch)
     write_marked_config(roots.code_root, "from-code-root")
     other = write_marked_config(roots.other_cwd, "from-elsewhere")
     set_config(CLIConfigFactory().create_from_file(str(other)))
@@ -825,6 +993,7 @@ def test_main_capture_reaches_the_real_deferred_cli_and_consumer(roots, monkeypa
     # The deferred factory runs LATER, from a different directory.
     os.chdir(roots.other_cwd)
     cli = factory()
+    assert_no_semantic_start(isolation, roots)
 
     assert cli._cli_config is not None, "the capture never reached the deferred CLI"
     assert cli._cli_config.theme_config["preset"] == "from-code-root", (
@@ -856,6 +1025,7 @@ def test_main_capture_reaches_the_real_deferred_cli_and_consumer(roots, monkeypa
     assert user_path.is_relative_to(roots.profile), (
         f"user paths did not resolve under the disposable profile: {user_path}"
     )
+    assert_no_semantic_start(isolation, roots)
 
 
 @pytest.mark.no_contained_config_seed
@@ -1054,6 +1224,7 @@ def observe_theme_at_the_ui_boundary(monkeypatch, cli):
 def test_main_route_run_hands_the_selected_theme_to_the_ui(roots, monkeypatch):
     """main -> Click -> deferred factory -> REAL run() -> UI boundary."""
     monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    isolation = isolate_semantic_start(monkeypatch)
     write_marked_config(roots.code_root, "from-code-root")
     other = write_marked_config(roots.other_cwd, "from-elsewhere")
     set_config(CLIConfigFactory().create_from_file(str(other)))
@@ -1062,6 +1233,7 @@ def test_main_route_run_hands_the_selected_theme_to_the_ui(roots, monkeypatch):
     factory = run_main_capturing_the_deferred_factory(monkeypatch, roots)
     os.chdir(roots.other_cwd)
     cli = factory()
+    assert_no_semantic_start(isolation, roots)
 
     theme = observe_theme_at_the_ui_boundary(monkeypatch, cli)
 
@@ -1072,6 +1244,7 @@ def test_main_route_run_hands_the_selected_theme_to_the_ui(roots, monkeypatch):
     assert theme.primary != MARKER_COLOURS["from-elsewhere"], (
         "run() resolved the ambient cached global instead of the selection"
     )
+    assert_no_semantic_start(isolation, roots)
 
 
 @pytest.mark.no_contained_config_seed
@@ -1084,6 +1257,7 @@ def test_direct_click_route_run_hands_the_selected_theme_to_the_ui(roots, monkey
     from tests.cli.helpers import MockApiKeyConfigService
 
     monkeypatch.delenv("CLI_CONFIG_PATH", raising=False)
+    isolation = isolate_semantic_start(monkeypatch)
     write_marked_config(roots.code_root, "from-code-root")
     other = write_marked_config(roots.other_cwd, "from-elsewhere")
     set_config(CLIConfigFactory().create_from_file(str(other)))
@@ -1109,6 +1283,7 @@ def test_direct_click_route_run_hands_the_selected_theme_to_the_ui(roots, monkey
 
     os.chdir(roots.other_cwd)
     cli = deferred[-1].cli_factory()
+    assert_no_semantic_start(isolation, roots)
 
     theme = observe_theme_at_the_ui_boundary(monkeypatch, cli)
 
@@ -1116,3 +1291,4 @@ def test_direct_click_route_run_hands_the_selected_theme_to_the_ui(roots, monkey
     assert theme.primary == MARKER_COLOURS["from-code-root"], (
         "the direct Click selection did not survive to the UI boundary"
     )
+    assert_no_semantic_start(isolation, roots)
