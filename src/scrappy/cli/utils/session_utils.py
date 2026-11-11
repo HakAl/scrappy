@@ -184,4 +184,4 @@ def display_session_not_saved_warning(io: "CLIIOProtocol") -> None:
         io: IO interface for output
     """
     io.secho("\nSession not saved (auto-save disabled).", fg=io.theme.warning)
-    io.echo("Use '/session save' to manually save before quitting.")
+    io.echo("Start scrappy without --no-save to save the session when using /quit.")

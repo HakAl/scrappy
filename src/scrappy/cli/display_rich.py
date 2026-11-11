@@ -63,8 +63,6 @@ def show_help_table(
         ],
         'Session Management': [
             ('/session', 'Show session info'),
-            ('/session save', 'Save current session'),
-            ('/session load', 'Load previous session'),
             ('/session clear', 'Delete saved session'),
         ],
         'System': [
