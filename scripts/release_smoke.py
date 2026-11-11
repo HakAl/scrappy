@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import codecs
 import errno
-import fcntl
 import json
 import os
-import pty
 import re
 import select
 import signal
@@ -14,7 +13,6 @@ import struct
 import subprocess
 import sys
 import tempfile
-import termios
 import time
 import venv
 from pathlib import Path
@@ -38,20 +36,119 @@ def smoke_env(home: Path, binary: Path) -> dict[str, str]:
     return env
 
 
-def terms_smoke(binary: Path, cwd: Path, env: dict[str, str]) -> dict[str, object]:
+PROMPT = "Type 'ok' to continue, or 'q' to quit"
+
+
+class VirtualScreen:
+    """Minimal fail-closed cell model for the Terms composer."""
+
+    def __init__(self) -> None:
+        self.cells: dict[tuple[int, int], str] = {}
+        self.cursor: tuple[int, int] | None = None
+        self.decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        self.pending = ""
+
+    def cell(self, position: tuple[int, int]) -> str:
+        return self.cells.get(position, "")
+
+    def prompt_position(self) -> tuple[int, int] | None:
+        for row in sorted({r for r, _ in self.cells}):
+            columns = [c for r, c in self.cells if r == row]
+            start = min(columns)
+            text = "".join(self.cell((row, c)) or " " for c in range(start, max(columns) + 1))
+            offset = text.find(PROMPT)
+            if offset >= 0:
+                return row, start + offset
+        return None
+
+    def feed(self, data: bytes) -> None:
+        text = self.pending + self.decoder.decode(data)
+        self.pending = ""
+        i = 0
+        while i < len(text):
+            ch = text[i]
+            if ch == "\x1b":
+                begin = i
+                if i + 1 == len(text):
+                    self.pending = text[begin:]
+                    break
+                kind = text[i + 1]
+                if kind == "[":
+                    i += 2
+                    while i < len(text) and not ("@" <= text[i] <= "~"):
+                        i += 1
+                    if i == len(text):
+                        self.pending = text[begin:]
+                        break
+                    params, final = text[begin + 2:i], text[i]
+                    if final in "JKXLMP@STr" or (params == "?1049" and final in "hl"):
+                        self.cells.clear()
+                        self.cursor = None
+                    elif final in "Hf" and re.fullmatch(r"[0-9]*(;[0-9]*)?", params):
+                        parts = params.split(";")
+                        self.cursor = (int(parts[0] or 1), int(parts[1] or 1) if len(parts) > 1 else 1)
+                    elif final in "mu" or (params.startswith("?") and final in "hlp"):
+                        pass
+                    else:
+                        self.cursor = None
+                elif kind == "]":
+                    end = re.search(r"\x07|\x1b\\", text[i + 2:])
+                    if end is None:
+                        self.pending = text[begin:]
+                        break
+                    i = i + 2 + end.end() - 1
+                else:
+                    if kind == "c":
+                        self.cells.clear()
+                    self.cursor = None
+                    i += 1
+            elif self.cursor is not None:
+                row, col = self.cursor
+                if ch == "\r":
+                    self.cursor = row, 1
+                elif ch == "\n":
+                    self.cursor = row + 1, col
+                elif ch.isprintable():
+                    self.cells[row, col] = ch
+                    self.cursor = row, col + 1
+            i += 1
+
+
+def terms_smoke(
+    binary: Path, cwd: Path, env: dict[str, str], *,
+    ready_timeout: float = 90, quit_timeout: float = 30,
+) -> dict[str, object]:
+    import fcntl
+    import pty
+    import termios
+
+    started = time.monotonic()
     pid, fd = pty.fork()
     if pid == 0:
-        os.chdir(cwd)
-        os.execve(binary, [str(binary)], env)
+        try:
+            os.chdir(cwd)
+            os.execve(binary, [str(binary)], env)
+        except BaseException:
+            os._exit(127)
     output = bytearray()
+    screen = VirtualScreen()
     seen = False
     eof = False
     status: int | None = None
-    deadline = time.monotonic() + 90
+    position: tuple[int, int] | None = None
+    phase = "READY"
+    written = 0
+    phases: list[dict[str, object]] = []
+
+    def trace(name: str) -> None:
+        phases.append({"name": name, "seconds": time.monotonic() - started, "bytes_written": written})
+
+    trace(phase)
+    deadline = started + ready_timeout
     try:
         fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
         while time.monotonic() < deadline:
-            if not eof and select.select([fd], [], [], 0.1)[0]:
+            if not eof and select.select([fd], [], [], min(0.05, max(0, deadline - time.monotonic())))[0]:
                 try:
                     chunk = os.read(fd, 65536)
                 except OSError as exc:
@@ -59,11 +156,19 @@ def terms_smoke(binary: Path, cwd: Path, env: dict[str, str]) -> dict[str, objec
                         raise
                     chunk = b""
                 output.extend(chunk)
-                plain = ANSI.sub("", output.decode(errors="replace"))
-                if not seen and "Terms of Use" in plain:
-                    seen = True
-                    os.write(fd, b"q\r")
-                    deadline = time.monotonic() + 30
+                screen.feed(chunk)
+                seen = seen or "Terms of Use" in ANSI.sub("", output.decode(errors="replace"))
+                if phase == "READY" and seen and (position := screen.prompt_position()) is not None:
+                    deadline = time.monotonic() + quit_timeout
+                    trace("TYPE")
+                    written += os.write(fd, b"q")
+                    phase = "ACK"
+                    trace(phase)
+                elif phase == "ACK" and position is not None and screen.cell(position) == "q":
+                    trace("SUBMIT")
+                    written += os.write(fd, b"\r")
+                    phase = "EXIT"
+                    trace(phase)
                 if not chunk:
                     eof = True
             ended, child_status = os.waitpid(pid, os.WNOHANG)
@@ -71,17 +176,24 @@ def terms_smoke(binary: Path, cwd: Path, env: dict[str, str]) -> dict[str, objec
                 status = child_status
                 break
             if eof:
-                time.sleep(0.05)
+                select.select([], [], [], min(0.01, max(0, deadline - time.monotonic())))
         if status is None:
             ended, child_status = os.waitpid(pid, os.WNOHANG)
             if ended:
                 status = child_status
+        if phase == "READY":
+            raise RuntimeError("Terms prompt not ready")
+        if phase == "ACK":
+            raise RuntimeError("exited before q echo" if status is not None else "q not echoed")
         if status is None:
-            raise RuntimeError("Terms startup/quit timed out")
+            raise RuntimeError("Terms quit timed out")
         code = os.waitstatus_to_exitcode(status)
         if not seen or code != 0:
             raise RuntimeError(f"Terms seen={seen}, exit={code}")
-        return {"terms_seen": seen, "quit_exit": code}
+        return {"terms_seen": seen, "quit_exit": code, "phases": phases}
+    except BaseException:
+        print(json.dumps({"phases": phases}), file=sys.stderr)
+        raise
     finally:
         if status is None:
             try:
@@ -90,7 +202,6 @@ def terms_smoke(binary: Path, cwd: Path, env: dict[str, str]) -> dict[str, objec
                 pass
             os.waitpid(pid, 0)
         os.close(fd)
-        # Preserve raw output for diagnosing startup failures, including model downloads.
         print(output.decode(errors="replace"), file=sys.stderr)
 
 
