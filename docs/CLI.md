@@ -29,17 +29,16 @@ scrappy [OPTIONS]
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--resume` | `-r` | Resume from last saved session |
-| `--no-save` | | Disable auto-save on exit |
+| `--no-save` | | Currently does not prevent saving on `/quit` (scrappy-u2go) |
 | `--help` | | Show help |
-| `--version` | | Show version |
 
 **Example:**
 ```bash
 # Resume previous session
 scrappy --resume
 
-# Disable session auto-save
-scrappy --no-save
+# Currently does not prevent saving on /quit (scrappy-u2go)
+scrappy --no-save  # Ineffective for /quit saving (scrappy-u2go)
 ```
 
 ## One-Shot Commands
@@ -124,8 +123,8 @@ When in interactive mode, use slash commands:
 | Command | Description |
 |---------|-------------|
 | `/session` | Show session info |
-| `/session save` | Save current session |
-| `/session load` | Load previous session |
+| `/session save` | Not currently supported (scrappy-9853) |
+| `/session load` | Not currently supported (scrappy-9853) |
 | `/session clear` | Delete saved session |
 
 ### System Commands
@@ -133,7 +132,7 @@ When in interactive mode, use slash commands:
 | Command | Description |
 |---------|-------------|
 | `/help` | Show all commands |
-| `/quit`, `/exit`, `/q` | Exit CLI (auto-saves session by default) |
+| `/quit`, `/exit`, `/q` | Exit CLI; `/quit` saves the session by default |
 | `/verbose`, `/v` | Toggle verbose output mode |
 | `/autoexec` | Toggle automatic task execution in plans |
 

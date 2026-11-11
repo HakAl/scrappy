@@ -25,9 +25,8 @@ Run a single command and exit:
 
 ```
 --resume, -r          Resume from last saved session
---no-save             Disable auto-save on exit
+--no-save             Currently does not prevent saving on /quit (scrappy-u2go)
 --help                Show help
---version             Show version
 ```
 
 ## Interactive Mode
@@ -38,7 +37,7 @@ Start with `scrappy` (no arguments).
 
 **Session Management**
 - `/quit`, `/exit`, `/q` - Exit the application
-- `/session` - Manage session state (show/save/load/clear)
+- `/session` - Show session state; `/session clear` clears the saved session. `/session save` and `/session load` are not currently supported (scrappy-9853).
 - `/context` - View/manage codebase context
 - `/cache` - View cache statistics
 - `/limits` - View rate limit status
