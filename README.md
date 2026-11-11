@@ -69,7 +69,7 @@ Initial indexing needs an embedding model download. The BGE-small model download
 | `scrappy` | Start the interactive terminal UI |
 | `scrappy version` | Show the installed version |
 | `scrappy --resume` | Resume the last saved session |
-| `scrappy --no-save` | Currently does not prevent saving on `/quit` (scrappy-u2go) |
+| `scrappy --no-save` | Disables the session save on exit (`/quit`, `/exit`, `/q`); per-message conversation persistence continues, so history may be restored on the next start |
 | `scrappy undo [n]` | Undo the last N agent runs (default: one) |
 | `scrappy undo --force` | Bypass the worktree path check for undo |
 | `scrappy undo-list` | List undo points |
@@ -81,7 +81,7 @@ Initial indexing needs an embedding model download. The BGE-small model download
 
 For example, ask "How does authentication work?" in chat, or enter `/agent add input validation to the signup form` for a coding task. Review proposed changes before approving them.
 
-Chat and `/agent` require network access and a configured provider key. `/session save` and `/session load` are not currently supported (scrappy-9853). History cleared with `/clear` may reappear after restarting (scrappy-pz9l). `--no-save` currently does not prevent saving on `/quit` (scrappy-u2go).
+Chat and `/agent` require network access and a configured provider key. `/session save` and `/session load` are not currently supported (scrappy-9853). History cleared with `/clear` may reappear after restarting (scrappy-pz9l). `--no-save` disables the session save performed on exit (`/quit`, `/exit`, `/q`); it does not stop per-message conversation persistence, so history may still be restored on the next start.
 
 See the [CLI reference](docs/CLI.md) for more commands and the [architecture overview](docs/ARCHITECTURE.md) for how indexing, retrieval, and orchestration fit together.
 

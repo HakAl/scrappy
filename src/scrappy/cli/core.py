@@ -51,7 +51,9 @@ class CLI:
         conversation_store: Optional[ConversationStoreProtocol] = None,
         path_provider: Optional[PathProviderProtocol] = None,
         api_key_service: Optional[ApiKeyConfigServiceProtocol] = None,
-        cli_config: Optional["CLIConfig"] = None
+        cli_config: Optional["CLIConfig"] = None,
+        *,
+        auto_save: bool = True,
     ):
         """
         Initialize CLI with orchestrator and component handlers.
@@ -95,6 +97,7 @@ class CLI:
         self._auto_explore = auto_explore
         self._context_aware = context_aware
         self._show_provider_status = show_provider_status
+        self._auto_save = auto_save
         self._theme = theme or DEFAULT_THEME
 
         # PROVENANCE, retained BEFORE default resolution (scrappy-su47). Whether a
@@ -162,6 +165,7 @@ class CLI:
             conversation_history=[],
             conversation_store=conversation_store,
             was_stale_at_load=False,
+            auto_save=self._auto_save,
         )
 
         # Initialize component handlers using factory (pass theme)
@@ -256,6 +260,7 @@ class CLI:
             conversation_history=loaded_history,
             conversation_store=store,
             was_stale_at_load=self._session_is_stale,
+            auto_save=self._auto_save,
         )
 
     def _load_command_history(self) -> None:

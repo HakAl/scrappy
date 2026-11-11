@@ -155,6 +155,7 @@ def extract_context_options(ctx: Any) -> Dict[str, Any]:
         'auto_explore': obj.get('auto_explore', False),
         'context_aware': obj.get('context_aware', True),
         'show_provider_status': obj.get('show_providers', False),
+        'auto_save': obj.get('auto_save', True),
     }
 
 
@@ -250,7 +251,8 @@ def create_cli_from_context(
         theme=theme,
         path_provider=path_provider,
         api_key_service=api_key_service,
-        cli_config=cli_config
+        cli_config=cli_config,
+        auto_save=options['auto_save'],
     )
     cli.initialize()
     return cli
