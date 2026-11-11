@@ -1,0 +1,249 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact release version X.Y.Z
+        required: true
+        type: string
+      sha:
+        description: Exact reviewed main commit (40 lowercase hex characters)
+        required: true
+        type: string
+      publish:
+        description: Publish the existing Phase A artifact after tagging
+        type: boolean
+        default: false
+      build_run_id:
+        description: Successful Phase A workflow run ID (publish only)
+        type: string
+        default: ''
+
+permissions: {}
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  VERSION: ${{ inputs.version }}
+  SHA: ${{ inputs.sha }}
+  PUBLISH: ${{ inputs.publish && 'true' || 'false' }}
+  BUILD_RUN_ID: ${{ inputs.build_run_id }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      artifact_id: ${{ steps.build-run.outputs.artifact_id }}
+      wheel: ${{ steps.dist.outputs.wheel }}
+      wheel_sha256: ${{ steps.dist.outputs.wheel_sha256 }}
+      sdist: ${{ steps.dist.outputs.sdist }}
+      sdist_sha256: ${{ steps.dist.outputs.sdist_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+      - name: Validate inputs before using them
+        run: |
+          set -euo pipefail
+          python scripts/release_gate.py inputs
+      - name: Bind dispatch ref and annotated tag
+        run: |
+          set -euo pipefail
+          if [[ "$PUBLISH" == true ]]; then
+            git cat-file -t "refs/tags/v$VERSION" > "$RUNNER_TEMP/tag-type"
+            git rev-parse "refs/tags/v$VERSION^{commit}" > "$RUNNER_TEMP/tag-commit"
+            python scripts/release_gate.py ref "$RUNNER_TEMP/tag-type" "$RUNNER_TEMP/tag-commit"
+          else
+            python scripts/release_gate.py ref
+          fi
+      - name: Gate main membership and version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/commits/main" > "$RUNNER_TEMP/main.json"
+          if [[ "$PUBLISH" == true ]]; then
+            git fetch origin main
+            ancestor_exit=0
+            git merge-base --is-ancestor "$SHA" FETCH_HEAD || ancestor_exit=$?
+            export ANCESTOR_EXIT="$ancestor_exit"
+          fi
+          python scripts/release_gate.py main-head "$RUNNER_TEMP/main.json"
+          python scripts/release_gate.py version pyproject.toml
+      - name: Require newest exact-main Tests push success
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml" > "$RUNNER_TEMP/tests-workflow.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?head_sha=$SHA&event=push&branch=main&per_page=100" > "$RUNNER_TEMP/tests-runs.json"
+          python scripts/release_gate.py tests-run "$RUNNER_TEMP/tests-workflow.json" "$RUNNER_TEMP/tests-runs.json"
+      - name: Fail closed unless PyPI version is absent
+        run: |
+          set -euo pipefail
+          curl_exit=0
+          curl -sS -o "$RUNNER_TEMP/pypi-body" -w '%{http_code}' "https://pypi.org/pypi/scrappy-ai/$VERSION/json" > "$RUNNER_TEMP/pypi-status" || curl_exit=$?
+          export CURL_EXIT="$curl_exit"
+          python scripts/release_gate.py pypi-absent "$RUNNER_TEMP/pypi-status"
+      - name: Bind Phase A run and artifact identity
+        id: build-run
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/release.yml" > "$RUNNER_TEMP/release-workflow.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID" > "$RUNNER_TEMP/build-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID/artifacts?per_page=100" > "$RUNNER_TEMP/artifacts.json"
+          python scripts/release_gate.py build-run "$RUNNER_TEMP/release-workflow.json" "$RUNNER_TEMP/build-run.json" "$RUNNER_TEMP/artifacts.json"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: inputs.publish
+        with:
+          artifact-ids: ${{ steps.build-run.outputs.artifact_id }}
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          digest-mismatch: error
+          path: ${{ runner.temp }}/in
+      - name: Validate downloaded bytes and manifest
+        id: dist
+        if: inputs.publish
+        env:
+          BUILD_RUN_ATTEMPT: ${{ steps.build-run.outputs.run_attempt }}
+        run: |
+          set -euo pipefail
+          python scripts/release_gate.py dist-dir "$RUNNER_TEMP/in"
+
+  build:
+    needs: verify
+    if: ${{ !inputs.publish }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+      - name: Build, check and smoke exact distributions
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/tools"
+          tool_python="$RUNNER_TEMP/tools/bin/python"
+          "$tool_python" -m pip install --only-binary :all: build==1.6.1 twine==7.0.0 packaging==26.3
+          mkdir "$RUNNER_TEMP/out"
+          "$tool_python" -m build --outdir "$RUNNER_TEMP/out"
+          wheel="$RUNNER_TEMP/out/scrappy_ai-$VERSION-py3-none-any.whl"
+          sdist="$RUNNER_TEMP/out/scrappy_ai-$VERSION.tar.gz"
+          "$tool_python" -m twine check "$wheel" "$sdist"
+          "$tool_python" scripts/release_gate.py metadata "$wheel" "$sdist" pyproject.toml
+          "$tool_python" scripts/release_gate.py manifest-write "$RUNNER_TEMP/out"
+          "$tool_python" scripts/release_gate.py dist-dir "$RUNNER_TEMP/out"
+          "$tool_python" scripts/release_smoke.py --wheel "$wheel" --expect-version "$VERSION"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-${{ inputs.version }}-${{ inputs.sha }}
+          path: |
+            ${{ runner.temp }}/out/scrappy_ai-${{ inputs.version }}-py3-none-any.whl
+            ${{ runner.temp }}/out/scrappy_ai-${{ inputs.version }}.tar.gz
+            ${{ runner.temp }}/out/SHA256SUMS
+            ${{ runner.temp }}/out/manifest.json
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: false
+
+  publish:
+    needs: verify
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.verify.outputs.artifact_id }}
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          digest-mismatch: error
+          path: ${{ runner.temp }}/in
+      - name: Recheck verified bytes and stage only distributions
+        env:
+          WHEEL: ${{ needs.verify.outputs.wheel }}
+          WHEEL_SHA256: ${{ needs.verify.outputs.wheel_sha256 }}
+          SDIST: ${{ needs.verify.outputs.sdist }}
+          SDIST_SHA256: ${{ needs.verify.outputs.sdist_sha256 }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/in"
+          printf '%s\n' "$WHEEL" "$SDIST" SHA256SUMS manifest.json | LC_ALL=C sort > "$RUNNER_TEMP/expected"
+          ls -A | LC_ALL=C sort > "$RUNNER_TEMP/actual"
+          cmp "$RUNNER_TEMP/expected" "$RUNNER_TEMP/actual"
+          test -f "$WHEEL" && test ! -L "$WHEEL"
+          test -f "$SDIST" && test ! -L "$SDIST"
+          printf '%s  %s\n' "$WHEEL_SHA256" "$WHEEL" "$SDIST_SHA256" "$SDIST" > "$RUNNER_TEMP/verified-sums"
+          sha256sum -c "$RUNNER_TEMP/verified-sums"
+          mkdir "$RUNNER_TEMP/dist"
+          cp -- "$WHEEL" "$SDIST" "$RUNNER_TEMP/dist/"
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: ${{ runner.temp }}/dist/
+
+  confirm:
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.verify.outputs.artifact_id }}
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          digest-mismatch: error
+          path: ${{ runner.temp }}/in
+      - name: Confirm exact PyPI hashes and fresh-install behavior
+        run: |
+          set -euo pipefail
+          python scripts/release_gate.py dist-dir "$RUNNER_TEMP/in"
+          for attempt in $(seq 1 20); do
+            status=$(curl -sS -o "$RUNNER_TEMP/pypi.json" -w '%{http_code}' "https://pypi.org/pypi/scrappy-ai/$VERSION/json")
+            if [[ "$status" == 200 ]]; then
+              break
+            fi
+            if [[ "$status" != 404 ]]; then
+              echo "PyPI unavailable: HTTP $status; reconcile before any retry" >&2
+              exit 1
+            fi
+            if [[ "$attempt" == 20 ]]; then
+              echo 'PyPI version still absent; reconcile before any retry' >&2
+              exit 1
+            fi
+            sleep 15
+          done
+          python scripts/release_gate.py pypi-files "$RUNNER_TEMP/pypi.json" "$RUNNER_TEMP/in"
+          python scripts/release_smoke.py --pypi "$VERSION" --expect-version "$VERSION"
