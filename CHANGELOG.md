@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.0.0] - 2026-11-11
+
+### Breaking Changes
+
+- The exported, runtime-checkable `ContextProvider` protocol now requires `augment_prompt(user_prompt, include_files=False)`. Implementations providing only `is_explored` and `get_summary` must add this member to retain protocol conformance. This is a stricter public contract; it does not establish a newly introduced runtime failure in prompt augmentation.
+- Removed the `scrappy.orchestrator_adapter.OrchestratorAdapter` and `ToolCall` submodule re-exports and `scrappy.orchestrator.protocols.ProviderSelectorProtocol`. `RateLimitTrackerProtocol` methods were replaced with the current quota and rate-tracking interface.
+- Raised dependency floors to `python-dotenv>=1.2.0` and `textual>=7.3.0`. Python still requires >=3.11; classifiers now list 3.11, 3.12 and 3.13.
+
+### Bug Fixes
+
+- Honor `--no-save` through CLI initialization and on exit.
+- Advertise only supported `/session` commands in help and advice.
+- Isolate semantic startup in the macOS CI configuration-routing test.
+
+### Miscellaneous
+
+- Correct README and CLI setup guidance and document release gates.
+- Add a two-phase release workflow with exact artifact reuse, metadata and hash gates, and an isolated first-run smoke check.
+- Existing source mypy debt remains unresolved; the full-source CI type check remains nonblocking. The compatibility assessment covers static source surfaces, not full API or runtime parity.
+
+## [1.3.0] - 2026-04-07
+
+### Security
+
+- Block compromised LiteLLM versions 1.82.7 and 1.82.8.
+
+### Release provenance
+
+- This release has no recorded release tag. After CRLF normalization, all 313 Git-tracked packaged sdist paths match both `8ac6b95` and `d141222`, with no differences. Eight generated paths are excluded. This establishes packaged-source content equivalence, not a unique build commit, whole-repository equivalence, or verified wheel identity.
+
 ## [1.2.0] - 2026-01-20
 
 ### Features
