@@ -12,6 +12,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from scrappy.context.semantic.file_collector import (
     IndexFilterConfig,
     SemanticFileCollector,
@@ -245,25 +247,31 @@ class TestSemanticFileCollector:
 
         assert files['test.py'] == content
 
-    def test_collect_files_handles_read_errors_gracefully(self, tmp_path):
-        """Should skip files that can't be read."""
-        (tmp_path / 'good.py').write_text('print("good")')
+    @pytest.mark.parametrize("ancestor", ["plain", "has-bad-in-name"])
+    def test_collect_files_handles_read_errors_gracefully(self, tmp_path, ancestor):
+        """Should skip only the designated unreadable file."""
+        root = tmp_path / ancestor
+        root.mkdir()
+        (root / 'good.py').write_text('print("good")')
+        unreadable = (root / 'bad.py').resolve()
+        unreadable.write_text('print("bad")')
 
-        collector = SemanticFileCollector(tmp_path)
-
-        # Mock read_text to fail for specific file
+        collector = SemanticFileCollector(root)
         original_read_text = Path.read_text
+        called_paths = []
 
         def mock_read_text(self, *args, **kwargs):
-            if 'bad' in str(self):
+            path = self.resolve()
+            called_paths.append(path)
+            if path == unreadable:
                 raise PermissionError("No permission")
             return original_read_text(self, *args, **kwargs)
 
         with patch.object(Path, 'read_text', mock_read_text):
             files = collector.collect_files()
 
-            # Should get good file, skip bad
-            assert 'good.py' in files
+        assert files == {"good.py": 'print("good")'}
+        assert unreadable in called_paths
 
 
 
