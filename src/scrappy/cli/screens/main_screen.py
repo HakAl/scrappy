@@ -76,7 +76,7 @@ class MainAppScreen(Screen):
     """
 
     BINDINGS = [
-        Binding("enter", "submit_input", "Submit", priority=True),
+        Binding("enter", "submit_input", "Submit"),
         Binding("up", "history_previous", "Previous", priority=True),
         Binding("down", "history_next", "Next", priority=True),
         Binding("ctrl+home", "transcript_home", "Transcript Start", priority=True),
@@ -183,6 +183,7 @@ class MainAppScreen(Screen):
         """Called when screen is mounted."""
         # Get surface and focus input
         self._surface = self.query_one(ChatSurface)
+        self._surface.set_submit_action(self.action_submit_input)
         self._surface.focus_input()
 
         # Register status components with the status bar
