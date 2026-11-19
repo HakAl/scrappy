@@ -4,7 +4,7 @@
 [![PyPI version](https://badge.fury.io/py/scrappy-ai.svg)](https://badge.fury.io/py/scrappy-ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Scrappy is a terminal coding assistant that combines local codebase search with multiple LLM providers. Provider access terms differ and change: some offer free tiers, others limited-credit trials or require purchased credits. Check each provider's current terms.
+Scrappy is a terminal coding assistant that combines local codebase search with multiple LLM providers. Its purpose is seamless free-tier AI coding: when a request has eligible models from multiple configured providers, Scrappy can fail over between them as limits are reached. Provider access terms differ and change: some offer free tiers, others limited-credit trials or require purchased credits. Check each provider's current terms.
 
 ![Scrappy showing a diff preview before applying changes](docs/images/new_ss.png)
 *Scrappy previews proposed changes and requests human approval.*
