@@ -915,11 +915,14 @@ def run_main_capturing_the_deferred_factory(monkeypatch, roots):
     captured = {}
 
     class RecordingApp:
+        # Mirrors Textual App.return_code: None until exit, 0 after a normal run().
+        return_code: int | None = None
         def __init__(self, cli_factory=None, **kwargs):
             captured["factory"] = cli_factory
 
         def run(self):
             captured["ran"] = True
+            self.return_code = 0
 
     monkeypatch.setattr("scrappy.cli.textual.app.ScrappyApp", RecordingApp)
     monkeypatch.setattr(
@@ -1187,6 +1190,8 @@ class ThemeObservingApp:
     """
 
     constructions = []
+    # Mirrors Textual App.return_code: None until exit, 0 after a normal run().
+    return_code: int | None = None
 
     def __init__(self, *args, **kwargs):
         from unittest.mock import Mock as _Mock
@@ -1205,6 +1210,7 @@ class ThemeObservingApp:
         return None
 
     def run(self):
+        self.return_code = 0
         return None
 
 
