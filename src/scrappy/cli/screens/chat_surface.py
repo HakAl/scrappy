@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeAlias
+from typing import Any, Callable, Protocol, TypeAlias
 
 from rich.console import RenderableType
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.widget import Widget
@@ -97,6 +98,27 @@ class ChatCommandHandlerProtocol(Protocol):
         ...
 
 
+class ComposerTextArea(TextArea):
+    """Submit synchronously at Enter's position in the composer's key queue."""
+
+    def __init__(
+        self,
+        on_enter: Callable[[], None] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._submit_on_enter = on_enter
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.key == "enter":
+            event.stop()
+            event.prevent_default()
+            if self._submit_on_enter is not None:
+                self._submit_on_enter()
+            return
+        await super()._on_key(event)
+
+
 class ChatSurface(Widget):
     """Shared transcript, status, and composer surface."""
 
@@ -110,6 +132,7 @@ class ChatSurface(Widget):
         self._output: SelectableLog | None = None
         self._input: TextArea | None = None
         self._composer: ComposerControllerProtocol | None = None
+        self._submit_action: Callable[[], None] | None = None
 
     def compose(self) -> ComposeResult:
         """Create the shared chat widgets."""
@@ -121,7 +144,8 @@ class ChatSurface(Widget):
 
         with Container(id="input_container"):
             yield Label(">", id="input_prompt")
-            yield TextArea(
+            yield ComposerTextArea(
+                on_enter=self._handle_composer_enter,
                 id="input",
                 language=None,
                 show_line_numbers=False,
@@ -130,6 +154,14 @@ class ChatSurface(Widget):
 
         if self._config.show_status_bar:
             yield StatusBar()
+
+    def set_submit_action(self, action: Callable[[], None]) -> None:
+        """Register the screen's existing submit action."""
+        self._submit_action = action
+
+    def _handle_composer_enter(self) -> None:
+        if self._submit_action is not None:
+            self._submit_action()
 
     def on_mount(self) -> None:
         """Cache widget references after mounting."""

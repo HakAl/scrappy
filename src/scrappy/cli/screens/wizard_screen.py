@@ -34,7 +34,7 @@ class SetupWizardScreen(Screen):
     """
 
     BINDINGS = [
-        Binding("enter", "submit_input", "Submit", priority=True),
+        Binding("enter", "submit_input", "Submit"),
         Binding("ctrl+home", "transcript_home", "Transcript Start", priority=True),
         Binding(
             "ctrl+end",
@@ -98,6 +98,7 @@ class SetupWizardScreen(Screen):
 
         # Get surface and focus input
         self._surface = self.query_one(ChatSurface)
+        self._surface.set_submit_action(self.action_submit_input)
         self._surface.focus_input()
 
         # Re-read storage before the session starts: the wizard saves the whole

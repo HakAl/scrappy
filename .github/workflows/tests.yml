@@ -48,6 +48,14 @@ jobs:
       run: |
         python -m pytest tests/cli/textual/test_rules_loader_composition.py -v --tb=short
 
+    # scrappy-rawc: same delivery gap as scrappy-6aua above. The composer Enter-ordering
+    # regressions live under tests/cli/textual/ and were selected by NO matrix job. Add back
+    # only that one file, explicitly, in EVERY matrix job. No continue-on-error and no
+    # deselection, so a failure here FAILS THE JOB.
+    - name: Run composer Enter-ordering tests (restored from the TUI exclusion)
+      run: |
+        python -m pytest tests/cli/textual/test_composer_enter_ordering.py -v --tb=short
+
     - name: Run tests with coverage
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       run: |
