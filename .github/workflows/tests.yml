@@ -56,6 +56,14 @@ jobs:
       run: |
         python -m pytest tests/cli/textual/test_composer_enter_ordering.py -v --tb=short
 
+    # scrappy-fymx: same delivery gap as scrappy-6aua and scrappy-rawc above. The first-run
+    # initialization-failure and shutdown-ownership regressions live under tests/cli/textual/
+    # and were selected by NO matrix job. Add back only that one file, explicitly, in EVERY
+    # matrix job. No continue-on-error and no deselection, so a failure here FAILS THE JOB.
+    - name: Run first-run init failure tests (restored from the TUI exclusion)
+      run: |
+        python -m pytest tests/cli/textual/test_first_run_init_failure.py -v --tb=short
+
     - name: Run tests with coverage
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       run: |

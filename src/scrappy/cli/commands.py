@@ -177,6 +177,8 @@ def start_tui_deferred(ctx, theme, resume: bool = False, cli_config=None) -> Non
         api_key_service=api_key_service,
     )
     app.run()
+    if isinstance(app.return_code, int) and app.return_code != 0:
+        raise SystemExit(app.return_code)
 
 
 @cli.command()

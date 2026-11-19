@@ -13,7 +13,7 @@ import os
 import time
 from pathlib import Path
 
-from textual.app import App
+from textual.app import App, AutopilotCallbackType
 from textual.binding import Binding
 from textual.theme import Theme
 from textual.reactive import reactive
@@ -31,6 +31,8 @@ from scrappy.infrastructure.paths import create_default_path_provider
 from scrappy.infrastructure.protocols import PathProviderProtocol
 from scrappy.infrastructure.theme import DEFAULT_THEME, ThemeProtocol
 from scrappy.orchestrator.api_key_composition import create_api_key_service
+
+from ..utils.error_handler import sanitize_message
 
 from .runtime_wiring import create_textual_runtime_session, wire_textual_runtime
 from .bridge import ThreadSafeAsyncBridge
@@ -136,6 +138,7 @@ class ScrappyApp(App):
                 to keep the read off the user's config file.
         """
         super().__init__()
+        self._run_task: asyncio.Task | None = None
         self._theme = theme or DEFAULT_THEME
         # Resolve the provider once at this composition root and thread it to the
         # main screen. Explicit is-None check: a Protocol-typed provider with a
@@ -194,6 +197,27 @@ class ScrappyApp(App):
         self._integration_log_path = os.getenv("SCRAPPY_INTEGRATION_LOG_PATH")
         self._integration_ready_file = os.getenv("SCRAPPY_READY_FILE")
         self._integration_ready_signaled = False
+
+    async def run_async(
+        self,
+        *,
+        headless: bool = False,
+        inline: bool = False,
+        inline_no_clear: bool = False,
+        mouse: bool = True,
+        size: tuple[int, int] | None = None,
+        auto_pilot: Optional[AutopilotCallbackType] = None,
+    ) -> Any | None:
+        """Keep the app's run task alive while shielded shutdown completes."""
+        self._run_task = asyncio.current_task()
+        return await super().run_async(
+            headless=headless,
+            inline=inline,
+            inline_no_clear=inline_no_clear,
+            mouse=mouse,
+            size=size,
+            auto_pilot=auto_pilot,
+        )
 
     def _create_default_path_provider(self) -> PathProviderProtocol:
         """Create the default path provider (production location).
@@ -377,7 +401,10 @@ class ScrappyApp(App):
             # In deferred mode, wizard needs CLI - create it synchronously
             # (user needs to configure before using anyway, no benefit to defer)
             if self._cli_factory is not None:
-                self._create_cli_sync_for_wizard()
+                failure = self._create_cli_sync_for_wizard()
+                if failure is not None:
+                    self._fail_first_run_startup(failure)
+                    return
             self._show_wizard_screen(allow_cancel=has_provider)
         else:
             # Show main screen immediately (skeleton in deferred mode)
@@ -393,14 +420,14 @@ class ScrappyApp(App):
                 self.launch_setup_wizard
             )
 
-    def _create_cli_sync_for_wizard(self) -> None:
+    def _create_cli_sync_for_wizard(self) -> str | None:
         """Create CLI synchronously for wizard screen.
 
         When no provider is configured, we need CLI for the wizard.
         No benefit to defer since user must configure before using.
         """
         if self._cli_factory is None:
-            return
+            return None
 
         try:
             self._cli = self._cli_factory()
@@ -408,6 +435,22 @@ class ScrappyApp(App):
             self.ready = True
         except Exception as e:
             logger.exception("Failed to create CLI for wizard: %s", e)
+            return sanitize_message(f"{type(e).__name__}: {e}")
+        return None
+
+    def _fail_first_run_startup(self, reason: str) -> None:
+        """End first-run startup through normal cleanup with a visible reason."""
+        self._write_integration_event(
+            "cli_init_failed", phase="first_run", error=reason
+        )
+        self.exit(
+            return_code=1,
+            message=(
+                "Scrappy could not start first-run setup.\n"
+                f"{reason}\n"
+                "First-run setup did not complete. Fix the problem above and run scrappy again.\n"
+            ),
+        )
 
     @work(thread=True)
     def initialize_cli(self) -> None:
@@ -640,7 +683,16 @@ class ScrappyApp(App):
         # This helps Textual's shutdown complete when there are lingering tasks.
         loop = asyncio.get_running_loop()
         current_task = asyncio.current_task()
-        pending_tasks = [t for t in asyncio.all_tasks(loop) if t is not current_task and not t.done()]
+        pump_tasks = {
+            node._task for node in list(self._registry) if node._task is not None
+        }
+        if self._task is not None:
+            pump_tasks.add(self._task)
+        pending_tasks = [
+            t for t in asyncio.all_tasks(loop)
+            if t is not current_task and t is not self._run_task and not t.done()
+            and t not in pump_tasks
+        ]
         self._file_log(f"_shutdown: cancelling {len(pending_tasks)} pending tasks")
         for task in pending_tasks:
             task.cancel()
