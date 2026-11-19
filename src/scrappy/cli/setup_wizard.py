@@ -15,7 +15,7 @@ from scrappy.infrastructure.validation import validate_api_key
 from scrappy.orchestrator.protocols import KeyValidatorProtocol
 
 if TYPE_CHECKING:
-    from .unified_io import UnifiedIO
+    from .protocols import CLIIOProtocol
 
 
 _CATALOG = build_default_catalog()
@@ -111,7 +111,7 @@ class SetupWizard:
 
     def __init__(
         self,
-        io: "UnifiedIO",
+        io: "CLIIOProtocol",
         key_validator: KeyValidatorProtocol,
         config_service: ApiKeyConfigServiceProtocol,
     ):
